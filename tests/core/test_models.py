@@ -1,0 +1,84 @@
+"""Tests for indexer.core.models."""
+
+import pytest
+
+from coderay.core.models import Chunk, EdgeKind, GraphEdge, GraphNode, NodeKind
+
+
+class TestChunk:
+    def test_fields(self):
+        c = Chunk(
+            path="a.py",
+            start_line=1,
+            end_line=5,
+            symbol="foo",
+            language="python",
+            content="x",
+        )
+        assert c.path == "a.py"
+        assert c.symbol == "foo"
+
+    def test_line_range(self):
+        c = Chunk(
+            path="a.py",
+            start_line=3,
+            end_line=7,
+            symbol="f",
+            language="python",
+            content="",
+        )
+        assert c.line_range() == (3, 7)
+
+
+class TestNodeKind:
+    def test_values(self):
+        assert NodeKind.MODULE.value == "module"
+        assert NodeKind.CLASS.value == "class"
+        assert NodeKind.FUNCTION.value == "function"
+
+
+class TestEdgeKind:
+    def test_values(self):
+        assert EdgeKind.IMPORTS.value == "imports"
+        assert EdgeKind.DEFINES.value == "defines"
+        assert EdgeKind.CALLS.value == "calls"
+        assert EdgeKind.INHERITS.value == "inherits"
+
+
+class TestGraphNode:
+    def test_frozen(self):
+        n = GraphNode(
+            id="x",
+            kind=NodeKind.MODULE,
+            file_path="a.py",
+            start_line=1,
+            end_line=10,
+            name="a",
+            qualified_name="a",
+        )
+        with pytest.raises(AttributeError):
+            n.id = "y"
+
+    def test_fields(self):
+        n = GraphNode(
+            id="f::foo",
+            kind=NodeKind.FUNCTION,
+            file_path="f.py",
+            start_line=1,
+            end_line=3,
+            name="foo",
+            qualified_name="foo",
+        )
+        assert n.kind == NodeKind.FUNCTION
+        assert n.qualified_name == "foo"
+
+
+class TestGraphEdge:
+    def test_frozen(self):
+        e = GraphEdge(source="a", target="b", kind=EdgeKind.CALLS)
+        with pytest.raises(AttributeError):
+            e.source = "c"
+
+    def test_fields(self):
+        e = GraphEdge(source="a.py", target="os", kind=EdgeKind.IMPORTS)
+        assert e.kind == EdgeKind.IMPORTS
