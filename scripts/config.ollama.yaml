@@ -1,0 +1,9 @@
+embedder:
+  provider: ollama
+  model: nomic-embed-text
+  dimensions: 768
+  base_url: http://ollama:11434
+
+index:
+  path: .index
+  default_top_k: 10

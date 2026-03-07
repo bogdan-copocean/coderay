@@ -1,0 +1,21 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  indexer:
+    build: .
+    volumes:
+      - .:/repo:ro
+      - index_data:/repo/.index
+    working_dir: /repo
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["sleep", "infinity"]
+
+volumes:
+  ollama_data:
+  index_data:
