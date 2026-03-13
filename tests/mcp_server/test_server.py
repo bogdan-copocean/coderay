@@ -1,9 +1,16 @@
 """Tests for MCP server tool registration and response format."""
 
+import asyncio
 import json
 from unittest.mock import MagicMock, patch
 
 from coderay.mcp_server.server import mcp
+
+
+def _get_tool_names() -> set[str]:
+    """Retrieve registered tool names from the FastMCP instance."""
+    tools = asyncio.get_event_loop().run_until_complete(mcp.list_tools())
+    return {t.name for t in tools}
 
 
 class TestMCPToolsRegistered:
@@ -25,16 +32,12 @@ class TestMCPToolsRegistered:
     ]
 
     def test_all_tools_registered(self):
-        tool_names = set()
-        for tool in mcp._tool_manager._tools.values():
-            tool_names.add(tool.name)
+        tool_names = _get_tool_names()
         for name in self.EXPECTED_TOOLS:
             assert name in tool_names, f"Tool {name!r} not registered"
 
     def test_removed_tools_not_registered(self):
-        tool_names = set()
-        for tool in mcp._tool_manager._tools.values():
-            tool_names.add(tool.name)
+        tool_names = _get_tool_names()
         for name in self.REMOVED_TOOLS:
             assert name not in tool_names, f"Tool {name!r} should have been removed"
 
