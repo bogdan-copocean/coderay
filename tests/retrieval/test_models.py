@@ -5,18 +5,13 @@ import pytest
 from coderay.retrieval.models import DEFAULT_MAX_CONTENT_LINES, SearchResult
 
 
-def _make_row(
-    content: str = "line\n" * 10,
-    *,
-    score: float = 0.85,
-) -> dict:
+def _make_row(content: str = "line\n" * 10) -> dict:
     return {
         "path": "src/app.py",
         "start_line": 1,
         "end_line": 10,
         "symbol": "foo",
         "content": content,
-        "score": score,
     }
 
 
@@ -24,7 +19,7 @@ class TestSearchResultFromRaw:
     """Tests for SearchResult.from_raw factory."""
 
     def test_basic_fields(self):
-        row = _make_row(content="hello", score=0.9)
+        row = _make_row(content="hello")
         result = SearchResult.from_raw(row)
 
         assert result.path == "src/app.py"
@@ -32,7 +27,6 @@ class TestSearchResultFromRaw:
         assert result.end_line == 10
         assert result.symbol == "foo"
         assert result.content == "hello"
-        assert result.score == 0.9
         assert result.truncated is False
 
     def test_no_truncation_when_under_limit(self):
@@ -88,13 +82,6 @@ class TestSearchResultFromRaw:
 
         assert result.content == ""
 
-    def test_missing_score_defaults_zero(self):
-        row = _make_row()
-        del row["score"]
-        result = SearchResult.from_raw(row)
-
-        assert result.score == 0.0
-
     def test_extra_keys_ignored(self):
         row = _make_row()
         row["raw_score"] = 0.5
@@ -117,7 +104,6 @@ class TestSearchResultToDict:
             "end_line",
             "symbol",
             "content",
-            "score",
         }
         assert set(d.keys()) == expected
 

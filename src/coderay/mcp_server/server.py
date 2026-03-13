@@ -80,8 +80,8 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 
 @mcp.tool(
     description=(
-        "Search code by meaning. Returns ranked chunks with path, "
-        "line range, content, and score (higher = more relevant). "
+        "Search code by meaning. Returns chunks ranked by relevance, "
+        "each with path, line range, symbol, and content. "
         "Best for 'how/where' questions; use grep for exact symbols."
     ),
     annotations=READ_ONLY_ANNOTATIONS,

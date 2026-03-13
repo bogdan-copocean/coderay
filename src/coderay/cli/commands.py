@@ -173,15 +173,11 @@ def search_cmd(
         start = r.get("start_line", 0)
         end = r.get("end_line", 0)
         symbol = r.get("symbol", "?")
-        score = r.get("score", 0)
-        score_str = f"score={score:.4f}"
         preview = (r.get("content") or "")[:200].replace("\n", " ")
         if len(r.get("content") or "") > 200:
             preview += "..."
         click.echo("")
-        click.echo(
-            _color(f"  {i}. {path}:{start}-{end} ({symbol})  {score_str}", GREEN)
-        )
+        click.echo(_color(f"  {i}. {path}:{start}-{end} ({symbol})", GREEN))
         click.echo(f"     {preview}")
 
 

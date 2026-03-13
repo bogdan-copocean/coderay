@@ -14,7 +14,6 @@ class SearchResult:
     end_line: int
     symbol: str
     content: str
-    score: float
     truncated: bool = False
 
     @classmethod
@@ -28,7 +27,7 @@ class SearchResult:
 
         Args:
             row: Dict with keys path, start_line, end_line, symbol,
-                content, score, and optionally raw_score.
+                and content.
             max_lines: Truncate content beyond this many lines.
                 None disables truncation.
         """
@@ -47,7 +46,6 @@ class SearchResult:
             end_line=row["end_line"],
             symbol=row["symbol"],
             content=content,
-            score=row.get("score", 0.0),
             truncated=truncated,
         )
 
@@ -59,7 +57,6 @@ class SearchResult:
             "end_line": self.end_line,
             "symbol": self.symbol,
             "content": self.content,
-            "score": self.score,
         }
         if self.truncated:
             d["truncated"] = True
