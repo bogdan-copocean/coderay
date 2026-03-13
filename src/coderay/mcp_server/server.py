@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ def _load_state(index_dir: str | None = None):
     return _get_state_machine(index_dir).current_state
 
 
-@mcp.tool()
+@mcp.tool
 def semantic_search(
     query: str,
     top_k: int = 10,
@@ -92,7 +92,7 @@ def semantic_search(
     )
 
 
-@mcp.tool()
+@mcp.tool
 def get_file_skeleton(file_path: str) -> str:
     """Get the API surface of a file (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
@@ -111,7 +111,7 @@ _STATIC_ANALYSIS_NOTE = (
 )
 
 
-@mcp.tool()
+@mcp.tool
 def get_impact_radius(
     node_id: str,
     max_depth: int = 3,
@@ -130,7 +130,7 @@ def get_impact_radius(
     )
 
 
-@mcp.tool()
+@mcp.tool
 def index_status(index_dir: str | None = None) -> str:
     """Check health and status of the semantic index."""
     state = _load_state(index_dir)
@@ -169,7 +169,9 @@ def main():
     import sys
 
     transport = "stdio"
-    if "--sse" in sys.argv:
+    if "--http" in sys.argv:
+        transport = "http"
+    elif "--sse" in sys.argv:
         transport = "sse"
     mcp.run(transport=transport)
 
