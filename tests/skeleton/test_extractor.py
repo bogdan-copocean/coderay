@@ -69,6 +69,6 @@ class TestExtractSkeleton:
         result = extract_skeleton("test.py", "")
         assert isinstance(result, str)
 
-    def test_explicit_language_param(self):
-        skeleton = extract_skeleton("noext", SAMPLE_PYTHON, language="python")
-        assert "def helper_function" in skeleton
+    def test_unsupported_extension_returns_raw_content(self):
+        skeleton = extract_skeleton("noext", SAMPLE_PYTHON)
+        assert skeleton == SAMPLE_PYTHON
