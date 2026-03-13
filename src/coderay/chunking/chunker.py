@@ -91,7 +91,6 @@ def _chunk_file_with_config(
                     start_line=start_line,
                     end_line=end_line,
                     symbol=symbol,
-                    language=lang_cfg.name,
                     content=text,
                 )
             )
@@ -107,7 +106,6 @@ def _chunk_file_with_config(
                 start_line=1,
                 end_line=root.end_point[0] + 1,
                 symbol="<module>",
-                language=lang_cfg.name,
                 content="\n".join(preamble_lines),
             ),
         )
@@ -118,7 +116,7 @@ def _chunk_file_with_config(
     return chunks
 
 
-def chunk_file(path: str | Path, content: str, language: str = "python") -> list[Chunk]:
+def chunk_file(path: str | Path, content: str) -> list[Chunk]:
     """Chunk a source file into semantic units (functions, classes, preamble)."""
     path_str = str(path) if isinstance(path, Path) else path
     if not (lang_cfg := get_language_for_file(path_str)):

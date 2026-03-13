@@ -12,7 +12,6 @@ class Chunk:
     start_line: int
     end_line: int
     symbol: str
-    language: str
     content: str
 
     def line_range(self) -> tuple[int, int]:
