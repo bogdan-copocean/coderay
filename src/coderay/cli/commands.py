@@ -168,31 +168,16 @@ def search_cmd(
         click.echo(_color("No results.", YELLOW))
         return
 
-    score_type = results[0].get("score_type", "cosine")
-    if score_type == "rrf":
-        click.echo(
-            _color("Scoring: hybrid (RRF) — relative ranking, not a percentage", CYAN)
-        )
-    else:
-        click.echo(_color("Scoring: cosine similarity (0-1)", CYAN))
-
     for i, r in enumerate(results, 1):
         path = r.get("path", "?")
         start = r.get("start_line", 0)
         end = r.get("end_line", 0)
         symbol = r.get("symbol", "?")
-        score = r.get("score", 0)
-        if score_type == "cosine":
-            score_str = f"score={score:.4f} ({score:.0%})"
-        else:
-            score_str = f"score={score:.4f} (rrf)"
         preview = (r.get("content") or "")[:200].replace("\n", " ")
         if len(r.get("content") or "") > 200:
             preview += "..."
         click.echo("")
-        click.echo(
-            _color(f"  {i}. {path}:{start}-{end} ({symbol})  {score_str}", GREEN)
-        )
+        click.echo(_color(f"  {i}. {path}:{start}-{end} ({symbol})", GREEN))
         click.echo(f"     {preview}")
 
 

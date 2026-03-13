@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+DEFAULT_MAX_CONTENT_LINES: int = 60
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    """A single search hit with optional content truncation."""
+
+    path: str
+    start_line: int
+    end_line: int
+    symbol: str
+    content: str
+    truncated: bool = False
+
+    @classmethod
+    def from_raw(
+        cls,
+        row: dict,
+        *,
+        max_lines: int | None = DEFAULT_MAX_CONTENT_LINES,
+    ) -> SearchResult:
+        """Build from a raw dict returned by the storage layer.
+
+        Args:
+            row: Dict with keys path, start_line, end_line, symbol,
+                and content.
+            max_lines: Truncate content beyond this many lines.
+                None disables truncation.
+        """
+        content: str = row.get("content", "")
+        truncated = False
+
+        if max_lines is not None:
+            lines = content.split("\n")
+            if len(lines) > max_lines:
+                content = "\n".join(lines[:max_lines])
+                truncated = True
+
+        return cls(
+            path=row["path"],
+            start_line=row["start_line"],
+            end_line=row["end_line"],
+            symbol=row["symbol"],
+            content=content,
+            truncated=truncated,
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize to a JSON-compatible dict for the MCP response."""
+        d: dict = {
+            "path": self.path,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "symbol": self.symbol,
+            "content": self.content,
+        }
+        if self.truncated:
+            d["truncated"] = True
+        return d
