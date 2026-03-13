@@ -228,12 +228,15 @@ class CodeGraph:
                 very large sets.
         """
         resolved = self.resolve_symbol(symbol) or symbol
+        if resolved not in self._g:
+            return []
         visited: set[str] = set()
         frontier = {resolved}
         for _ in range(depth):
             next_frontier: set[str] = set()
             for nid in frontier:
-                # predecessors = nodes that have an edge pointing TO nid
+                if nid not in self._g:
+                    continue
                 for pred in self._g.predecessors(nid):
                     if pred not in visited:
                         visited.add(pred)

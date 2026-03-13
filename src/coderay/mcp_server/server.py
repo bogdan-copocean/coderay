@@ -15,13 +15,19 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP(
     name="coderay",
     instructions=(
-        "CodeRay provides semantic code search, file skeleton extraction, "
-        "and dependency impact analysis over a pre-built index. "
-        "Use 'index_status' first to verify the index is healthy before querying. "
-        "Prefer 'semantic_search' for understanding what code does. "
-        "Prefer 'get_file_skeleton' for getting a high-level understanding "
-        "of big files to reduce token consumption and context bloat. "
-        "Use 'get_impact_radius' before refactoring to understand blast radius."
+        "CodeRay provides semantic code search, file skeletons, and "
+        "dependency impact analysis over a pre-built index.\n"
+        "\n"
+        "- semantic_search: search code by meaning. Best for "
+        "'how/where' questions. Use grep for exact symbol lookup.\n"
+        "- get_file_skeleton: signatures and docstrings only, no bodies. "
+        "Useful to check a file's API before reading full source. "
+        "Works without the index.\n"
+        "- get_impact_radius: reverse dependency traversal from the code "
+        "graph. Shows callers/dependents of a function or class.\n"
+        "\n"
+        "All tools except get_file_skeleton require a built index. "
+        "On index errors, ask the user to run 'coderay build'."
     ),
 )
 
@@ -73,10 +79,9 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 
 @mcp.tool(
     description=(
-        "Search indexed code by natural language meaning. Returns ranked chunks "
-        "with a score_type field: 'cosine' means similarity 0-1 (higher = more "
-        "similar); 'rrf' means rank fusion (higher = more relevant). "
-        "Use for 'where/how' questions about the codebase."
+        "Search code by meaning. Returns ranked chunks with path, "
+        "line range, content, and score (higher = more relevant). "
+        "Best for 'how/where' questions; use grep for exact symbols."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
@@ -114,9 +119,9 @@ def semantic_search(
 
 @mcp.tool(
     description=(
-        "Extract the public API surface of a file: class and function "
-        "signatures without bodies. Use to understand a file's interface "
-        "without reading full source."
+        "Extracts class/function signatures and docstrings from a "
+        "file — no bodies. Output is significantly shorter than "
+        "full source. Does not require the index."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"analysis"},
@@ -124,7 +129,7 @@ def semantic_search(
 def get_file_skeleton(
     file_path: Annotated[
         str,
-        Field(description="Absolute path to the file"),
+        Field(description="Absolute or relative path to the file"),
     ],
 ) -> str:
     """Get the API surface of a file (signatures, no bodies)."""
@@ -139,9 +144,10 @@ def get_file_skeleton(
 
 @mcp.tool(
     description=(
-        "Find all code affected by changing a function or module (callers, "
-        "dependents). Use before refactoring to understand what might break. "
-        "Based on static analysis — dynamic dispatch may not be detected."
+        "Reverse dependency traversal: lists callers and dependents "
+        "of a function or class from the code graph. Returns empty "
+        "results when node_id has no dependents. "
+        "Static analysis only; dynamic dispatch may be missed."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"analysis"},
@@ -177,8 +183,7 @@ def get_impact_radius(
 
 @mcp.resource(
     "coderay://index/status",
-    description="Current index health, branch, commit, and chunk count.",
-    annotations={"readOnlyHint": True, "idempotentHint": True},
+    description=("Index status: build state, branch, commit, and chunk count."),
     tags={"status"},
 )
 def index_status() -> dict:
