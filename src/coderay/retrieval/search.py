@@ -59,7 +59,6 @@ class Retrieval:
         *,
         top_k: int = 10,
         path_prefix: str | None = None,
-        language: str | None = None,
     ) -> list[dict[str, Any]]:
         """Semantic search over the index."""
         if not index_exists(self.index_dir):
@@ -82,7 +81,6 @@ class Retrieval:
             query_embedding=query_vectors[0],
             top_k=top_k,
             path_prefix=path_prefix,
-            language=language,
             query_text=query,
         )
         logger.info("Vector search took %.3fs", time.perf_counter() - t1)

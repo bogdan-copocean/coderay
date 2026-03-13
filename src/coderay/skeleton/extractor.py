@@ -11,17 +11,10 @@ logger = logging.getLogger(__name__)
 def extract_skeleton(
     path: str | Path,
     content: str,
-    language: str | None = None,
 ) -> str:
     """Extract the skeleton of a source file (signatures, no bodies)."""
     path_str = str(path)
-    lang_cfg = get_language_for_file(path_str) if language is None else None
-    if lang_cfg is None and language:
-        from coderay.chunking.registry import LANGUAGE_REGISTRY
-
-        lang_cfg = LANGUAGE_REGISTRY.get(language)
-    if lang_cfg is None:
-        lang_cfg = get_language_for_file(path_str)
+    lang_cfg = get_language_for_file(path_str)
     if lang_cfg is None:
         return content
 
@@ -33,7 +26,7 @@ def extract_skeleton(
     source_bytes = content.encode("utf-8")
     tree = parser.parse(source_bytes)
     lines: list[str] = []
-    _visit_skeleton(tree.root_node, source_bytes, lang_cfg.name, lines, depth=0)
+    _visit_skeleton(tree.root_node, source_bytes, lines, depth=0)
     return "\n".join(lines)
 
 
@@ -77,7 +70,6 @@ def _get_signature_line(node, source_bytes: bytes) -> str:
 def _visit_skeleton(
     node,
     source_bytes: bytes,
-    language: str,
     lines: list[str],
     depth: int,
 ) -> None:
@@ -118,7 +110,7 @@ def _visit_skeleton(
         for child in node.children:
             if child.type in ("block", "class_body", "statement_block"):
                 for member in child.children:
-                    _visit_skeleton(member, source_bytes, language, lines, depth + 1)
+                    _visit_skeleton(member, source_bytes, lines, depth + 1)
         lines.append("")
         return
 
@@ -137,4 +129,4 @@ def _visit_skeleton(
         return
 
     for child in node.children:
-        _visit_skeleton(child, source_bytes, language, lines, depth)
+        _visit_skeleton(child, source_bytes, lines, depth)

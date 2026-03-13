@@ -9,7 +9,6 @@ class TestChunkFile:
         chunks = chunk_file("test.py", code)
         fn_chunks = [c for c in chunks if c.symbol == "hello"]
         assert len(fn_chunks) == 1
-        assert fn_chunks[0].language == "python"
         assert fn_chunks[0].path == "test.py"
 
     def test_class_and_method(self, sample_python_code):
@@ -22,12 +21,11 @@ class TestChunkFile:
         assert chunks == []
 
     def test_non_python(self):
-        chunks = chunk_file("test.js", "function foo() {}", language="javascript")
+        chunks = chunk_file("test.js", "function foo() {}")
         try:
             import tree_sitter_javascript  # noqa: F401
 
             assert len(chunks) >= 1
-            assert chunks[0].language == "javascript"
         except ImportError:
             assert chunks == []
 

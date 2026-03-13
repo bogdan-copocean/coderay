@@ -1,15 +1,35 @@
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
+
+from coderay.mcp_server.errors import IndexNotBuiltError
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("coderay")
+mcp = FastMCP(
+    name="coderay",
+    instructions=(
+        "CodeRay provides semantic code search, file skeletons, and "
+        "dependency impact analysis over a pre-built index.\n"
+        "\n"
+        "- semantic_search: search code by meaning. Best for "
+        "'how/where' questions. Use grep for exact symbol lookup.\n"
+        "- get_file_skeleton: signatures and docstrings only, no bodies. "
+        "Useful to check a file's API before reading full source. "
+        "Works without the index.\n"
+        "- get_impact_radius: reverse dependency traversal from the code "
+        "graph. Shows callers/dependents of a function or class.\n"
+        "\n"
+        "All tools except get_file_skeleton require a built index. "
+        "On index errors, ask the user to run 'coderay build'."
+    ),
+)
 
 DEFAULT_INDEX_DIR = ".index"
 
@@ -17,14 +37,14 @@ _retrieval_cache: dict[Path, Any] = {}
 _state_machine_cache: dict[Path, Any] = {}
 
 
-def _resolve_index_dir(index_dir: str | None = None) -> Path:
+def _resolve_index_dir() -> Path:
     """Resolve the index directory to an absolute path."""
-    return Path(index_dir or DEFAULT_INDEX_DIR).resolve()
+    return Path(DEFAULT_INDEX_DIR).resolve()
 
 
-def _get_retrieval(index_dir: str | None = None):
+def _get_retrieval():
     """Return a cached Retrieval instance for the given index directory."""
-    idx = _resolve_index_dir(index_dir)
+    idx = _resolve_index_dir()
     if idx not in _retrieval_cache:
         from coderay.retrieval.search import Retrieval
 
@@ -32,16 +52,16 @@ def _get_retrieval(index_dir: str | None = None):
     return _retrieval_cache[idx]
 
 
-def _load_graph(index_dir: str | None = None):
+def _load_graph():
     """Load the code graph from disk, or return None if absent."""
     from coderay.graph.builder import load_graph
 
-    return load_graph(_resolve_index_dir(index_dir))
+    return load_graph(_resolve_index_dir())
 
 
-def _get_state_machine(index_dir: str | None = None):
-    """Return a cached StateMachine instance for the given index directory."""
-    idx = _resolve_index_dir(index_dir)
+def _get_state_machine():
+    """Return a cached StateMachine instance."""
+    idx = _resolve_index_dir()
     if idx not in _state_machine_cache:
         from coderay.state.machine import StateMachine
 
@@ -49,99 +69,134 @@ def _get_state_machine(index_dir: str | None = None):
     return _state_machine_cache[idx]
 
 
-def _load_state(index_dir: str | None = None):
+def _load_state():
     """Load the current IndexMeta state, or None if no run has completed."""
-    return _get_state_machine(index_dir).current_state
+    return _get_state_machine().current_state
 
 
-@mcp.tool
+READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+
+
+@mcp.tool(
+    description=(
+        "Search code by meaning. Returns ranked chunks with path, "
+        "line range, content, and score (higher = more relevant). "
+        "Best for 'how/where' questions; use grep for exact symbols."
+    ),
+    annotations=READ_ONLY_ANNOTATIONS,
+    tags={"search"},
+)
 def semantic_search(
-    query: str,
-    top_k: int = 10,
-    path_prefix: str | None = None,
-    language: str | None = None,
-    index_dir: str | None = None,
-) -> str:
-    """Search code by meaning."""
-    retrieval = _get_retrieval(index_dir)
-    state = _load_state(index_dir)
-    if state is None:
-        return json.dumps({"error": "No index state found. Run 'coderay build' first."})
-    try:
-        results = retrieval.search(
-            query,
-            state,
-            top_k=top_k,
-            path_prefix=path_prefix,
-            language=language,
-        )
-    except RuntimeError as e:
-        return json.dumps({"error": str(e)})
-    score_type = results[0].get("score_type", "cosine") if results else "cosine"
-    return json.dumps(
-        {
-            "score_type": score_type,
-            "score_description": (
-                "cosine similarity (0-1, higher = more similar)"
-                if score_type == "cosine"
-                else "RRF rank fusion (higher = more relevant, scale differs from cosine)"
+    query: Annotated[
+        str,
+        Field(description="Natural language question about the code"),
+    ],
+    top_k: int = 5,
+    path_prefix: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Filter to files under this directory, e.g. 'src/coderay/graph/'"
             ),
-            "results": results,
-        },
-        default=str,
+        ),
+    ] = None,
+) -> dict:
+    """Search the semantic index."""
+    retrieval = _get_retrieval()
+    state = _load_state()
+    if state is None:
+        raise IndexNotBuiltError()
+
+    results = retrieval.search(
+        query=query,
+        current_state=state,
+        top_k=top_k,
+        path_prefix=path_prefix,
     )
+    score_type = results[0].get("score_type", "cosine") if results else "cosine"
+    return {"score_type": score_type, "results": results}
 
 
-@mcp.tool
-def get_file_skeleton(file_path: str) -> str:
+@mcp.tool(
+    description=(
+        "Extracts class/function signatures and docstrings from a "
+        "file — no bodies. Output is significantly shorter than "
+        "full source. Does not require the index."
+    ),
+    annotations=READ_ONLY_ANNOTATIONS,
+    tags={"analysis"},
+)
+def get_file_skeleton(
+    file_path: Annotated[
+        str,
+        Field(description="Absolute or relative path to the file"),
+    ],
+) -> str:
     """Get the API surface of a file (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
 
     p = Path(file_path)
     if not p.is_file():
-        return json.dumps({"error": f"File not found: {file_path}"})
+        raise FileNotFoundError(f"File not found: {file_path}")
     content = p.read_text(encoding="utf-8", errors="replace")
     return extract_skeleton(p, content)
 
 
-_STATIC_ANALYSIS_NOTE = (
-    "Based on static analysis of source code. Calls through dependency "
-    "injection, interfaces, dynamic dispatch (getattr), decorators, or "
-    "framework routing may not be detected."
+@mcp.tool(
+    description=(
+        "Reverse dependency traversal: lists callers and dependents "
+        "of a function or class from the code graph. Returns empty "
+        "results when node_id has no dependents. "
+        "Static analysis only; dynamic dispatch may be missed."
+    ),
+    annotations=READ_ONLY_ANNOTATIONS,
+    tags={"analysis"},
 )
-
-
-@mcp.tool
 def get_impact_radius(
-    node_id: str,
-    max_depth: int = 3,
-    index_dir: str | None = None,
-) -> str:
+    node_id: Annotated[
+        str,
+        Field(
+            description=(
+                "Fully qualified node ID, e.g. "
+                "'src/utils.py::parse_config' or "
+                "'src/models.py::User.save'"
+            ),
+        ),
+    ],
+    max_depth: Annotated[
+        int,
+        Field(description="How many caller/dependent levels to traverse"),
+    ] = 2,
+) -> dict:
     """Analyze the blast radius of changing a function or module."""
-    graph = _load_graph(index_dir)
+    graph = _load_graph()
     if graph is None:
-        return json.dumps({"error": "No graph found. Run 'coderay build' first."})
+        raise IndexNotBuiltError(
+            "No graph found. Ask the user to run 'coderay build' "
+            "in their terminal, then retry."
+        )
     impact = graph.get_impact_radius(node_id, depth=max_depth)
-    return json.dumps(
-        {
-            "results": [n.to_dict() for n in impact],
-            "note": _STATIC_ANALYSIS_NOTE,
-        }
-    )
+    return {
+        "results": [n.to_dict() for n in impact],
+    }
 
 
-@mcp.tool
-def index_status(index_dir: str | None = None) -> str:
+@mcp.resource(
+    "coderay://index/status",
+    description=("Index status: build state, branch, commit, and chunk count."),
+    tags={"status"},
+)
+def index_status() -> dict:
     """Check health and status of the semantic index."""
-    state = _load_state(index_dir)
+    state = _load_state()
     if state is None:
-        return json.dumps({"status": "no_index", "message": "No index found."})
+        raise IndexNotBuiltError()
 
     from coderay.core.config import get_embedding_dimensions, load_config
     from coderay.state.version import read_index_version
     from coderay.storage.lancedb import index_exists as idx_exists
 
-    idx_dir = _resolve_index_dir(index_dir)
+    idx_dir = _resolve_index_dir()
     has_store = idx_exists(idx_dir)
     chunk_count = 0
     if has_store:
@@ -151,29 +206,18 @@ def index_status(index_dir: str | None = None) -> str:
         store = Store(idx_dir, dimensions=get_embedding_dimensions(config))
         chunk_count = store.chunk_count()
 
-    return json.dumps(
-        {
-            "status": state.state.value,
-            "branch": state.branch,
-            "last_commit": state.last_commit,
-            "chunk_count": chunk_count,
-            "schema_version": read_index_version(idx_dir),
-            "has_store": has_store,
-        },
-        default=str,
-    )
+    return {
+        "status": state.state.value,
+        "branch": state.branch,
+        "last_commit": state.last_commit,
+        "chunk_count": chunk_count,
+        "schema_version": read_index_version(idx_dir),
+        "has_store": has_store,
+    }
 
 
 def main():
-    """Entry point for the coderay-mcp command."""
-    import sys
-
-    transport = "stdio"
-    if "--http" in sys.argv:
-        transport = "http"
-    elif "--sse" in sys.argv:
-        transport = "sse"
-    mcp.run(transport=transport)
+    mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

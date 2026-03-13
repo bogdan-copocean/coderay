@@ -12,7 +12,6 @@ class TestChunk:
             start_line=1,
             end_line=5,
             symbol="foo",
-            language="python",
             content="x",
         )
         assert c.path == "a.py"
@@ -24,7 +23,6 @@ class TestChunk:
             start_line=3,
             end_line=7,
             symbol="f",
-            language="python",
             content="",
         )
         assert c.line_range() == (3, 7)

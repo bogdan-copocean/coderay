@@ -75,7 +75,6 @@ def sample_chunks() -> list[Chunk]:
             start_line=1,
             end_line=5,
             symbol="foo",
-            language="python",
             content="def foo():\n    pass",
         ),
         Chunk(
@@ -83,7 +82,6 @@ def sample_chunks() -> list[Chunk]:
             start_line=1,
             end_line=3,
             symbol="bar",
-            language="python",
             content="def bar():\n    pass",
         ),
     ]

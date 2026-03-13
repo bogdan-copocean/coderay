@@ -19,7 +19,6 @@ class TestSearchScoring:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-                language="python",
                 content="def foo(): pass",
             ),
             Chunk(
@@ -27,7 +26,6 @@ class TestSearchScoring:
                 start_line=1,
                 end_line=3,
                 symbol="bar",
-                language="python",
                 content="def bar(): pass",
             ),
         ]
