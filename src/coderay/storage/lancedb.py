@@ -159,7 +159,6 @@ class Store:
             else:
                 score = row.pop("distance", 0.0)
             row["score"] = round(float(score), 4)
-            row["score_type"] = "rrf" if use_hybrid else "cosine"
             row.pop("vector", None)
             results.append(row)
 

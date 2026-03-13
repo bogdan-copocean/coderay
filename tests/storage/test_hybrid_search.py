@@ -40,11 +40,6 @@ class TestSearchScoring:
         assert len(results) >= 1
         assert all(0 <= r["score"] <= 1.0 for r in results)
 
-    def test_vector_score_type_is_cosine(self, tmp_index_dir):
-        store = self._make_store(tmp_index_dir)
-        results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2)
-        assert all(r["score_type"] == "cosine" for r in results)
-
     def test_vector_exact_match_scores_high(self, tmp_index_dir):
         store = self._make_store(tmp_index_dir)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2)
@@ -61,9 +56,3 @@ class TestSearchScoring:
         store = self._make_store(tmp_index_dir)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
         assert all("score" in r and r["score"] > 0 for r in results)
-
-    def test_hybrid_score_type_is_rrf(self, tmp_index_dir):
-        """Hybrid search tags results with score_type='rrf'."""
-        store = self._make_store(tmp_index_dir)
-        results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
-        assert all(r.get("score_type") in ("rrf", "cosine") for r in results)

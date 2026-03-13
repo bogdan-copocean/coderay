@@ -9,6 +9,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from coderay.mcp_server.errors import IndexNotBuiltError
+from coderay.retrieval.models import SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -107,14 +108,14 @@ def semantic_search(
     if state is None:
         raise IndexNotBuiltError()
 
-    results = retrieval.search(
+    raw_results = retrieval.search(
         query=query,
         current_state=state,
         top_k=top_k,
         path_prefix=path_prefix,
     )
-    score_type = results[0].get("score_type", "cosine") if results else "cosine"
-    return {"score_type": score_type, "results": results}
+    results = [SearchResult.from_raw(r) for r in raw_results]
+    return {"results": [r.to_dict() for r in results]}
 
 
 @mcp.tool(
