@@ -64,7 +64,6 @@ class Store:
                     "start_line": chunk.start_line,
                     "end_line": chunk.end_line,
                     "symbol": chunk.symbol,
-                    "language": chunk.language,
                     "content": chunk.content,
                     "vector": emb,
                 }
@@ -115,7 +114,6 @@ class Store:
         query_embedding: list[float],
         top_k: int = 10,
         path_prefix: str | None = None,
-        language: str | None = None,
         query_text: str | None = None,
     ) -> list[dict[str, Any]]:
         """Nearest-neighbor search with optional hybrid scoring."""
@@ -146,9 +144,6 @@ class Store:
         if path_prefix:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
             query = query.where(f"path LIKE '{prefix}%'")
-        if language:
-            lang = (language or "").replace("'", "''")
-            query = query.where(f"language = '{lang}'")
 
         query = query.limit(top_k)
         rows = query.to_list()
@@ -189,7 +184,7 @@ class Store:
         if n == 0:
             return []
 
-        col_names = ["path", "start_line", "end_line", "symbol", "language"]
+        col_names = ["path", "start_line", "end_line", "symbol"]
 
         if path_prefix:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")

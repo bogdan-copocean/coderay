@@ -132,14 +132,12 @@ def update(ctx: click.Context, repo: Path) -> None:
 @click.argument("query_text", required=True)
 @click.option("--top-k", "top_k", default=10, help="Number of results")
 @click.option("--path-prefix", help="Filter by path prefix")
-@click.option("--language", help="Filter by language (e.g. python)")
 @click.pass_context
 def search_cmd(
     ctx: click.Context,
     query_text: str,
     top_k: int,
     path_prefix: str | None,
-    language: str | None,
 ) -> None:
     """Semantic search the index."""
     index_dir = ctx.obj["index_dir"]
@@ -162,7 +160,6 @@ def search_cmd(
         current_state=current_state,
         top_k=top_k,
         path_prefix=path_prefix,
-        language=language,
     )
     elapsed = time.perf_counter() - t0
     click.echo(_color(f"Query took {elapsed:.2f}s", BOLD))

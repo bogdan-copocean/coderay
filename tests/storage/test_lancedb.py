@@ -15,7 +15,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-                language="python",
+
                 content="def foo(): pass",
             )
         ]
@@ -31,7 +31,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-                language="python",
+
                 content="def foo(): pass",
             )
         ]
@@ -50,7 +50,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-                language="python",
+
                 content="x",
             ),
             Chunk(
@@ -58,7 +58,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="bar",
-                language="python",
+
                 content="y",
             ),
         ]
@@ -75,7 +75,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-                language="python",
+
                 content="x",
             )
         ]
@@ -92,7 +92,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-                language="python",
+
                 content="x",
             ),
             Chunk(
@@ -100,7 +100,7 @@ class TestStore:
                 start_line=4,
                 end_line=6,
                 symbol="g",
-                language="python",
+
                 content="y",
             ),
             Chunk(
@@ -108,7 +108,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="h",
-                language="python",
+
                 content="z",
             ),
         ]
@@ -126,7 +126,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-                language="python",
+
                 content="x",
             )
         ]
@@ -142,7 +142,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-                language="python",
+
                 content="x",
             )
         ]
@@ -162,7 +162,7 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-                language="python",
+
                 content="x",
             )
         ]
@@ -182,7 +182,7 @@ class TestIndexExists:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-                language="python",
+
                 content="x",
             )
         ]
