@@ -15,7 +15,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-
                 content="def foo(): pass",
             )
         ]
@@ -31,7 +30,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-
                 content="def foo(): pass",
             )
         ]
@@ -50,7 +48,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-
                 content="x",
             ),
             Chunk(
@@ -58,7 +55,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="bar",
-
                 content="y",
             ),
         ]
@@ -75,7 +71,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="foo",
-
                 content="x",
             )
         ]
@@ -92,7 +87,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-
                 content="x",
             ),
             Chunk(
@@ -100,7 +94,6 @@ class TestStore:
                 start_line=4,
                 end_line=6,
                 symbol="g",
-
                 content="y",
             ),
             Chunk(
@@ -108,7 +101,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="h",
-
                 content="z",
             ),
         ]
@@ -126,7 +118,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-
                 content="x",
             )
         ]
@@ -142,7 +133,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-
                 content="x",
             )
         ]
@@ -162,7 +152,6 @@ class TestStore:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-
                 content="x",
             )
         ]
@@ -182,7 +171,6 @@ class TestIndexExists:
                 start_line=1,
                 end_line=3,
                 symbol="f",
-
                 content="x",
             )
         ]
