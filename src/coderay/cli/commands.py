@@ -438,13 +438,11 @@ def watch(
     click.echo(
         _color(
             f"Watching {repo.resolve()} "
-            f"(debounce={config.get('watch', {}).get('debounce_seconds', 2)}s, "
-            f"Ctrl+C to stop)",
+            f"(debounce={config.watcher.debounce}s, Ctrl+C to stop)",
             CYAN,
         )
     )
     # Do an incremental update at start-up
-    index_dir = Path(config.index.path)
     index_dir.mkdir(parents=True, exist_ok=True)
     indexer = Indexer(repo, config=config)
     indexer.update_incremental()

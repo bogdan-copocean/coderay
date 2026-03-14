@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Union
+
+from coderay.core.config import Config
 
 DEFAULT_PENALTIES: list[dict[str, Any]] = [
     {"pattern": r"(^|/)tests?/", "factor": 0.5},
@@ -36,13 +38,16 @@ class StructuralBooster:
     bonuses: list[BoostRule] = field(default_factory=list)
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> StructuralBooster:
-        """Build from config dict. Falls back to defaults if not specified."""
-        search_cfg = config.get("search") or {}
-        boost_cfg = search_cfg.get("boost_rules") or {}
-
-        raw_penalties = boost_cfg.get("penalties") or DEFAULT_PENALTIES
-        raw_bonuses = boost_cfg.get("bonuses") or DEFAULT_BONUSES
+    def from_config(cls, config: Union[Config, dict[str, Any]]) -> StructuralBooster:
+        """Build from Config or legacy config dict; use defaults when not specified."""
+        if isinstance(config, Config):
+            raw_penalties = DEFAULT_PENALTIES
+            raw_bonuses = DEFAULT_BONUSES
+        else:
+            search_cfg = config.get("search") or {}
+            boost_cfg = search_cfg.get("boost_rules") or {}
+            raw_penalties = boost_cfg.get("penalties") or DEFAULT_PENALTIES
+            raw_bonuses = boost_cfg.get("bonuses") or DEFAULT_BONUSES
 
         return cls(
             penalties=[
