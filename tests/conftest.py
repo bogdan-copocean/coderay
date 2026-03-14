@@ -7,6 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from coderay.core.config import (
+    Config,
+    EmbedderConfig,
+    IndexConfig,
+    _reset_config_for_testing,
+)
 from coderay.core.models import Chunk
 from coderay.embedding.base import Embedder
 
@@ -24,13 +30,9 @@ class MockEmbedder(Embedder):
         return [[float(i + 1)] * self.DIMS for i, _ in enumerate(texts)]
 
 
-MOCK_CONFIG: dict = {
-    "embedder": {
-        "provider": "local",
-        "model": "all-MiniLM-L6-v2",
-        "dimensions": MockEmbedder.DIMS,
-    },
-}
+MOCK_CONFIG: Config = Config(
+    embedder=EmbedderConfig(dimensions=MockEmbedder.DIMS),
+)
 
 SAMPLE_PYTHON = """\
 import os
@@ -51,8 +53,31 @@ def mock_embedder() -> MockEmbedder:
 
 
 @pytest.fixture
-def mock_config() -> dict:
-    return MOCK_CONFIG.copy()
+def mock_config() -> Config:
+    return MOCK_CONFIG
+
+
+@pytest.fixture
+def app_config(tmp_path: Path) -> Config:
+    """Set global config for the test (index=tmp_path/.index, dimensions=4)."""
+    idx = tmp_path / ".index"
+    idx.mkdir()
+    cfg = Config(
+        index=IndexConfig(path=str(idx)),
+        embedder=EmbedderConfig(dimensions=MockEmbedder.DIMS),
+    )
+    _reset_config_for_testing(cfg)
+    yield cfg
+    _reset_config_for_testing(None)
+
+
+@pytest.fixture
+def default_config() -> Config:
+    """Reset global config to default (for tests that use get_config() default)."""
+    cfg = Config()
+    _reset_config_for_testing(cfg)
+    yield cfg
+    _reset_config_for_testing(None)
 
 
 @pytest.fixture

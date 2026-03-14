@@ -7,8 +7,8 @@ from coderay.storage.lancedb import Store, index_exists
 
 
 class TestStore:
-    def test_insert_and_count(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_insert_and_count(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -22,8 +22,8 @@ class TestStore:
         store.insert_chunks(chunks, embeddings)
         assert store.chunk_count() == 1
 
-    def test_search(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_search(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -40,8 +40,8 @@ class TestStore:
         assert results[0]["symbol"] == "foo"
         assert "vector" not in results[0]
 
-    def test_delete_by_paths(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_delete_by_paths(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -63,8 +63,8 @@ class TestStore:
         store.delete_by_paths(["a.py"])
         assert store.chunk_count() == 1
 
-    def test_list_chunks(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_list_chunks(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -79,8 +79,8 @@ class TestStore:
         assert len(listed) == 1
         assert "vector" not in listed[0]
 
-    def test_chunks_by_path(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_chunks_by_path(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -110,8 +110,8 @@ class TestStore:
         assert by_path["a.py"] == 2
         assert by_path["b.py"] == 1
 
-    def test_clear(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_clear(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -125,8 +125,8 @@ class TestStore:
         store.clear()
         assert store.chunk_count() == 0
 
-    def test_dimension_mismatch_raises(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_dimension_mismatch_raises(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -139,13 +139,13 @@ class TestStore:
         with pytest.raises(ValueError, match="dimension"):
             store.insert_chunks(chunks, [[1.0, 2.0]])
 
-    def test_empty_insert_noop(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_empty_insert_noop(self, app_config):
+        store = Store()
         store.insert_chunks([], [])
         assert store.chunk_count() == 0
 
-    def test_length_mismatch_raises(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_length_mismatch_raises(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -163,8 +163,8 @@ class TestIndexExists:
     def test_no_index(self, tmp_path):
         assert not index_exists(tmp_path)
 
-    def test_with_index(self, tmp_index_dir):
-        store = Store(tmp_index_dir, dimensions=4)
+    def test_with_index(self, app_config):
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -175,4 +175,4 @@ class TestIndexExists:
             )
         ]
         store.insert_chunks(chunks, [[1.0] * 4])
-        assert index_exists(tmp_index_dir)
+        assert index_exists(app_config.index.path)

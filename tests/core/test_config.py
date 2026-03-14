@@ -1,16 +1,20 @@
 """Tests for coderay.core.config."""
 
-import os
 from pathlib import Path
 
-from coderay.core.config import ENV_CONFIG_FILE, ENV_INDEX_DIR, Config, load_config
+from coderay.core.config import (
+    ENV_INDEX_DIR,
+    Config,
+    get_config,
+    _reset_config_for_testing,
+)
 
 
-class TestLoadConfig:
+class TestGetConfig:
     def test_no_config_file_uses_defaults(self, tmp_path, monkeypatch):
-        # Point CODERAY_INDEX_DIR to a temp dir with no config file
         monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_path))
-        cfg = load_config()
+        _reset_config_for_testing(None)
+        cfg = get_config()
         assert isinstance(cfg, Config)
         assert cfg.embedder.dimensions == 384
         assert Path(cfg.index.path) == tmp_path
@@ -18,5 +22,6 @@ class TestLoadConfig:
     def test_with_yaml_overrides(self, tmp_path, monkeypatch):
         monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_path))
         (tmp_path / "config.yaml").write_text("embedder:\n  dimensions: 64\n")
-        cfg = load_config()
+        _reset_config_for_testing(None)
+        cfg = get_config()
         assert cfg.embedder.dimensions == 64
