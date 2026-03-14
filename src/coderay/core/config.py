@@ -198,43 +198,61 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
     """
     base: dict[str, Any] = asdict(Config())
 
-    # Validate unknown top-level keys.
+    def _merge_section(
+        default_val: Any,
+        override_val: Any,
+        path: str,
+    ) -> Any:
+        """Recursively merge one config section, validating unknown keys."""
+        if not isinstance(default_val, dict) or not isinstance(override_val, dict):
+            return override_val
+
+        unknown = set(override_val.keys()) - set(default_val.keys())
+        if unknown:
+            location = path or "."
+            raise ConfigError(
+                f"Unknown config keys under '{location}': {sorted(unknown)}"
+            )
+
+        merged_section: dict[str, Any] = {}
+        for key, default_child in default_val.items():
+            if key in override_val:
+                value = override_val[key]
+                if type(default_child) is not type(value):
+                    raise ConfigError(
+                        "config type mismatch under "
+                        f"'{path or key}': {type(default_child)} is not {type(value)}"
+                    )
+
+                child_path = f"{path}.{key}" if path else key
+                merged_section[key] = _merge_section(
+                    default_child,
+                    value,
+                    child_path,
+                )
+            else:
+                merged_section[key] = default_child
+        return merged_section
+
     unknown_top = set(overrides.keys()) - set(base.keys())
     if unknown_top:
         raise ConfigError(f"Unknown top-level config keys: {sorted(unknown_top)}")
 
     merged: dict[str, Any] = {}
-    for k, default_val in base.items():
-        if k in overrides:
-            override_val = overrides[k]
+    for key, default_val in base.items():
+        if key in overrides:
+            override_val = overrides[key]
             if isinstance(default_val, dict) and isinstance(override_val, dict):
-                # Validate unknown nested keys for this section.
-                unknown_nested = set(override_val.keys()) - set(default_val.keys())
-                if unknown_nested:
-                    raise ConfigError(
-                        f"Unknown config keys under '{k}': {sorted(unknown_nested)}"
-                    )
-                merged[k] = {**default_val, **override_val}
-                # Deep-merge semantic_search.boosting for partial overrides.
-                if k == "semantic_search" and "boosting" in default_val:
-                    boost_default = default_val.get("boosting") or {}
-                    boost_override = merged[k].get("boosting") or {}
-                    if isinstance(boost_override, dict):
-                        unknown_boost = set(boost_override.keys()) - {
-                            "penalties",
-                            "bonuses",
-                        }
-                        if unknown_boost:
-                            raise ConfigError(
-                                "Unknown config keys under "
-                                "'semantic_search.boosting': "
-                                f"{sorted(unknown_boost)}"
-                            )
-                        merged[k]["boosting"] = {**boost_default, **boost_override}
+                merged[key] = _merge_section(default_val, override_val, key)
             else:
-                merged[k] = override_val
+                if type(default_val) is not type(override_val):
+                    raise ConfigError(
+                        "config type mismatch under "
+                        f"'{key}': {type(default_val)} is not {type(override_val)}"
+                    )
+                merged[key] = override_val
         else:
-            merged[k] = default_val
+            merged[key] = default_val
 
     # Ensure index.path reflects the resolved index_dir
     index_dict = merged.get("index", {}) or {}
