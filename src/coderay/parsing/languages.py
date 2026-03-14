@@ -1,36 +1,64 @@
 from __future__ import annotations
 
+"""Language configuration for Tree-sitter based analyzers.
+
+This module centralizes language-specific configuration used by all Tree-sitter
+consumers (chunking, skeleton extraction, graph building, etc.).
+"""
+
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from tree_sitter import Language, Parser
-
 logger = logging.getLogger(__name__)
 
 
 @dataclass
+class SkeletonConfig:
+    """Skeleton-specific configuration (fields not shared with other features)."""
+
+    extra_class_like_types: tuple[str, ...] = ()
+    top_level_expr_types: tuple[str, ...] = ("expression_statement",)
+    export_like_types: tuple[str, ...] = ("export_statement", "lexical_declaration")
+
+
+@dataclass
+class ChunkerConfig:
+    """Configuration for chunking for a language."""
+
+    chunk_types: tuple[str, ...]
+
+
+@dataclass
+class GraphConfig:
+    """Graph-specific configuration (fields not shared with other features)."""
+
+    call_types: tuple[str, ...]
+    extra_class_scope_types: tuple[str, ...] = ()
+
+
+@dataclass
 class LanguageConfig:
-    """Configuration for a single language's tree-sitter grammar."""
+    """Describe how a programming language is parsed with Tree-sitter.
+
+    Shared node type sets (``import_types``, ``function_scope_types``,
+    ``class_scope_types``) live here so that skeleton, graph, and future
+    features reference the same definitions.  Feature-specific sub-configs
+    carry only what is unique to that feature.
+    """
 
     name: str
     extensions: tuple[str, ...]
     language_fn: Callable[[], Any]
-    chunk_types: tuple[str, ...]
-    scope_types: tuple[str, ...] = ("function_definition", "class_definition")
-    import_types: tuple[str, ...] = ("import_statement", "import_from_statement")
-    call_types: tuple[str, ...] = ("call", "call_expression")
-    function_scope_types: tuple[str, ...] = ("function_definition",)
-    class_scope_types: tuple[str, ...] = ("class_definition",)
+    import_types: tuple[str, ...]
+    function_scope_types: tuple[str, ...]
+    class_scope_types: tuple[str, ...]
+    skeleton: SkeletonConfig
+    chunker: ChunkerConfig
+    graph: GraphConfig
     init_filenames: tuple[str, ...] = ()
-
-    def get_parser(self) -> Parser:
-        """Create and return a tree-sitter Parser for this language."""
-        lang = Language(self.language_fn())
-        parser = Parser(lang)
-        return parser
 
 
 def _python_language():
@@ -61,16 +89,20 @@ PYTHON_CONFIG = LanguageConfig(
     name="python",
     extensions=(".py", ".pyi"),
     language_fn=_python_language,
-    chunk_types=(
-        "function_definition",
-        "class_definition",
-        "decorated_definition",
-    ),
-    scope_types=("function_definition", "class_definition"),
     import_types=("import_statement", "import_from_statement"),
-    call_types=("call",),
     function_scope_types=("function_definition",),
     class_scope_types=("class_definition",),
+    skeleton=SkeletonConfig(),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_definition",
+            "class_definition",
+            "decorated_definition",
+        ),
+    ),
+    graph=GraphConfig(
+        call_types=("call",),
+    ),
     init_filenames=("__init__",),
 )
 
@@ -78,19 +110,23 @@ JAVASCRIPT_CONFIG = LanguageConfig(
     name="javascript",
     extensions=(".js", ".jsx", ".mjs", ".cjs"),
     language_fn=_javascript_language,
-    chunk_types=(
-        "function_declaration",
-        "class_declaration",
-        "method_definition",
-        "arrow_function",
-        "export_statement",
-        "lexical_declaration",
-    ),
-    scope_types=("function_declaration", "class_declaration", "method_definition"),
     import_types=("import_statement",),
-    call_types=("call_expression",),
     function_scope_types=("function_declaration", "method_definition"),
     class_scope_types=("class_declaration",),
+    skeleton=SkeletonConfig(),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "class_declaration",
+            "method_definition",
+            "arrow_function",
+            "export_statement",
+            "lexical_declaration",
+        ),
+    ),
+    graph=GraphConfig(
+        call_types=("call_expression",),
+    ),
     init_filenames=("index",),
 )
 
@@ -98,26 +134,32 @@ TYPESCRIPT_CONFIG = LanguageConfig(
     name="typescript",
     extensions=(".ts", ".tsx"),
     language_fn=_typescript_language,
-    chunk_types=(
-        "function_declaration",
-        "class_declaration",
-        "method_definition",
-        "arrow_function",
-        "export_statement",
-        "lexical_declaration",
-        "interface_declaration",
-        "type_alias_declaration",
-    ),
-    scope_types=(
-        "function_declaration",
-        "class_declaration",
-        "method_definition",
-        "interface_declaration",
-    ),
     import_types=("import_statement",),
-    call_types=("call_expression",),
     function_scope_types=("function_declaration", "method_definition"),
-    class_scope_types=("class_declaration", "interface_declaration"),
+    class_scope_types=("class_declaration",),
+    skeleton=SkeletonConfig(
+        extra_class_like_types=(
+            "interface_declaration",
+            "type_alias_declaration",
+            "type_declaration",
+        ),
+    ),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "class_declaration",
+            "method_definition",
+            "arrow_function",
+            "export_statement",
+            "lexical_declaration",
+            "interface_declaration",
+            "type_alias_declaration",
+        ),
+    ),
+    graph=GraphConfig(
+        call_types=("call_expression",),
+        extra_class_scope_types=("interface_declaration",),
+    ),
     init_filenames=("index",),
 )
 
@@ -125,18 +167,25 @@ GO_CONFIG = LanguageConfig(
     name="go",
     extensions=(".go",),
     language_fn=_go_language,
-    chunk_types=(
-        "function_declaration",
-        "method_declaration",
-        "type_declaration",
-    ),
-    scope_types=("function_declaration", "method_declaration"),
     import_types=("import_declaration",),
-    call_types=("call_expression",),
     function_scope_types=("function_declaration", "method_declaration"),
     class_scope_types=(),
+    skeleton=SkeletonConfig(
+        extra_class_like_types=("type_declaration",),
+    ),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "method_declaration",
+            "type_declaration",
+        ),
+    ),
+    graph=GraphConfig(
+        call_types=("call_expression",),
+    ),
     init_filenames=(),
 )
+
 
 LANGUAGE_REGISTRY: dict[str, LanguageConfig] = {
     "python": PYTHON_CONFIG,

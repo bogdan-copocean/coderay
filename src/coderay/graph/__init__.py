@@ -6,14 +6,18 @@ from coderay.graph.builder import (
     save_graph,
 )
 from coderay.graph.code_graph import CodeGraph
-from coderay.graph.extractor import GraphExtractor
+from coderay.graph.extractor import (
+    GraphTreeSitterParser,
+    extract_graph_from_file,
+)
 
 __all__ = [
     "GRAPH_FILENAME",
     "CodeGraph",
-    "GraphExtractor",
+    "GraphTreeSitterParser",
     "build_and_save_graph",
     "build_graph",
+    "extract_graph_from_file",
     "load_graph",
     "save_graph",
 ]

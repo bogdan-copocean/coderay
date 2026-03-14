@@ -19,7 +19,7 @@ from watchdog.events import (
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 
-from coderay.chunking.registry import get_supported_extensions
+from coderay.parsing.languages import get_supported_extensions
 from coderay.vcs.git import load_gitignore
 
 logger = logging.getLogger(__name__)

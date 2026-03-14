@@ -6,12 +6,12 @@ from typing import Any
 
 import networkx as nx
 
-from coderay.chunking.registry import (
+from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.parsing.languages import (
     get_init_filenames,
     get_resolution_suffixes,
     get_supported_extensions,
 )
-from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
 
 logger = logging.getLogger(__name__)
 

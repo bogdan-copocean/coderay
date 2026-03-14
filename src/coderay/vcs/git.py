@@ -85,7 +85,7 @@ class Git:
         self, last_commit: str | None
     ) -> tuple[list[Path], list[str]]:
         """Return (paths_to_add, paths_to_remove) since last indexed commit."""
-        from coderay.chunking.registry import get_supported_extensions
+        from coderay.parsing.languages import get_supported_extensions
 
         supported = get_supported_extensions()
 
@@ -162,7 +162,7 @@ class Git:
     ) -> list[Path]:
         """List all source files matching the given extensions."""
         if extensions is None:
-            from coderay.chunking.registry import get_supported_extensions
+            from coderay.parsing.languages import get_supported_extensions
 
             extensions = get_supported_extensions()
 
