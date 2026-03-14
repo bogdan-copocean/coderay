@@ -12,25 +12,25 @@ class TestLanguageRegistry:
         assert "python" in LANGUAGE_REGISTRY
         cfg = LANGUAGE_REGISTRY["python"]
         assert ".py" in cfg.extensions
-        assert "function_definition" in cfg.chunk_types
+        assert "function_definition" in cfg.chunker.chunk_types
 
     def test_javascript_registered(self):
         assert "javascript" in LANGUAGE_REGISTRY
         cfg = LANGUAGE_REGISTRY["javascript"]
         assert ".js" in cfg.extensions
-        assert "function_declaration" in cfg.chunk_types
+        assert "function_declaration" in cfg.chunker.chunk_types
 
     def test_typescript_registered(self):
         assert "typescript" in LANGUAGE_REGISTRY
         cfg = LANGUAGE_REGISTRY["typescript"]
         assert ".ts" in cfg.extensions
-        assert "interface_declaration" in cfg.chunk_types
+        assert "interface_declaration" in cfg.chunker.chunk_types
 
     def test_go_registered(self):
         assert "go" in LANGUAGE_REGISTRY
         cfg = LANGUAGE_REGISTRY["go"]
         assert ".go" in cfg.extensions
-        assert "function_declaration" in cfg.chunk_types
+        assert "function_declaration" in cfg.chunker.chunk_types
 
 
 class TestGetLanguageForFile:
