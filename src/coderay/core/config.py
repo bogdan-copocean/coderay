@@ -10,6 +10,11 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+
+class ConfigError(Exception):
+    """Raised when configuration is invalid or contains unknown keys."""
+
+
 DEFAULT_INDEX_DIR = ".index"
 DEFAULT_CONFIG_FILENAME = "config.yaml"
 ENV_INDEX_DIR = "CODERAY_INDEX_DIR"
@@ -89,7 +94,7 @@ def load_config() -> Config:
         Loaded configuration with resolved index path.
 
     Raises:
-        ValueError: If the config file contains unknown keys.
+        ConfigError: If the config file contains unknown keys or is invalid.
     """
     index_dir = _resolve_index_dir()
 
@@ -100,6 +105,8 @@ def load_config() -> Config:
                 overrides = yaml.safe_load(f) or {}
             logger.info("Loaded config overrides from %s", cfg_path)
             return _deep_merge(overrides, index_dir=index_dir)
+        except ConfigError:
+            raise
         except Exception as e:
             logger.warning("Failed to load config from %s: %s", cfg_path, e)
 
@@ -129,14 +136,14 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
         Config: New configuration instance with overrides applied.
 
     Raises:
-        ValueError: If overrides contain unknown top-level or nested keys.
+        ConfigError: If overrides contain unknown top-level or nested keys.
     """
     base: dict[str, Any] = asdict(Config())
 
     # Validate unknown top-level keys.
     unknown_top = set(overrides.keys()) - set(base.keys())
     if unknown_top:
-        raise ValueError(f"Unknown top-level config keys: {sorted(unknown_top)}")
+        raise ConfigError(f"Unknown top-level config keys: {sorted(unknown_top)}")
 
     merged: dict[str, Any] = {}
     for k, default_val in base.items():
@@ -146,7 +153,7 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
                 # Validate unknown nested keys for this section.
                 unknown_nested = set(override_val.keys()) - set(default_val.keys())
                 if unknown_nested:
-                    raise ValueError(
+                    raise ConfigError(
                         f"Unknown config keys under '{k}': {sorted(unknown_nested)}"
                     )
                 merged[k] = {**default_val, **override_val}
