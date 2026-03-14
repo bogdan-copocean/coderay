@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from coderay.core.config import Config, load_config
+
 META_FILENAME = "meta.json"
 FILE_HASHES_FILENAME = "file_hashes.json"
 
@@ -52,9 +54,18 @@ class IndexMeta:
 class StateMachine:
     """Manages index metadata and file hashes on disk."""
 
-    def __init__(self, index_dir: Path | str) -> None:
-        """Initialize with index dir (contains meta.json and file_hashes.json)."""
-        self._index_dir = Path(index_dir)
+    def __init__(
+        self,
+        index_dir: Path | str | None = None,
+        config: Config | None = None,
+    ) -> None:
+        """Initialize with index dir or config (contains meta.json and file_hashes.json)."""
+        if config is not None:
+            self._index_dir = Path(config.index.path)
+        elif index_dir is not None:
+            self._index_dir = Path(index_dir)
+        else:
+            self._index_dir = Path(load_config().index.path)
         self._meta_path = self._index_dir / META_FILENAME
         self._file_hashes_path = self._index_dir / FILE_HASHES_FILENAME
         self._current_state: IndexMeta | None = self._load_meta()

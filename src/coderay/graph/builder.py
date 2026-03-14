@@ -66,15 +66,15 @@ def load_graph(index_dir: str | Path) -> CodeGraph | None:
 
 def build_and_save_graph(
     repo_root: str | Path,
-    index_dir: str | Path,
+    config: Config | None = None,
     changed_paths: list[str] | None = None,
 ) -> None:
     """Build or incrementally update the graph, then save."""
     from coderay.state.machine import StateMachine
 
     repo = Path(repo_root)
-    idx_dir = Path(index_dir)
-    config = load_config()
+    config = config or load_config()
+    idx_dir = Path(config.index.path)
 
     existing_graph = load_graph(idx_dir) if changed_paths else None
     incremental = existing_graph is not None and changed_paths is not None
@@ -85,7 +85,7 @@ def build_and_save_graph(
         from coderay.chunking.registry import get_supported_extensions
 
         supported = get_supported_extensions()
-        sm = StateMachine(idx_dir)
+        sm = StateMachine(config=config)
         paths_to_parse = [
             p for p in sm.file_hashes if any(p.endswith(ext) for ext in supported)
         ]

@@ -340,7 +340,7 @@ class Indexer:
         try:
             build_and_save_graph(
                 self._repo_root,
-                self._index_dir,
+                config=self._config,
                 changed_paths=changed_paths,
             )
         except Exception as e:

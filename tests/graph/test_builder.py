@@ -1,5 +1,6 @@
 """Tests for indexer.graph.builder."""
 
+from coderay.core.config import ENV_INDEX_DIR, load_config
 from coderay.graph.builder import (
     build_and_save_graph,
     build_graph,
@@ -39,21 +40,25 @@ class TestSaveAndLoadGraph:
 
 
 class TestBuildAndSaveGraph:
-    def test_with_explicit_paths(self, tmp_path, tmp_index_dir):
+    def test_with_explicit_paths(self, tmp_path, tmp_index_dir, monkeypatch):
+        monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_index_dir))
+        config = load_config()
         (tmp_path / "a.py").write_text(SAMPLE)
-        build_and_save_graph(tmp_path, tmp_index_dir, changed_paths=["a.py"])
+        build_and_save_graph(tmp_path, config=config, changed_paths=["a.py"])
         loaded = load_graph(tmp_index_dir)
         assert loaded is not None
         assert loaded.node_count > 0
 
-    def test_incremental_merges_with_existing(self, tmp_path, tmp_index_dir):
+    def test_incremental_merges_with_existing(self, tmp_path, tmp_index_dir, monkeypatch):
+        monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_index_dir))
+        config = load_config()
         (tmp_path / "a.py").write_text(SAMPLE)
         (tmp_path / "b.py").write_text("def bar():\n    pass\n")
 
-        build_and_save_graph(tmp_path, tmp_index_dir, changed_paths=["a.py", "b.py"])
+        build_and_save_graph(tmp_path, config=config, changed_paths=["a.py", "b.py"])
 
         (tmp_path / "b.py").write_text("def bar_v2():\n    pass\n")
-        build_and_save_graph(tmp_path, tmp_index_dir, changed_paths=["b.py"])
+        build_and_save_graph(tmp_path, config=config, changed_paths=["b.py"])
         updated = load_graph(tmp_index_dir)
 
         assert updated.node_count > 0
