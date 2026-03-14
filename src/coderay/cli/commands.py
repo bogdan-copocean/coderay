@@ -52,6 +52,9 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     _setup_logging(verbose)
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
+    from coderay.core.config import load_config
+
+    ctx.obj["config"] = load_config()
 
 
 @cli.command()
@@ -65,9 +68,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 @click.pass_context
 def build(ctx: click.Context, full: bool, repo: Path) -> None:
     """Build or rebuild the index."""
-    from coderay.core.config import load_config
-
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     index_dir.mkdir(parents=True, exist_ok=True)
     indexer = Indexer(repo, config=config)
@@ -109,9 +110,7 @@ def build(ctx: click.Context, full: bool, repo: Path) -> None:
 @click.pass_context
 def update(ctx: click.Context, repo: Path) -> None:
     """Incremental update (only changed files). Uses file lock."""
-    from coderay.core.config import load_config
-
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     indexer = Indexer(repo, config=config)
     t0 = time.time()
@@ -144,9 +143,7 @@ def search_cmd(
     path_prefix: str | None,
 ) -> None:
     """Semantic search the index."""
-    from coderay.core.config import load_config
-
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
@@ -215,9 +212,7 @@ def list_cmd(
     show_content: bool,
 ) -> None:
     """Show what is in the index: chunk counts and/or chunk list."""
-    from coderay.core.config import load_config
-
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     retrieval = Retrieval(config=config)
     if not index_exists(index_dir):
@@ -253,9 +248,10 @@ def list_cmd(
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Show index status: state, branch, commit, chunk count."""
-    from coderay.core.config import load_config
+    from coderay.state.version import read_index_version
+    from coderay.storage.lancedb import Store
 
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
@@ -266,9 +262,6 @@ def status(ctx: click.Context) -> None:
     if state is None:
         click.echo(_color("No index state found.", YELLOW))
         ctx.exit(1)
-
-    from coderay.state.version import read_index_version
-    from coderay.storage.lancedb import Store
 
     store = Store(config=config)
     chunks = store.chunk_count()
@@ -295,9 +288,7 @@ def status(ctx: click.Context) -> None:
 @click.pass_context
 def maintain(ctx: click.Context, repo: Path) -> None:
     """Reclaim space and compact the index."""
-    from coderay.core.config import load_config
-
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
@@ -353,8 +344,9 @@ def graph_cmd(
     limit: int,
 ) -> None:
     """List call and import graph edges (who calls who, who imports what)."""
-    index_dir = ctx.obj["index_dir"]
-    retrieval = Retrieval(index_dir)
+    config = ctx.obj["config"]
+    index_dir = Path(config.index.path)
+    retrieval = Retrieval(config=config)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
@@ -409,10 +401,9 @@ def watch(
     quiet: bool,
 ) -> None:
     """Watch for file changes and re-index automatically."""
-    from coderay.core.config import load_config
     from coderay.pipeline.watcher import FileWatcher
 
-    config = load_config()
+    config = ctx.obj["config"]
     index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(

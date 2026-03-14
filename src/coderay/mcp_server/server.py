@@ -8,11 +8,22 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from coderay.core.config import load_config
+from coderay.core.config import Config, load_config
 from coderay.mcp_server.errors import IndexNotBuiltError
 from coderay.retrieval.models import SearchResult
 
 logger = logging.getLogger(__name__)
+
+_config_cache: Config | None = None
+
+
+def _get_config() -> Config:
+    """Return cached config; load once per process."""
+    global _config_cache
+    if _config_cache is None:
+        _config_cache = load_config()
+    return _config_cache
+
 
 mcp = FastMCP(
     name="coderay",
@@ -39,8 +50,7 @@ _state_machine_cache: dict[Path, Any] = {}
 
 def _resolve_index_dir() -> Path:
     """Resolve the index directory to an absolute path."""
-    cfg = load_config()
-    return Path(cfg.index.path).resolve()
+    return Path(_get_config().index.path).resolve()
 
 
 def _get_retrieval():
@@ -49,7 +59,7 @@ def _get_retrieval():
     if idx not in _retrieval_cache:
         from coderay.retrieval.search import Retrieval
 
-        _retrieval_cache[idx] = Retrieval()
+        _retrieval_cache[idx] = Retrieval(config=_get_config())
     return _retrieval_cache[idx]
 
 
@@ -202,7 +212,7 @@ def index_status() -> dict:
     if has_store:
         from coderay.storage.lancedb import Store
 
-        store = Store()
+        store = Store(config=_get_config())
         chunk_count = store.chunk_count()
 
     return {
