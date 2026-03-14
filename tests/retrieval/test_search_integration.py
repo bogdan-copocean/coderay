@@ -7,9 +7,7 @@ from coderay.retrieval.search import Retrieval
 
 
 class TestSearchIntegration:
-    def test_build_and_search(
-        self, fake_git_repo, mock_embedder, app_config
-    ):
+    def test_build_and_search(self, fake_git_repo, mock_embedder, app_config):
         if fake_git_repo is None:
             pytest.skip("no git")
         indexer = Indexer(fake_git_repo, embedder=mock_embedder)

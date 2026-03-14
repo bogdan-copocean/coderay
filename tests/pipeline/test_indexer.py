@@ -36,9 +36,7 @@ class TestIndexer:
         result = indexer.build_full()
         assert isinstance(result, IndexResult)
 
-    def test_build_full_with_files(
-        self, fake_git_repo, mock_embedder, app_config
-    ):
+    def test_build_full_with_files(self, fake_git_repo, mock_embedder, app_config):
         if fake_git_repo is None:
             pytest.skip("no git")
         indexer = Indexer(fake_git_repo, embedder=mock_embedder)
@@ -58,9 +56,7 @@ class TestIndexer:
         indexer = Indexer(repo, embedder=mock_embedder)
         assert not indexer.index_exists()
 
-    def test_error_sets_state(
-        self, fake_git_repo, mock_embedder, app_config
-    ):
+    def test_error_sets_state(self, fake_git_repo, mock_embedder, app_config):
         if fake_git_repo is None:
             pytest.skip("no git")
         indexer = Indexer(fake_git_repo, embedder=mock_embedder)
@@ -69,9 +65,7 @@ class TestIndexer:
         state = indexer.current_state
         assert state is not None
 
-    def test_build_full_creates_graph(
-        self, fake_git_repo, mock_embedder, app_config
-    ):
+    def test_build_full_creates_graph(self, fake_git_repo, mock_embedder, app_config):
         if fake_git_repo is None:
             pytest.skip("no git")
         idx = Path(app_config.index.path)
@@ -80,9 +74,7 @@ class TestIndexer:
         graph_file = idx / "graph.json"
         assert graph_file.is_file()
 
-    def test_build_full_writes_version(
-        self, fake_git_repo, mock_embedder, app_config
-    ):
+    def test_build_full_writes_version(self, fake_git_repo, mock_embedder, app_config):
         if fake_git_repo is None:
             pytest.skip("no git")
         idx = Path(app_config.index.path)

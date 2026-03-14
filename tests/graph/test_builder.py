@@ -47,9 +47,7 @@ class TestBuildAndSaveGraph:
         assert loaded is not None
         assert loaded.node_count > 0
 
-    def test_incremental_merges_with_existing(
-        self, tmp_path, app_config
-    ):
+    def test_incremental_merges_with_existing(self, tmp_path, app_config):
         tmp_index_dir = app_config.index.path
         (tmp_path / "a.py").write_text(SAMPLE)
         (tmp_path / "b.py").write_text("def bar():\n    pass\n")

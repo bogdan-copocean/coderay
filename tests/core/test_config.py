@@ -5,8 +5,8 @@ from pathlib import Path
 from coderay.core.config import (
     ENV_INDEX_DIR,
     Config,
-    get_config,
     _reset_config_for_testing,
+    get_config,
 )
 
 
