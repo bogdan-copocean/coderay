@@ -37,13 +37,47 @@ class IndexConfig:
 
 @dataclass(frozen=True)
 class BoostRule:
-    path: str
-    score: float
+    """Single path-based score rule (regex pattern + factor)."""
+
+    pattern: str
+    factor: float
+
+
+def _default_penalties() -> list[BoostRule]:
+    """Return default penalty rules for search result scoring."""
+    return [
+        BoostRule(pattern=r"(^|/)tests?/", factor=0.5),
+        BoostRule(pattern=r"(^|/)test_[^/]+\.py$", factor=0.5),
+        BoostRule(pattern=r"(^|/)(mock|fixture|conftest)", factor=0.4),
+    ]
+
+
+def _default_bonuses() -> list[BoostRule]:
+    """Return default bonus rules for search result scoring."""
+    return [
+        BoostRule(pattern=r"(^|/)src/", factor=1.1),
+    ]
+
+
+@dataclass(frozen=True)
+class BoostingConfig:
+    """Path-based score rules for search result boosting."""
+
+    penalties: list[BoostRule] = field(default_factory=_default_penalties)
+    bonuses: list[BoostRule] = field(default_factory=_default_bonuses)
+
+
+def _default_boosting() -> BoostingConfig:
+    """Return default boosting config (penalties + bonuses)."""
+    return BoostingConfig(
+        penalties=_default_penalties(),
+        bonuses=_default_bonuses(),
+    )
 
 
 @dataclass(frozen=True)
 class SemanticSearchConfig:
-    boost_rules: BoostRule | None = None
+    boosting: BoostingConfig = field(default_factory=_default_boosting)
     metric: str = "cosine"
 
 
@@ -60,6 +94,30 @@ class Config:
     index: IndexConfig = field(default_factory=IndexConfig)
     semantic_search: SemanticSearchConfig = field(default_factory=SemanticSearchConfig)
     watcher: WatcherConfig = field(default_factory=WatcherConfig)
+
+
+def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
+    """Parse dict into BoostingConfig (penalties/bonuses -> list[BoostRule])."""
+    raw_penalties = data.get("penalties")
+    raw_bonuses = data.get("bonuses")
+    penalties = (
+        [BoostRule(**p) for p in raw_penalties]
+        if raw_penalties
+        else _default_penalties()
+    )
+    bonuses = (
+        [BoostRule(**b) for b in raw_bonuses] if raw_bonuses else _default_bonuses()
+    )
+    return BoostingConfig(penalties=penalties, bonuses=bonuses)
+
+
+def _parse_semantic_search(data: dict[str, Any]) -> SemanticSearchConfig:
+    """Parse dict into SemanticSearchConfig (boosting + metric)."""
+    boosting_data = data.get("boosting") or {}
+    return SemanticSearchConfig(
+        boosting=_parse_boosting(boosting_data),
+        metric=data.get("metric", "cosine"),
+    )
 
 
 def _resolve_index_dir() -> Path:
@@ -118,8 +176,8 @@ def load_config() -> Config:
     return Config(
         embedder=EmbedderConfig(**default_data.get("embedder", {})),
         index=IndexConfig(**default_data.get("index", {})),
-        semantic_search=SemanticSearchConfig(
-            **default_data.get("semantic_search", {})  # type: ignore[arg-type]
+        semantic_search=_parse_semantic_search(
+            default_data.get("semantic_search", {}) or {}
         ),
         watcher=WatcherConfig(**default_data.get("watcher", {})),
     )
@@ -157,6 +215,22 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
                         f"Unknown config keys under '{k}': {sorted(unknown_nested)}"
                     )
                 merged[k] = {**default_val, **override_val}
+                # Deep-merge semantic_search.boosting for partial overrides.
+                if k == "semantic_search" and "boosting" in default_val:
+                    boost_default = default_val.get("boosting") or {}
+                    boost_override = merged[k].get("boosting") or {}
+                    if isinstance(boost_override, dict):
+                        unknown_boost = set(boost_override.keys()) - {
+                            "penalties",
+                            "bonuses",
+                        }
+                        if unknown_boost:
+                            raise ConfigError(
+                                "Unknown config keys under "
+                                "'semantic_search.boosting': "
+                                f"{sorted(unknown_boost)}"
+                            )
+                        merged[k]["boosting"] = {**boost_default, **boost_override}
             else:
                 merged[k] = override_val
         else:
@@ -170,8 +244,6 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
     return Config(
         embedder=EmbedderConfig(**merged.get("embedder", {})),
         index=IndexConfig(**merged.get("index", {})),
-        semantic_search=SemanticSearchConfig(
-            **merged.get("semantic_search", {})  # type: ignore[arg-type]
-        ),
+        semantic_search=_parse_semantic_search(merged.get("semantic_search", {}) or {}),
         watcher=WatcherConfig(**merged.get("watcher", {})),
     )

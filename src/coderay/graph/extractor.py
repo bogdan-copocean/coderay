@@ -15,7 +15,9 @@ _PYTHON_BUILTINS: frozenset[str] = frozenset(
 )
 
 
-def build_callee_filter(config: Union[Config, dict[str, Any], None] = None) -> frozenset[str]:
+def build_callee_filter(
+    config: Union[Config, dict[str, Any], None] = None,
+) -> frozenset[str]:
     """Build the callee exclusion set from builtins + user config.
 
     Args:

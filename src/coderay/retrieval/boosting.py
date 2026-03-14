@@ -2,24 +2,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any
 
 from coderay.core.config import Config
-
-DEFAULT_PENALTIES: list[dict[str, Any]] = [
-    {"pattern": r"(^|/)tests?/", "factor": 0.5},
-    {"pattern": r"(^|/)test_[^/]+\.py$", "factor": 0.5},
-    {"pattern": r"(^|/)(mock|fixture|conftest)", "factor": 0.4},
-    {"pattern": r"(^|/)(generated|vendor|third_party)/", "factor": 0.3},
-    {"pattern": r"(^|/)docs?/", "factor": 0.6},
-    {"pattern": r"(^|/)examples?/", "factor": 0.7},
-]
-
-DEFAULT_BONUSES: list[dict[str, Any]] = [
-    {"pattern": r"(^|/)src/", "factor": 1.1},
-    {"pattern": r"(^|/)lib/", "factor": 1.1},
-    {"pattern": r"(^|/)app/", "factor": 1.1},
-]
 
 
 @dataclass
@@ -38,25 +23,24 @@ class StructuralBooster:
     bonuses: list[BoostRule] = field(default_factory=list)
 
     @classmethod
-    def from_config(cls, config: Union[Config, dict[str, Any]]) -> StructuralBooster:
-        """Build from Config or legacy config dict; use defaults when not specified."""
-        if isinstance(config, Config):
-            raw_penalties = DEFAULT_PENALTIES
-            raw_bonuses = DEFAULT_BONUSES
-        else:
-            search_cfg = config.get("search") or {}
-            boost_cfg = search_cfg.get("boost_rules") or {}
-            raw_penalties = boost_cfg.get("penalties") or DEFAULT_PENALTIES
-            raw_bonuses = boost_cfg.get("bonuses") or DEFAULT_BONUSES
+    def from_config(cls, config: Config) -> StructuralBooster:
+        """Build a booster from Config using semantic_search.boosting rules.
 
+        Args:
+            config: Application config (semantic_search.boosting.penalties and bonuses).
+
+        Returns:
+            StructuralBooster with path-based rules from config.
+        """
+        boosting = config.semantic_search.boosting
         return cls(
             penalties=[
-                BoostRule(regex=re.compile(r["pattern"]), factor=r["factor"])
-                for r in raw_penalties
+                BoostRule(regex=re.compile(r.pattern), factor=r.factor)
+                for r in boosting.penalties
             ],
             bonuses=[
-                BoostRule(regex=re.compile(r["pattern"]), factor=r["factor"])
-                for r in raw_bonuses
+                BoostRule(regex=re.compile(r.pattern), factor=r.factor)
+                for r in boosting.bonuses
             ],
         )
 

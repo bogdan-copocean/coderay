@@ -49,7 +49,9 @@ class TestBuildAndSaveGraph:
         assert loaded is not None
         assert loaded.node_count > 0
 
-    def test_incremental_merges_with_existing(self, tmp_path, tmp_index_dir, monkeypatch):
+    def test_incremental_merges_with_existing(
+        self, tmp_path, tmp_index_dir, monkeypatch
+    ):
         monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_index_dir))
         config = load_config()
         (tmp_path / "a.py").write_text(SAMPLE)
