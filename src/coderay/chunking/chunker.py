@@ -9,6 +9,8 @@ from coderay.parsing.base import BaseTreeSitterParser, ParserContext
 
 logger = logging.getLogger(__name__)
 
+MODULE_SYMBOL = "<module>"
+
 
 class ChunkingTreeSitterParser(BaseTreeSitterParser):
     """Tree-sitter based chunker for source files."""
@@ -19,29 +21,30 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         root = tree.root_node
         chunks: list[Chunk] = []
 
-        if preamble_lines := _collect_preamble_lines(
-            root, self._source_bytes, self._ctx.lang_cfg.chunk_types
-        ):
+        if preamble_lines := self._collect_preamble_lines(root):
             chunks.append(
                 Chunk(
                     path=self.file_path,
                     start_line=1,
                     end_line=root.end_point[0] + 1,
-                    symbol="<module>",
+                    symbol=MODULE_SYMBOL,
                     content="\n".join(preamble_lines),
                 )
             )
 
         def _dfs(node) -> None:
-            if node.type in self._ctx.lang_cfg.chunk_types:
-                if node.parent and node.parent.type in self._ctx.lang_cfg.chunk_types:
+            if node.type in self._ctx.lang_cfg.chunker.chunk_types:
+                if (
+                    node.parent
+                    and node.parent.type in self._ctx.lang_cfg.chunker.chunk_types
+                ):
                     for child in node.children:
                         _dfs(child)
                     return
                 start_line = node.start_point[0] + 1
                 end_line = node.end_point[0] + 1
                 text = self.node_text(node)
-                symbol = _get_symbol_name(node, self._source_bytes) or f"<{node.type}>"
+                symbol = self._get_symbol_name(node) or f"<{node.type}>"
                 chunks.append(
                     Chunk(
                         path=self.file_path,
@@ -58,49 +61,35 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         logger.debug("Chunked %s: %d chunks", self.file_path, len(chunks))
         return chunks
 
+    def _get_symbol_name(self, node) -> str:
+        """Extract symbol name from a definition node."""
+        if node.type == "decorated_definition":
+            for child in node.children:
+                if child.type != "decorator":
+                    return self._get_symbol_name(child)
+            return ""
 
-def _get_symbol_name(node, source_bytes: bytes) -> str:
-    """Extract symbol name from a definition node."""
-    if node.type == "decorated_definition":
         for child in node.children:
-            if child.type != "decorator":
-                return _get_symbol_name(child, source_bytes)
+            if child.type == "identifier":
+                return self.node_text(child)
+            if child.type in ("class", "def", "func", "function", "type"):
+                for sibling in node.children:
+                    if sibling.type == "identifier":
+                        return self.node_text(sibling)
+        if node.type in ("property_identifier", "field_identifier"):
+            return self.node_text(node)
         return ""
 
-    for child in node.children:
-        if child.type == "identifier":
-            return source_bytes[child.start_byte : child.end_byte].decode(
-                "utf-8", errors="replace"
-            )
-        if child.type in ("class", "def", "func", "function", "type"):
-            for sibling in node.children:
-                if sibling.type == "identifier":
-                    return source_bytes[sibling.start_byte : sibling.end_byte].decode(
-                        "utf-8", errors="replace"
-                    )
-    if node.type in ("property_identifier", "field_identifier"):
-        return source_bytes[node.start_byte : node.end_byte].decode(
-            "utf-8", errors="replace"
-        )
-    return ""
-
-
-def _collect_preamble_lines(
-    root, source_bytes: bytes, chunk_types: tuple[str, ...]
-) -> list[str]:
-    """Collect top-level lines that are NOT part of any chunk_type definition."""
-    lines: list[str] = []
-    for child in root.children:
-        if child.type in chunk_types:
-            continue
-        text = (
-            source_bytes[child.start_byte : child.end_byte]
-            .decode("utf-8", errors="replace")
-            .strip()
-        )
-        if text:
-            lines.append(text)
-    return lines
+    def _collect_preamble_lines(self, root) -> list[str]:
+        """Collect top-level lines that are NOT part of any chunk_type definition."""
+        lines: list[str] = []
+        for child in root.children:
+            if child.type in self._ctx.lang_cfg.chunker.chunk_types:
+                continue
+            text = self.node_text(child).strip()
+            if text:
+                lines.append(text)
+        return lines
 
 
 def _chunk_file_with_config(

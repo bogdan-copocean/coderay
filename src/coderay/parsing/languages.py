@@ -16,32 +16,47 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class SkeletonConfig:
+    """Configuration for skeleton extraction for a language."""
+
+    import_types: tuple[str, ...]
+    function_scope_types: tuple[str, ...]
+    class_scope_types: tuple[str, ...]
+    extra_class_like_types: tuple[str, ...] = ()
+    top_level_expr_types: tuple[str, ...] = ("expression_statement",)
+    export_like_types: tuple[str, ...] = ("export_statement", "lexical_declaration")
+
+
+@dataclass
+class ChunkerConfig:
+    """Configuration for chunking for a language."""
+
+    chunk_types: tuple[str, ...]
+
+
+@dataclass
+class GraphConfig:
+    """Configuration for graph extraction for a language."""
+
+    import_types: tuple[str, ...]
+    call_types: tuple[str, ...]
+    function_scope_types: tuple[str, ...]
+    class_scope_types: tuple[str, ...]
+
+
+@dataclass
 class LanguageConfig:
     """Describe how a programming language is parsed with Tree-sitter.
 
-    The various *_types attributes list the concrete Tree-sitter node kinds
-    that matter to our analyzers. They act as declarative selectors:
-
-    - ``chunk_types``: node kinds that should become semantic chunks.
-    - ``scope_types``: nodes that introduce a new lexical/semantic scope.
-    - ``import_types``: import-like nodes that can produce IMPORTS edges or
-      skeleton entries.
-    - ``call_types``: call-expression nodes that can produce CALLS edges.
-    - ``function_scope_types``: nodes representing function-like definitions.
-    - ``class_scope_types``: nodes representing class/type/interface defs.
-    - ``init_filenames``: special basename patterns used for module resolution
-      (e.g. ``__init__`` or ``index``).
+    Per-language container that holds feature-specific sub-configs.
     """
 
     name: str
     extensions: tuple[str, ...]
     language_fn: Callable[[], Any]
-    chunk_types: tuple[str, ...]
-    scope_types: tuple[str, ...] = ("function_definition", "class_definition")
-    import_types: tuple[str, ...] = ("import_statement", "import_from_statement")
-    call_types: tuple[str, ...] = ("call", "call_expression")
-    function_scope_types: tuple[str, ...] = ("function_definition",)
-    class_scope_types: tuple[str, ...] = ("class_definition",)
+    skeleton: SkeletonConfig
+    chunker: ChunkerConfig
+    graph: GraphConfig
     init_filenames: tuple[str, ...] = ()
 
     def get_parser(self):
@@ -81,16 +96,24 @@ PYTHON_CONFIG = LanguageConfig(
     name="python",
     extensions=(".py", ".pyi"),
     language_fn=_python_language,
-    chunk_types=(
-        "function_definition",
-        "class_definition",
-        "decorated_definition",
+    skeleton=SkeletonConfig(
+        import_types=("import_statement", "import_from_statement"),
+        function_scope_types=("function_definition",),
+        class_scope_types=("class_definition",),
     ),
-    scope_types=("function_definition", "class_definition"),
-    import_types=("import_statement", "import_from_statement"),
-    call_types=("call",),
-    function_scope_types=("function_definition",),
-    class_scope_types=("class_definition",),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_definition",
+            "class_definition",
+            "decorated_definition",
+        ),
+    ),
+    graph=GraphConfig(
+        import_types=("import_statement", "import_from_statement"),
+        call_types=("call",),
+        function_scope_types=("function_definition",),
+        class_scope_types=("class_definition",),
+    ),
     init_filenames=("__init__",),
 )
 
@@ -98,19 +121,30 @@ JAVASCRIPT_CONFIG = LanguageConfig(
     name="javascript",
     extensions=(".js", ".jsx", ".mjs", ".cjs"),
     language_fn=_javascript_language,
-    chunk_types=(
-        "function_declaration",
-        "class_declaration",
-        "method_definition",
-        "arrow_function",
-        "export_statement",
-        "lexical_declaration",
+    skeleton=SkeletonConfig(
+        import_types=("import_statement",),
+        function_scope_types=("function_declaration", "method_definition"),
+        class_scope_types=("class_declaration",),
+        extra_class_like_types=(),
+        top_level_expr_types=("expression_statement",),
+        export_like_types=("export_statement", "lexical_declaration"),
     ),
-    scope_types=("function_declaration", "class_declaration", "method_definition"),
-    import_types=("import_statement",),
-    call_types=("call_expression",),
-    function_scope_types=("function_declaration", "method_definition"),
-    class_scope_types=("class_declaration",),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "class_declaration",
+            "method_definition",
+            "arrow_function",
+            "export_statement",
+            "lexical_declaration",
+        ),
+    ),
+    graph=GraphConfig(
+        import_types=("import_statement",),
+        call_types=("call_expression",),
+        function_scope_types=("function_declaration", "method_definition"),
+        class_scope_types=("class_declaration",),
+    ),
     init_filenames=("index",),
 )
 
@@ -118,26 +152,36 @@ TYPESCRIPT_CONFIG = LanguageConfig(
     name="typescript",
     extensions=(".ts", ".tsx"),
     language_fn=_typescript_language,
-    chunk_types=(
-        "function_declaration",
-        "class_declaration",
-        "method_definition",
-        "arrow_function",
-        "export_statement",
-        "lexical_declaration",
-        "interface_declaration",
-        "type_alias_declaration",
+    skeleton=SkeletonConfig(
+        import_types=("import_statement",),
+        function_scope_types=("function_declaration", "method_definition"),
+        class_scope_types=("class_declaration",),
+        extra_class_like_types=(
+            "interface_declaration",
+            "type_alias_declaration",
+            "type_declaration",
+        ),
+        top_level_expr_types=("expression_statement",),
+        export_like_types=("export_statement", "lexical_declaration"),
     ),
-    scope_types=(
-        "function_declaration",
-        "class_declaration",
-        "method_definition",
-        "interface_declaration",
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "class_declaration",
+            "method_definition",
+            "arrow_function",
+            "export_statement",
+            "lexical_declaration",
+            "interface_declaration",
+            "type_alias_declaration",
+        ),
     ),
-    import_types=("import_statement",),
-    call_types=("call_expression",),
-    function_scope_types=("function_declaration", "method_definition"),
-    class_scope_types=("class_declaration", "interface_declaration"),
+    graph=GraphConfig(
+        import_types=("import_statement",),
+        call_types=("call_expression",),
+        function_scope_types=("function_declaration", "method_definition"),
+        class_scope_types=("class_declaration", "interface_declaration"),
+    ),
     init_filenames=("index",),
 )
 
@@ -145,16 +189,25 @@ GO_CONFIG = LanguageConfig(
     name="go",
     extensions=(".go",),
     language_fn=_go_language,
-    chunk_types=(
-        "function_declaration",
-        "method_declaration",
-        "type_declaration",
+    skeleton=SkeletonConfig(
+        import_types=("import_declaration",),
+        function_scope_types=("function_declaration", "method_declaration"),
+        class_scope_types=(),
+        extra_class_like_types=("type_declaration",),
     ),
-    scope_types=("function_declaration", "method_declaration"),
-    import_types=("import_declaration",),
-    call_types=("call_expression",),
-    function_scope_types=("function_declaration", "method_declaration"),
-    class_scope_types=(),
+    chunker=ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "method_declaration",
+            "type_declaration",
+        ),
+    ),
+    graph=GraphConfig(
+        import_types=("import_declaration",),
+        call_types=("call_expression",),
+        function_scope_types=("function_declaration", "method_declaration"),
+        class_scope_types=(),
+    ),
     init_filenames=(),
 )
 

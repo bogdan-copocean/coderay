@@ -105,7 +105,7 @@ class GraphExtractor(BaseTreeSitterParser):
         self._ctx = context
         self._source_bytes = context.content.encode("utf-8")
         self._module_id = file_path
-        self._lang_cfg = lang_cfg
+        self._lang_cfg = lang_cfg.graph
         self._nodes = []
         self._edges = []
 
