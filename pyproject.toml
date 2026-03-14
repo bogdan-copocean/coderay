@@ -45,7 +45,6 @@ Repository = "https://github.com/bogdan-copocean/coderay"
 Issues = "https://github.com/bogdan-copocean/coderay/issues"
 
 [project.optional-dependencies]
-openai = ["openai>=2.0.0"]
 languages = [
     "tree-sitter-javascript>=0.25.0",
     "tree-sitter-typescript>=0.23.2",
@@ -56,14 +55,12 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.8.0",
     "mypy>=1.0.0",
-    "openai>=2.0.0",
-    "httpx>=0.28.0",
 ]
 maintain = [
     "pylance>=0.15.0",
 ]
 all = [
-    "coderay[openai,languages,dev,maintain]",
+    "coderay[languages,dev,maintain]",
 ]
 
 [project.scripts]
