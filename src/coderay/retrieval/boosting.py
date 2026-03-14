@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from coderay.core.config import Config
+from coderay.core.config import get_config
 
 
 @dataclass
@@ -23,16 +23,13 @@ class StructuralBooster:
     bonuses: list[BoostRule] = field(default_factory=list)
 
     @classmethod
-    def from_config(cls, config: Config) -> StructuralBooster:
-        """Build a booster from Config using semantic_search.boosting rules.
-
-        Args:
-            config: Application config (semantic_search.boosting.penalties and bonuses).
+    def from_config(cls) -> StructuralBooster:
+        """Build a booster from the application config.
 
         Returns:
             StructuralBooster with path-based rules from config.
         """
-        boosting = config.semantic_search.boosting
+        boosting = get_config().semantic_search.boosting
         return cls(
             penalties=[
                 BoostRule(regex=re.compile(r.pattern), factor=r.factor)

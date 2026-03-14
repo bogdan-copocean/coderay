@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from coderay.core.config import Config, load_config
+from coderay.core.config import get_config
 from coderay.graph.code_graph import CodeGraph
 from coderay.graph.extractor import GraphExtractor
 
@@ -17,14 +17,13 @@ GRAPH_FILENAME = "graph.json"
 def build_graph(
     repo_root: str | Path,
     file_paths_and_contents: list[tuple[str, str]],
-    config: Config | None = None,
 ) -> CodeGraph:
     """Extract a CodeGraph from the given files.
 
     Returns:
         Built CodeGraph with resolved edges.
     """
-    extractor = GraphExtractor(config=config)
+    extractor = GraphExtractor()
     graph = CodeGraph()
     for file_path, content in file_paths_and_contents:
         try:
@@ -66,14 +65,13 @@ def load_graph(index_dir: str | Path) -> CodeGraph | None:
 
 def build_and_save_graph(
     repo_root: str | Path,
-    config: Config | None = None,
     changed_paths: list[str] | None = None,
 ) -> None:
     """Build or incrementally update the graph, then save."""
     from coderay.state.machine import StateMachine
 
     repo = Path(repo_root)
-    config = config or load_config()
+    config = get_config()
     idx_dir = Path(config.index.path)
 
     existing_graph = load_graph(idx_dir) if changed_paths else None
@@ -85,7 +83,7 @@ def build_and_save_graph(
         from coderay.chunking.registry import get_supported_extensions
 
         supported = get_supported_extensions()
-        sm = StateMachine(config=config)
+        sm = StateMachine()
         paths_to_parse = [
             p for p in sm.file_hashes if any(p.endswith(ext) for ext in supported)
         ]
@@ -101,7 +99,7 @@ def build_and_save_graph(
                 logger.warning("Could not read %s for graph: %s", p, e)
 
     if incremental:
-        extractor = GraphExtractor(config=config)
+        extractor = GraphExtractor()
         for fp in paths_to_parse:
             existing_graph.remove_file(fp)
         for fp, content in files_with_content:
@@ -117,7 +115,7 @@ def build_and_save_graph(
             len(files_with_content),
         )
     else:
-        graph = build_graph(repo_root, files_with_content, config=config)
+        graph = build_graph(repo_root, files_with_content)
 
     save_graph(graph, idx_dir)
     logger.info(

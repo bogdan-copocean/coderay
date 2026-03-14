@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import builtins
 import logging
-from typing import Any, Union
+from typing import Any
 
 from coderay.chunking.registry import LanguageConfig, get_language_for_file
-from coderay.core.config import Config
+from coderay.core.config import get_config
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
 
 logger = logging.getLogger(__name__)
@@ -15,24 +15,14 @@ _PYTHON_BUILTINS: frozenset[str] = frozenset(
 )
 
 
-def build_callee_filter(
-    config: Union[Config, dict[str, Any], None] = None,
-) -> frozenset[str]:
-    """Build the callee exclusion set from builtins + user config.
-
-    Args:
-        config: Full application config (Config or dict). Only the graph
-            section is read. If None or no graph section, defaults are used.
+def build_callee_filter() -> frozenset[str]:
+    """Build the callee exclusion set from builtins + application config.
 
     Returns:
         Frozen set of callee names to exclude from CALLS edges.
     """
-    if config is None:
-        graph_cfg = {}
-    elif isinstance(config, dict):
-        graph_cfg = config.get("graph") or {}
-    else:
-        graph_cfg = getattr(config, "graph", None) or {}
+    config = get_config()
+    graph_cfg = getattr(config, "graph", None) or {}
     if not isinstance(graph_cfg, dict):
         graph_cfg = {}
     extra_excludes = set(graph_cfg.get("exclude_callees") or [])
@@ -83,9 +73,9 @@ def _extract_callee_name(text: str) -> str:
 class GraphExtractor:
     """Extract graph nodes and edges from source files."""
 
-    def __init__(self, config: Union[Config, dict[str, Any], None] = None) -> None:
-        """Initialize the extractor with optional config overrides."""
-        self._excluded_callees = build_callee_filter(config)
+    def __init__(self) -> None:
+        """Initialize the extractor from the application config."""
+        self._excluded_callees = build_callee_filter()
         self._source_bytes: bytes = b""
         self._file_path: str = ""
         self._module_id: str = ""
