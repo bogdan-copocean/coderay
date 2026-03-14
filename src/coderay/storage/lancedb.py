@@ -6,13 +6,12 @@ from typing import Any
 
 import lancedb
 
+from coderay.core.config import get_config
 from coderay.core.models import Chunk
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DIMENSIONS = 384
 TABLE_NAME = "chunks"
-DEFAULT_DISTANCE_METRIC = "cosine"
 
 
 def index_exists(index_dir: str | Path) -> bool:
@@ -24,10 +23,13 @@ def index_exists(index_dir: str | Path) -> bool:
 class Store:
     """LanceDB-backed vector store for code chunks."""
 
-    def __init__(self, db_path: str | Path, dimensions: int = DEFAULT_DIMENSIONS):
-        """Initialize the LanceDB store."""
-        self.db_path = Path(db_path)
-        self.dimensions = dimensions
+    def __init__(self) -> None:
+        """Initialize the store from the application config."""
+        cfg = get_config()
+        self._config = cfg
+        self.db_path = Path(cfg.index.path)
+        self.dimensions = cfg.embedder.dimensions
+        self.metric = cfg.semantic_search.metric
         self._ensure_dir()
         self._db = lancedb.connect(str(self.db_path))
         self._table_known = False
@@ -52,7 +54,7 @@ class Store:
         embeddings: list[list[float]],
     ) -> list[dict[str, Any]]:
         rows = []
-        for chunk, emb in zip(chunks, embeddings):
+        for chunk, emb in zip(chunks, embeddings, strict=False):
             if len(emb) != self.dimensions:
                 raise ValueError(
                     f"Embedding dimension {len(emb)} "
@@ -130,16 +132,14 @@ class Store:
                 query = (
                     table.search(query_type="hybrid")
                     .vector(query_embedding)
-                    .distance_type(DEFAULT_DISTANCE_METRIC)
+                    .distance_type(self.metric)
                     .text(query_text)
                 )
             except Exception:
-                query = table.search(query_embedding).distance_type(
-                    DEFAULT_DISTANCE_METRIC
-                )
+                query = table.search(query_embedding).distance_type(self.metric)
                 use_hybrid = False
         else:
-            query = table.search(query_embedding).distance_type(DEFAULT_DISTANCE_METRIC)
+            query = table.search(query_embedding).distance_type(self.metric)
 
         if path_prefix:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")

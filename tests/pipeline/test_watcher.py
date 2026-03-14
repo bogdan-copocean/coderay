@@ -342,7 +342,6 @@ class TestFileWatcher:
         watcher = FileWatcher(
             repo,
             idx,
-            config={"watch": {"debounce_seconds": 0.1}},
             on_batch=lambda c, r: calls.append((c, r)),
             use_polling=True,
         )
@@ -361,7 +360,6 @@ class TestFileWatcher:
         watcher = FileWatcher(
             repo,
             idx,
-            config={"watch": {"debounce_seconds": 0.15}},
             on_batch=record,
             use_polling=True,
         )
@@ -385,7 +383,6 @@ class TestFileWatcher:
         watcher = FileWatcher(
             repo,
             idx,
-            config={"watch": {"debounce_seconds": 0.1}},
             on_batch=lambda c, r: calls.append((c, r)),
             use_polling=True,
         )
@@ -408,7 +405,6 @@ class TestFileWatcher:
         watcher = FileWatcher(
             repo,
             idx,
-            config={"watch": {"debounce_seconds": 0.1}},
             on_batch=lambda c, r: calls.append((c, r)),
             use_polling=True,
         )

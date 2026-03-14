@@ -180,24 +180,23 @@ class FileWatcher:
         self,
         repo_root: Path,
         index_dir: Path,
-        config: dict[str, Any] | None = None,
         on_batch: Callable[[set[str], set[str]], None] | None = None,
         *,
         use_polling: bool = False,
     ) -> None:
-        """Initialize the file watcher."""
-        from coderay.core.config import load_config
+        """Initialize the file watcher from the application config."""
+        from coderay.core.config import get_config
 
         self._repo_root = repo_root.resolve()
         self._index_dir = index_dir.resolve()
-        self._config = config or load_config(index_dir)
+        self._config = get_config()
         self._on_batch = on_batch
         self._use_polling = use_polling
 
-        watch_cfg = self._config.get("watch") or {}
-        self._debounce = float(watch_cfg.get("debounce_seconds", 2))
-        self._threshold = int(watch_cfg.get("branch_switch_threshold", 50))
-        self._extra_exclude: list[str] = list(watch_cfg.get("exclude_patterns") or [])
+        watch_cfg = self._config.watcher
+        self._debounce = float(watch_cfg.debounce)
+        self._threshold = int(watch_cfg.branch_switch_threshold)
+        self._extra_exclude = list(watch_cfg.exclude_patterns or [])
 
         self._observer: Observer | PollingObserver | None = None
         self._handler: _DebouncedHandler | None = None
@@ -275,11 +274,7 @@ class FileWatcher:
 
         try:
             with acquire_indexer_lock(self._index_dir, timeout=30):
-                indexer = Indexer(
-                    self._repo_root,
-                    self._index_dir,
-                    config=self._config,
-                )
+                indexer = Indexer(self._repo_root)
                 if total >= self._threshold:
                     result = indexer.update_incremental()
                 else:

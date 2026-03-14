@@ -1,26 +1,27 @@
-"""Tests for indexer.core.config."""
+"""Tests for coderay.core.config."""
 
-from coderay.core.config import get_embedding_dimensions, load_config
+from pathlib import Path
 
-
-class TestGetEmbeddingDimensions:
-    def test_default(self):
-        assert get_embedding_dimensions({}) == 384
-
-    def test_custom(self):
-        cfg = {"embedder": {"dimensions": 256}}
-        assert get_embedding_dimensions(cfg) == 256
-
-    def test_nested_missing(self):
-        assert get_embedding_dimensions({"embedder": {}}) == 384
+from coderay.core.config import (
+    ENV_INDEX_DIR,
+    Config,
+    _reset_config_for_testing,
+    get_config,
+)
 
 
-class TestLoadConfig:
-    def test_no_config_file(self, tmp_path):
-        cfg = load_config(tmp_path)
-        assert isinstance(cfg, dict)
+class TestGetConfig:
+    def test_no_config_file_uses_defaults(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_path))
+        _reset_config_for_testing(None)
+        cfg = get_config()
+        assert isinstance(cfg, Config)
+        assert cfg.embedder.dimensions == 384
+        assert Path(cfg.index.path) == tmp_path
 
-    def test_with_yaml(self, tmp_path):
+    def test_with_yaml_overrides(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_path))
         (tmp_path / "config.yaml").write_text("embedder:\n  dimensions: 64\n")
-        cfg = load_config(tmp_path)
-        assert cfg["embedder"]["dimensions"] == 64
+        _reset_config_for_testing(None)
+        cfg = get_config()
+        assert cfg.embedder.dimensions == 64

@@ -227,64 +227,109 @@ class TestBuildCalleeFilter:
         assert "Println" not in filt
 
     def test_exclude_callees_adds_names(self):
-        cfg = {"graph": {"exclude_callees": ["our_sdk_helper", "append"]}}
-        filt = build_callee_filter(cfg)
+        from types import SimpleNamespace
+
+        from coderay.core.config import _reset_config_for_testing
+
+        _reset_config_for_testing(
+            SimpleNamespace(graph={"exclude_callees": ["our_sdk_helper", "append"]})
+        )
+        try:
+            filt = build_callee_filter()
+        finally:
+            _reset_config_for_testing(None)
         assert "our_sdk_helper" in filt
         assert "append" in filt
         assert "len" in filt  # builtins still present
 
     def test_include_callees_overrides_default(self):
-        cfg = {"graph": {"include_callees": ["isinstance", "print"]}}
-        filt = build_callee_filter(cfg)
+        from types import SimpleNamespace
+
+        from coderay.core.config import _reset_config_for_testing
+
+        _reset_config_for_testing(
+            SimpleNamespace(graph={"include_callees": ["isinstance", "print"]})
+        )
+        try:
+            filt = build_callee_filter()
+        finally:
+            _reset_config_for_testing(None)
         assert "isinstance" not in filt
         assert "print" not in filt
         assert "len" in filt  # other builtins still present
 
     def test_both_exclude_and_include(self):
-        cfg = {
-            "graph": {
-                "exclude_callees": ["my_helper"],
-                "include_callees": ["isinstance"],
-            }
-        }
-        filt = build_callee_filter(cfg)
+        from types import SimpleNamespace
+
+        from coderay.core.config import _reset_config_for_testing
+
+        _reset_config_for_testing(
+            SimpleNamespace(
+                graph={
+                    "exclude_callees": ["my_helper"],
+                    "include_callees": ["isinstance"],
+                }
+            )
+        )
+        try:
+            filt = build_callee_filter()
+        finally:
+            _reset_config_for_testing(None)
         assert "my_helper" in filt
         assert "isinstance" not in filt
 
     def test_none_config_uses_defaults(self):
-        filt = build_callee_filter(None)
+        filt = build_callee_filter()
         assert "len" in filt
 
     def test_empty_config_uses_defaults(self):
-        filt = build_callee_filter({})
+        filt = build_callee_filter()
         assert "len" in filt
 
 
 class TestConfigurableExtraction:
-    """Test that GraphExtractor respects config overrides end-to-end."""
+    """Test that GraphExtractor respects config (via get_config()) end-to-end."""
 
     def test_include_callees_creates_edge_for_builtin(self):
         """When 'isinstance' is included via config, it should appear as a CALLS edge."""
-        cfg = {"graph": {"include_callees": ["isinstance"]}}
-        ext = GraphExtractor(config=cfg)
-        code = "def check(x):\n    isinstance(x, str)\n"
-        _, edges = ext.extract_from_file("test.py", code)
-        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-        targets = {e.target for e in calls}
-        assert "isinstance" in targets
+        from types import SimpleNamespace
+
+        from coderay.core.config import _reset_config_for_testing
+
+        _reset_config_for_testing(
+            SimpleNamespace(graph={"include_callees": ["isinstance"]})
+        )
+        try:
+            ext = GraphExtractor()
+            code = "def check(x):\n    isinstance(x, str)\n"
+            _, edges = ext.extract_from_file("test.py", code)
+            calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+            targets = {e.target for e in calls}
+            assert "isinstance" in targets
+        finally:
+            _reset_config_for_testing(None)
 
     def test_exclude_callees_filters_custom_name(self):
         """A user-excluded name should not appear as a CALLS edge."""
-        cfg = {"graph": {"exclude_callees": ["my_custom_func"]}}
-        ext = GraphExtractor(config=cfg)
-        code = "def run():\n    my_custom_func()\n    other_func()\n"
-        _, edges = ext.extract_from_file("test.py", code)
-        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-        targets = {e.target for e in calls}
-        assert "my_custom_func" not in targets
-        assert "other_func" in targets
+        from types import SimpleNamespace
 
-    def test_default_extractor_filters_builtins(self):
+        from coderay.core.config import _reset_config_for_testing
+
+        _reset_config_for_testing(
+            SimpleNamespace(graph={"exclude_callees": ["my_custom_func"]})
+        )
+        try:
+            ext = GraphExtractor()
+            code = "def run():\n    my_custom_func()\n    other_func()\n"
+            _, edges = ext.extract_from_file("test.py", code)
+            calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+            targets = {e.target for e in calls}
+            assert "my_custom_func" not in targets
+            assert "other_func" in targets
+        finally:
+            _reset_config_for_testing(None)
+
+    def test_default_extractor_filters_builtins(self, default_config):
         """Default GraphExtractor (no config) still filters builtins."""
         ext = GraphExtractor()
         code = "def f():\n    len([])\n    custom()\n"

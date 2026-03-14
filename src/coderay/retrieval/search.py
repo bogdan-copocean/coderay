@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from coderay.core.config import get_embedding_dimensions, load_config
+from coderay.core.config import Config, get_config
 from coderay.embedding.base import Embedder, load_embedder_from_config
 from coderay.graph.builder import load_graph
 from coderay.retrieval.boosting import StructuralBooster
@@ -19,19 +19,14 @@ logger = logging.getLogger(__name__)
 class Retrieval:
     """Query interface for the semantic index."""
 
-    def __init__(
-        self,
-        index_dir: str | Path,
-        config: dict[str, Any] | None = None,
-        embedder: Embedder | None = None,
-    ) -> None:
-        """Initialize retrieval for the given index."""
-        self.index_dir = Path(index_dir)
-        self._config = config or load_config(self.index_dir)
+    def __init__(self, embedder: Embedder | None = None) -> None:
+        """Initialize retrieval from the application config."""
+        self._config = get_config()
+        self.index_dir = Path(self._config.index.path)
         self._explicit_embedder = embedder
         self._lazy_embedder: Embedder | None = None
-        self._dimensions = get_embedding_dimensions(self._config)
-        self._booster = StructuralBooster.from_config(self._config)
+        self._dimensions = self._config.embedder.dimensions
+        self._booster = StructuralBooster.from_config()
         self._store: Store | None = None
         check_index_version(self.index_dir)
 
@@ -40,16 +35,16 @@ class Retrieval:
         if self._explicit_embedder is not None:
             return self._explicit_embedder
         if self._lazy_embedder is None:
-            self._lazy_embedder = load_embedder_from_config(self._config)
+            self._lazy_embedder = load_embedder_from_config()
         return self._lazy_embedder
 
     @property
-    def config(self) -> dict[str, Any]:
+    def config(self) -> Config:
         return self._config
 
     def _get_store(self) -> Store:
         if self._store is None:
-            self._store = Store(self.index_dir, dimensions=self._dimensions)
+            self._store = Store()
         return self._store
 
     def search(

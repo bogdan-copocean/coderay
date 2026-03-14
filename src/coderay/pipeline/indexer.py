@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from coderay.chunking.chunker import chunk_file
-from coderay.core.config import get_embedding_dimensions, load_config
+from coderay.core.config import Config, get_config
 from coderay.core.timing import timed, timed_phase
 from coderay.core.utils import files_with_changed_content, hash_content, read_from_path
 from coderay.embedding.base import Embedder, load_embedder_from_config
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 RESUME_BATCH_SIZE = 200
 DEFAULT_REPO_ROOT = "."
-DEFAULT_INDEX_DIR = ".index"
 
 
 @dataclass
@@ -44,24 +43,20 @@ class Indexer:
     def __init__(
         self,
         repo_root: str | Path = DEFAULT_REPO_ROOT,
-        index_dir: str | Path = DEFAULT_INDEX_DIR,
-        config: dict[str, Any] | None = None,
         embedder: Embedder | None = None,
     ) -> None:
         """Initialize the indexer."""
         self._repo_root = Path(repo_root)
-        self._index_dir = Path(index_dir)
-        self._config = config or load_config(self._index_dir)
+        self._config = get_config()
+        self._index_dir = Path(self._config.index.path)
         self._git = Git(self._repo_root)
-        self._state = StateMachine(self._index_dir)
-        self._embedder = embedder or load_embedder_from_config(self._config)
-        self._store = Store(
-            self._index_dir, dimensions=get_embedding_dimensions(self._config)
-        )
+        self._state = StateMachine()
+        self._embedder = embedder or load_embedder_from_config()
+        self._store = Store()
         check_index_version(self._index_dir)
 
     @property
-    def config(self) -> dict[str, Any]:
+    def config(self) -> Config:
         """Current config (embedder, index settings)."""
         return self._config
 
@@ -344,7 +339,6 @@ class Indexer:
         try:
             build_and_save_graph(
                 self._repo_root,
-                self._index_dir,
                 changed_paths=changed_paths,
             )
         except Exception as e:

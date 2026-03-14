@@ -45,15 +45,16 @@ def _setup_logging(verbose: bool = False) -> None:
 
 
 @click.group()
-@click.option("--index-dir", default=".index", help="Index directory (default .index)")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Verbose logging")
 @click.pass_context
-def cli(ctx: click.Context, index_dir: str, verbose: bool) -> None:
+def cli(ctx: click.Context, verbose: bool) -> None:
     """CodeRay — build, update, search, and inspect the index."""
     _setup_logging(verbose)
     ctx.ensure_object(dict)
-    ctx.obj["index_dir"] = Path(index_dir)
     ctx.obj["verbose"] = verbose
+    from coderay.core.config import get_config
+
+    get_config()
 
 
 @cli.command()
@@ -67,9 +68,12 @@ def cli(ctx: click.Context, index_dir: str, verbose: bool) -> None:
 @click.pass_context
 def build(ctx: click.Context, full: bool, repo: Path) -> None:
     """Build or rebuild the index."""
-    index_dir = ctx.obj["index_dir"]
+    from coderay.core.config import get_config
+
+    config = get_config()
+    index_dir = Path(config.index.path)
     index_dir.mkdir(parents=True, exist_ok=True)
-    indexer = Indexer(repo, index_dir)
+    indexer = Indexer(repo)
     t0 = time.time()
     try:
         with acquire_indexer_lock(index_dir):
@@ -108,8 +112,11 @@ def build(ctx: click.Context, full: bool, repo: Path) -> None:
 @click.pass_context
 def update(ctx: click.Context, repo: Path) -> None:
     """Incremental update (only changed files). Uses file lock."""
-    index_dir = ctx.obj["index_dir"]
-    indexer = Indexer(repo, index_dir)
+    from coderay.core.config import get_config
+
+    config = get_config()
+    index_dir = Path(config.index.path)
+    indexer = Indexer(repo)
     t0 = time.time()
 
     if not indexer.index_exists():
@@ -140,18 +147,21 @@ def search_cmd(
     path_prefix: str | None,
 ) -> None:
     """Semantic search the index."""
-    index_dir = ctx.obj["index_dir"]
+    from coderay.core.config import get_config
+
+    config = get_config()
+    index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
 
-    sm = StateMachine(index_dir)
+    sm = StateMachine()
     current_state = sm.current_state
     if current_state is None:
         click.echo(_color("No index state. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
 
-    retrieval = Retrieval(index_dir)
+    retrieval = Retrieval()
     click.echo(_color(f"Searching: {query_text!r}", CYAN))
     t0 = time.perf_counter()
 
@@ -208,8 +218,11 @@ def list_cmd(
     show_content: bool,
 ) -> None:
     """Show what is in the index: chunk counts and/or chunk list."""
-    index_dir = ctx.obj["index_dir"]
-    retrieval = Retrieval(index_dir)
+    from coderay.core.config import get_config
+
+    config = get_config()
+    index_dir = Path(config.index.path)
+    retrieval = Retrieval()
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
@@ -243,23 +256,23 @@ def list_cmd(
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Show index status: state, branch, commit, chunk count."""
-    index_dir = ctx.obj["index_dir"]
+    from coderay.core.config import get_config
+    from coderay.state.version import read_index_version
+    from coderay.storage.lancedb import Store
+
+    config = get_config()
+    index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
 
-    sm = StateMachine(index_dir)
+    sm = StateMachine()
     state = sm.current_state
     if state is None:
         click.echo(_color("No index state found.", YELLOW))
         ctx.exit(1)
 
-    from coderay.core.config import get_embedding_dimensions, load_config
-    from coderay.state.version import read_index_version
-    from coderay.storage.lancedb import Store
-
-    config = load_config(index_dir)
-    store = Store(index_dir, dimensions=get_embedding_dimensions(config))
+    store = Store()
     chunks = store.chunk_count()
     version = read_index_version(index_dir)
 
@@ -284,12 +297,15 @@ def status(ctx: click.Context) -> None:
 @click.pass_context
 def maintain(ctx: click.Context, repo: Path) -> None:
     """Reclaim space and compact the index."""
-    index_dir = ctx.obj["index_dir"]
+    from coderay.core.config import get_config
+
+    config = get_config()
+    index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
     click.echo(_color("Maintaining index...", CYAN))
-    indexer = Indexer(repo, index_dir)
+    indexer = Indexer(repo)
     with acquire_indexer_lock(index_dir):
         result = indexer.maintain()
     if result.get("cleanup_done"):
@@ -339,8 +355,11 @@ def graph_cmd(
     limit: int,
 ) -> None:
     """List call and import graph edges (who calls who, who imports what)."""
-    index_dir = ctx.obj["index_dir"]
-    retrieval = Retrieval(index_dir)
+    from coderay.core.config import get_config
+
+    config = get_config()
+    index_dir = Path(config.index.path)
+    retrieval = Retrieval()
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
@@ -377,12 +396,6 @@ def graph_cmd(
     help="Repo root",
 )
 @click.option(
-    "--debounce",
-    type=float,
-    default=None,
-    help="Debounce seconds (default from config, typically 2s)",
-)
-@click.option(
     "--quiet",
     is_flag=True,
     help="Suppress per-file output; show only update summaries.",
@@ -391,14 +404,14 @@ def graph_cmd(
 def watch(
     ctx: click.Context,
     repo: Path,
-    debounce: float | None,
     quiet: bool,
 ) -> None:
     """Watch for file changes and re-index automatically."""
-    from coderay.core.config import load_config
+    from coderay.core.config import get_config
     from coderay.pipeline.watcher import FileWatcher
 
-    index_dir = ctx.obj["index_dir"]
+    config = get_config()
+    index_dir = Path(config.index.path)
     if not index_exists(index_dir):
         click.echo(
             _color(
@@ -408,27 +421,20 @@ def watch(
         )
         ctx.exit(1)
 
-    config = load_config(index_dir)
-    if debounce is not None:
-        config.setdefault("watch", {})["debounce_seconds"] = debounce
-
     if quiet:
         logging.getLogger("coderay.pipeline.watcher").setLevel(logging.WARNING)
 
-    watcher = FileWatcher(repo, index_dir, config=config)
+    watcher = FileWatcher(repo, index_dir)
 
     click.echo(
         _color(
             f"Watching {repo.resolve()} "
-            f"(debounce={config.get('watch', {}).get('debounce_seconds', 2)}s, "
-            f"Ctrl+C to stop)",
+            f"(debounce={config.watcher.debounce}s, Ctrl+C to stop)",
             CYAN,
         )
     )
-    # Do an incremental update at start-up
-    index_dir = ctx.obj["index_dir"]
     index_dir.mkdir(parents=True, exist_ok=True)
-    indexer = Indexer(repo, index_dir)
+    indexer = Indexer(repo)
     indexer.update_incremental()
 
     watcher.start()

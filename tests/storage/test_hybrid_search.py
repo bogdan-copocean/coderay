@@ -11,8 +11,8 @@ from coderay.storage.lancedb import Store
 class TestSearchScoring:
     """Store.search() returns higher-is-better scores in all modes."""
 
-    def _make_store(self, tmp_index_dir) -> Store:
-        store = Store(tmp_index_dir, dimensions=4)
+    def _make_store(self, app_config) -> Store:
+        store = Store()
         chunks = [
             Chunk(
                 path="a.py",
@@ -33,26 +33,26 @@ class TestSearchScoring:
         store.insert_chunks(chunks, embeddings)
         return store
 
-    def test_vector_returns_cosine_similarity(self, tmp_index_dir):
+    def test_vector_returns_cosine_similarity(self, app_config):
         """Pure vector search returns cosine similarity (0-1 range)."""
-        store = self._make_store(tmp_index_dir)
+        store = self._make_store(app_config)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2)
         assert len(results) >= 1
         assert all(0 <= r["score"] <= 1.0 for r in results)
 
-    def test_vector_exact_match_scores_high(self, tmp_index_dir):
-        store = self._make_store(tmp_index_dir)
+    def test_vector_exact_match_scores_high(self, app_config):
+        store = self._make_store(app_config)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2)
         best = max(results, key=lambda r: r["score"])
         assert best["path"] == "a.py"
         assert best["score"] > 0.9
 
-    def test_hybrid_returns_results(self, tmp_index_dir):
-        store = self._make_store(tmp_index_dir)
+    def test_hybrid_returns_results(self, app_config):
+        store = self._make_store(app_config)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
         assert len(results) >= 1
 
-    def test_hybrid_scores_positive(self, tmp_index_dir):
-        store = self._make_store(tmp_index_dir)
+    def test_hybrid_scores_positive(self, app_config):
+        store = self._make_store(app_config)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
         assert all("score" in r and r["score"] > 0 for r in results)
