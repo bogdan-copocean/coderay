@@ -67,6 +67,35 @@ class LanguageConfig:
         parser = Parser(lang)
         return parser
 
+    # ------------------------------------------------------------------
+    # Backwards-compatible attribute accessors
+    # ------------------------------------------------------------------
+
+    @property
+    def chunk_types(self) -> tuple[str, ...]:
+        """Alias for chunker.chunk_types to preserve older usages."""
+        return self.chunker.chunk_types
+
+    @property
+    def import_types(self) -> tuple[str, ...]:
+        """Alias for graph.import_types for older call sites."""
+        return self.graph.import_types
+
+    @property
+    def call_types(self) -> tuple[str, ...]:
+        """Alias for graph.call_types for older call sites."""
+        return self.graph.call_types
+
+    @property
+    def function_scope_types(self) -> tuple[str, ...]:
+        """Alias for graph.function_scope_types for older call sites."""
+        return self.graph.function_scope_types
+
+    @property
+    def class_scope_types(self) -> tuple[str, ...]:
+        """Alias for graph.class_scope_types for older call sites."""
+        return self.graph.class_scope_types
+
 
 def _python_language():
     import tree_sitter_python as tspython

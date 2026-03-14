@@ -276,7 +276,11 @@ class GraphExtractor(BaseTreeSitterParser):
 
     def _handle_call(self, node, *, scope_stack: list[str]) -> None:
         """Create a CALLS edge from the enclosing scope to the callee."""
-        caller_id = f"{self.file_path}::{'.'.join(scope_stack)}" if scope_stack else self._module_id
+        caller_id = (
+            f"{self.file_path}::{'.'.join(scope_stack)}"
+            if scope_stack
+            else self._module_id
+        )
         first_child = node.children[0] if node.children else None
         if first_child is None:
             return
