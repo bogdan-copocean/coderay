@@ -1,11 +1,11 @@
-"""Tests for indexer.graph.extractor."""
+"""Tests for graph.extractor."""
 
 from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.extractor import (
-    GraphExtractor,
     _extract_callee_name,
     _resolve_relative_import,
     build_callee_filter,
+    extract_graph_from_file,
 )
 
 SAMPLE = """\
@@ -71,25 +71,22 @@ class TestExtractCalleeName:
         assert _extract_callee_name("obj.method") == "method"
 
 
-class TestGraphExtractor:
-    def setup_method(self):
-        self.extractor = GraphExtractor()
-
+class TestGraphExtraction:
     def test_extracts_module_node(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", "x = 1")
+        nodes, edges = extract_graph_from_file("test.py", "x = 1")
         module_nodes = [n for n in nodes if n.kind == NodeKind.MODULE]
         assert len(module_nodes) == 1
         assert module_nodes[0].id == "test.py"
 
     def test_extracts_imports(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", SAMPLE)
+        nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
         targets = {e.target for e in import_edges}
         assert "os" in targets
         assert "pathlib" in targets
 
     def test_extracts_class_and_function_nodes(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", SAMPLE)
+        nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         names = {n.name for n in nodes}
         assert "Animal" in names
         assert "Dog" in names
@@ -98,27 +95,32 @@ class TestGraphExtractor:
         assert "bark" in names
 
     def test_extracts_defines_edges(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", SAMPLE)
+        nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         defines = [e for e in edges if e.kind == EdgeKind.DEFINES]
         targets = {e.target for e in defines}
         assert any("Animal" in t for t in targets)
         assert any("helper" in t for t in targets)
 
     def test_extracts_inherits_edges(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", SAMPLE)
+        nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         inherits = [e for e in edges if e.kind == EdgeKind.INHERITS]
         assert len(inherits) >= 1
         assert any("Animal" in e.target for e in inherits)
 
     def test_extracts_calls_edges_with_stripped_self(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", SAMPLE)
+        nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         callee_names = {e.target for e in calls}
         assert "bark" in callee_names
 
     def test_call_targets_are_short_names(self):
-        code = "class Foo:\n    def run(self):\n        self.helper()\n        self._store.save()\n"
-        nodes, edges = self.extractor.extract_from_file("test.py", code)
+        code = (
+            "class Foo:\n"
+            "    def run(self):\n"
+            "        self.helper()\n"
+            "        self._store.save()\n"
+        )
+        nodes, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "helper" in targets
@@ -126,12 +128,12 @@ class TestGraphExtractor:
         assert "self.helper" not in targets
 
     def test_empty_file(self):
-        nodes, edges = self.extractor.extract_from_file("empty.py", "")
+        nodes, edges = extract_graph_from_file("empty.py", "")
         assert len(nodes) == 1
         assert len(edges) == 0
 
     def test_qualified_names(self):
-        nodes, edges = self.extractor.extract_from_file("test.py", SAMPLE)
+        nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         dog_speak = [
             n for n in nodes if n.name == "speak" and "Dog" in n.qualified_name
         ]
@@ -139,7 +141,7 @@ class TestGraphExtractor:
 
     def test_module_level_calls_captured(self):
         code = "from flask import Flask\napp = Flask(__name__)\n"
-        nodes, edges = self.extractor.extract_from_file("app.py", code)
+        nodes, edges = extract_graph_from_file("app.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         assert len(calls) >= 1
         assert calls[0].source == "app.py"
@@ -147,7 +149,7 @@ class TestGraphExtractor:
 
     def test_relative_import_resolved(self):
         code = "from ..common.base_repo import BaseRepo\n"
-        nodes, edges = self.extractor.extract_from_file("src/a/b/c/file.py", code)
+        nodes, edges = extract_graph_from_file("src/a/b/c/file.py", code)
         import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
         assert len(import_edges) == 1
         assert import_edges[0].target == "src/a/b/common/base_repo"
@@ -160,7 +162,7 @@ class TestGraphExtractor:
             "        result = self.survey_service.get_count_by_survey_id(sid)\n"
             "        return result\n"
         )
-        nodes, edges = self.extractor.extract_from_file("api/views.py", code)
+        nodes, edges = extract_graph_from_file("api/views.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "get_count_by_survey_id" in targets, (
@@ -170,7 +172,7 @@ class TestGraphExtractor:
     def test_chained_attribute_call_creates_edge(self):
         """obj.a.b.c() should produce a CALLS edge to 'c'."""
         code = "def process():\n    result = app.services.registry.find_handler(name)\n"
-        nodes, edges = self.extractor.extract_from_file("test.py", code)
+        nodes, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "find_handler" in targets
@@ -184,7 +186,7 @@ class TestGraphExtractor:
             "    print(x)\n"
             "    custom_func()\n"
         )
-        nodes, edges = self.extractor.extract_from_file("test.py", code)
+        nodes, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "custom_func" in targets
@@ -201,7 +203,7 @@ class TestGraphExtractor:
             "    data.forEach(fn)\n"
             "    custom_func()\n"
         )
-        nodes, edges = self.extractor.extract_from_file("test.py", code)
+        nodes, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "append" in targets
@@ -288,10 +290,10 @@ class TestBuildCalleeFilter:
 
 
 class TestConfigurableExtraction:
-    """Test that GraphExtractor respects config (via get_config()) end-to-end."""
+    """Test that extraction respects config (via get_config()) end-to-end."""
 
     def test_include_callees_creates_edge_for_builtin(self):
-        """When 'isinstance' is included via config, it should appear as a CALLS edge."""
+        """When 'isinstance' is included via config, it appears as a CALLS edge."""
         from types import SimpleNamespace
 
         from coderay.core.config import _reset_config_for_testing
@@ -300,9 +302,8 @@ class TestConfigurableExtraction:
             SimpleNamespace(graph={"include_callees": ["isinstance"]})
         )
         try:
-            ext = GraphExtractor()
             code = "def check(x):\n    isinstance(x, str)\n"
-            _, edges = ext.extract_from_file("test.py", code)
+            _, edges = extract_graph_from_file("test.py", code)
             calls = [e for e in edges if e.kind == EdgeKind.CALLS]
             targets = {e.target for e in calls}
             assert "isinstance" in targets
@@ -319,9 +320,8 @@ class TestConfigurableExtraction:
             SimpleNamespace(graph={"exclude_callees": ["my_custom_func"]})
         )
         try:
-            ext = GraphExtractor()
             code = "def run():\n    my_custom_func()\n    other_func()\n"
-            _, edges = ext.extract_from_file("test.py", code)
+            _, edges = extract_graph_from_file("test.py", code)
             calls = [e for e in edges if e.kind == EdgeKind.CALLS]
             targets = {e.target for e in calls}
             assert "my_custom_func" not in targets
@@ -329,11 +329,10 @@ class TestConfigurableExtraction:
         finally:
             _reset_config_for_testing(None)
 
-    def test_default_extractor_filters_builtins(self, default_config):
-        """Default GraphExtractor (no config) still filters builtins."""
-        ext = GraphExtractor()
+    def test_default_extraction_filters_builtins(self, default_config):
+        """Default extraction (no config) still filters builtins."""
         code = "def f():\n    len([])\n    custom()\n"
-        _, edges = ext.extract_from_file("test.py", code)
+        _, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "len" not in targets

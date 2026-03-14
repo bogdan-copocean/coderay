@@ -124,7 +124,7 @@ class Indexer:
                 last_commit=self._git.get_head_commit(),
             )
 
-        all_path_hashes = self._run_batch_loop(
+        all_path_hashes, all_files_content = self._run_batch_loop(
             rel_paths=paths_to_process,
             full_rel_paths=rel_paths,
         )
@@ -141,7 +141,7 @@ class Indexer:
             branch=self._git.get_current_branch(),
         )
         write_index_version(self._index_dir)
-        self._refresh_graph()
+        self._refresh_graph(files_content=all_files_content)
         return IndexResult(updated=len(self._state.file_hashes))
 
     def update_incremental(self) -> IndexResult:
@@ -246,19 +246,26 @@ class Indexer:
         self,
         rel_paths: list[str],
         full_rel_paths: list[str],
-    ) -> dict[str, str]:
-        """Run the pipeline in batches and save progress for resume."""
+    ) -> tuple[dict[str, str], list[tuple[str, str]]]:
+        """Run the pipeline in batches and save progress for resume.
+
+        Returns:
+            Tuple of (path_hashes, accumulated_files_content).
+        """
         all_path_hashes: dict[str, str] = {}
+        all_files_content: list[tuple[str, str]] = []
 
         for i in range(0, len(rel_paths), RESUME_BATCH_SIZE):
             batch = rel_paths[i : i + RESUME_BATCH_SIZE]
-            all_path_hashes.update(self._run_pipeline(rel_paths=batch))
+            hashes, files_content = self._run_pipeline(rel_paths=batch)
+            all_path_hashes.update(hashes)
+            all_files_content.extend(files_content)
             self._state.save_progress(
                 full_rel_paths=full_rel_paths,
                 processed_count=i + len(batch),
             )
 
-        return all_path_hashes
+        return all_path_hashes, all_files_content
 
     def _update(
         self,
@@ -272,7 +279,7 @@ class Indexer:
             last_commit=self._git.get_head_commit(),
         )
 
-        batch_hashes = self._run_batch_loop(
+        batch_hashes, files_content = self._run_batch_loop(
             rel_paths=rel_paths,
             full_rel_paths=rel_paths,
         )
@@ -282,15 +289,20 @@ class Indexer:
             last_commit=self._git.get_head_commit(),
             branch=self._git.get_current_branch(),
         )
-        self._refresh_graph(changed_paths=rel_paths)
+        self._refresh_graph(changed_paths=rel_paths, files_content=files_content)
         return IndexResult(updated=len(batch_hashes))
 
     @timed("pipeline")
     def _run_pipeline(
         self,
         rel_paths: list[str],
-    ) -> dict[str, str]:
-        """Chunk, embed, and store the given files."""
+    ) -> tuple[dict[str, str], list[tuple[str, str]]]:
+        """Chunk, embed, and store the given files.
+
+        Returns:
+            Tuple of (path_hashes, files_content) so callers can forward
+            the already-read content to the graph builder.
+        """
         files_content: list[tuple[str, str]] = []
 
         with timed_phase("read"):
@@ -306,7 +318,7 @@ class Indexer:
                     logger.warning("Skip (read failed) %s: %s", p, e)
 
         if not files_content:
-            return {}
+            return {}, []
 
         path_hashes = {p: hash_content(content) for p, content in files_content}
 
@@ -320,7 +332,7 @@ class Indexer:
 
         if not chunks:
             logger.info("Pipeline done: 0 chunks in %d files", len(files_content))
-            return path_hashes
+            return path_hashes, files_content
 
         texts = [c.content for c in chunks]
         with timed_phase("embedding"):
@@ -332,14 +344,19 @@ class Indexer:
         logger.info(
             "Pipeline done: %d chunks in %d files", len(chunks), len(files_content)
         )
-        return path_hashes
+        return path_hashes, files_content
 
-    def _refresh_graph(self, changed_paths: list[str] | None = None) -> None:
+    def _refresh_graph(
+        self,
+        changed_paths: list[str] | None = None,
+        files_content: list[tuple[str, str]] | None = None,
+    ) -> None:
         """Rebuild and save the code graph, logging warnings on failure."""
         try:
             build_and_save_graph(
                 self._repo_root,
                 changed_paths=changed_paths,
+                files_content=files_content,
             )
         except Exception as e:
             logger.warning("Graph refresh failed: %s", e)

@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from coderay.chunking.registry import get_language_for_file
-from coderay.parsing.base import BaseTreeSitterParser, ParserContext
+from coderay.parsing.base import BaseTreeSitterParser, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +15,11 @@ def extract_skeleton(
     content: str,
 ) -> str:
     """Extract the skeleton of a source file (signatures, no bodies)."""
-    path_str = str(path)
-    lang_cfg = get_language_for_file(path_str)
-    if lang_cfg is None:
+    ctx = parse_file(path, content)
+    if ctx is None:
         return content
 
-    context = ParserContext(file_path=path_str, content=content, lang_cfg=lang_cfg)
-    parser = SkeletonTreeSitterParser(context)
+    parser = SkeletonTreeSitterParser(ctx)
     try:
         lines = parser.collect_lines()
     except Exception:  # pragma: no cover - defensive fallback
@@ -78,7 +75,8 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         indent = "    " * depth
         ntype = node.type
 
-        lang_cfg = self._ctx.lang_cfg.skeleton
+        lang_cfg = self._ctx.lang_cfg
+        skel_cfg = lang_cfg.skeleton
         if ntype in lang_cfg.import_types:
             lines.append(indent + self.node_text(node).strip())
             return
@@ -93,9 +91,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             lines.append("")
             return
 
-        class_like_types = tuple(lang_cfg.class_scope_types) + tuple(
-            lang_cfg.extra_class_like_types
-        )
+        class_like_types = lang_cfg.class_scope_types + skel_cfg.extra_class_like_types
         if ntype in class_like_types:
             sig = self._get_signature_line(node).strip()
             lines.append(indent + sig)
@@ -109,13 +105,13 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             lines.append("")
             return
 
-        if ntype in lang_cfg.top_level_expr_types and depth == 0:
+        if ntype in skel_cfg.top_level_expr_types and depth == 0:
             text = self.node_text(node).strip()
             if text.startswith(('"""', "'''", '"', "'")) or "=" in text:
                 lines.append(indent + text)
             return
 
-        if ntype in lang_cfg.export_like_types and depth == 0:
+        if ntype in skel_cfg.export_like_types and depth == 0:
             text = self.node_text(node)
             first_line = text.split("\n")[0].strip()
             lines.append(indent + first_line)

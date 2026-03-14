@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import builtins
 import logging
-from typing import Any
 
-from coderay.chunking.registry import LanguageConfig, get_language_for_file
 from coderay.core.config import get_config
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
-from coderay.parsing.base import BaseTreeSitterParser, ParserContext
+from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -71,57 +69,66 @@ def _extract_callee_name(text: str) -> str:
     return parts[-1] if parts else cleaned
 
 
-class GraphExtractor(BaseTreeSitterParser):
-    """Extract graph nodes and edges from source files."""
+def extract_graph_from_file(
+    file_path: str,
+    content: str,
+    *,
+    excluded_callees: frozenset[str] | None = None,
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """Parse a source file and extract all graph nodes and edges.
 
-    def __init__(self) -> None:
-        """Initialize the extractor from the application config."""
-        dummy_ctx = ParserContext(file_path="", content="", lang_cfg=None)
-        super().__init__(dummy_ctx)
-        self._excluded_callees = build_callee_filter()
-        self._module_id: str = ""
-        self._lang_cfg: LanguageConfig | None = None
+    Args:
+        file_path: Path of the source file.
+        content: Source code contents.
+        excluded_callees: Pre-computed callee filter.  When ``None``,
+            ``build_callee_filter()`` is called (hits the global config).
+
+    Returns:
+        Tuple of (nodes, edges). Returns ``([], [])`` if the language
+        is unsupported or parsing fails.
+    """
+    ctx = parse_file(file_path, content)
+    if ctx is None:
+        return [], []
+
+    if excluded_callees is None:
+        excluded_callees = build_callee_filter()
+
+    parser = GraphTreeSitterParser(ctx, excluded_callees=excluded_callees)
+    try:
+        return parser.extract()
+    except Exception:
+        return [], []
+
+
+class GraphTreeSitterParser(BaseTreeSitterParser):
+    """One-shot tree-sitter based graph extractor for a single source file."""
+
+    def __init__(
+        self,
+        context: ParserContext,
+        *,
+        excluded_callees: frozenset[str],
+    ) -> None:
+        """Initialize the parser with file context and callee filter."""
+        super().__init__(context)
+        self._excluded_callees = excluded_callees
+        self._module_id: str = context.file_path
         self._nodes: list[GraphNode] = []
         self._edges: list[GraphEdge] = []
 
-    def extract_from_file(
-        self,
-        file_path: str,
-        content: str,
-    ) -> tuple[list[GraphNode], list[GraphEdge]]:
-        """Parse a source file and extract all graph nodes and edges.
-
-        Returns:
-            Tuple of (nodes, edges). Returns ``([], [])`` if the language
-            is unsupported or parsing fails.
-        """
-        lang_cfg = get_language_for_file(file_path)
-        if lang_cfg is None:
-            return [], []
-
-        context = ParserContext(file_path=file_path, content=content, lang_cfg=lang_cfg)
-        # Reinitialize the base parser with the real context for this file.
-        self.__init__()
-        self._ctx = context
-        self._source_bytes = context.content.encode("utf-8")
-        self._module_id = file_path
-        self._lang_cfg = lang_cfg.graph
-        self._nodes = []
-        self._edges = []
-
-        try:
-            tree = self.get_tree()
-        except Exception:
-            return [], []
+    def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
+        """Walk the syntax tree and return all graph nodes and edges."""
+        tree = self.get_tree()
 
         module_node = GraphNode(
             id=self._module_id,
             kind=NodeKind.MODULE,
-            file_path=file_path,
+            file_path=self.file_path,
             start_line=1,
             end_line=tree.root_node.end_point[0] + 1,
-            name=file_path,
-            qualified_name=file_path,
+            name=self.file_path,
+            qualified_name=self.file_path,
         )
         self._nodes.append(module_node)
 
@@ -135,17 +142,19 @@ class GraphExtractor(BaseTreeSitterParser):
     def _visit(self, node, *, scope_stack: list[str]) -> None:
         """Recursively walk the syntax tree, dispatching to type-specific handlers."""
         ntype = node.type
-        lang_cfg = self._lang_cfg
+        lang_cfg = self._ctx.lang_cfg
 
         if ntype in lang_cfg.import_types:
             self._handle_import(node)
         elif ntype in lang_cfg.function_scope_types:
             self._handle_function_def(node, scope_stack=scope_stack)
             return
-        elif ntype in lang_cfg.class_scope_types:
+        elif ntype in (
+            lang_cfg.class_scope_types + lang_cfg.graph.extra_class_scope_types
+        ):
             self._handle_class_def(node, scope_stack=scope_stack)
             return
-        elif ntype in lang_cfg.call_types:
+        elif ntype in lang_cfg.graph.call_types:
             self._handle_call(node, scope_stack=scope_stack)
 
         for child in node.children:
@@ -163,7 +172,7 @@ class GraphExtractor(BaseTreeSitterParser):
             if child.type in ("dotted_name", "relative_import"):
                 if is_from_import and found_module:
                     continue
-                target = self._text(child)
+                target = self.node_text(child)
                 if target:
                     if child.type == "relative_import" and target.startswith("."):
                         resolved = _resolve_relative_import(self._module_id, target)
@@ -179,7 +188,7 @@ class GraphExtractor(BaseTreeSitterParser):
                     if is_from_import:
                         found_module = True
             elif child.type == "string":
-                target = self._text(child).strip("'\"")
+                target = self.node_text(child).strip("'\"")
                 if target:
                     self._edges.append(
                         GraphEdge(
@@ -189,7 +198,7 @@ class GraphExtractor(BaseTreeSitterParser):
                         )
                     )
             elif child.type == "interpreted_string_literal":
-                target = self._text(child).strip('"')
+                target = self.node_text(child).strip('"')
                 if target:
                     self._edges.append(
                         GraphEdge(
@@ -201,7 +210,7 @@ class GraphExtractor(BaseTreeSitterParser):
 
     def _handle_function_def(self, node, *, scope_stack: list[str]) -> None:
         """Create a FUNCTION node and DEFINES edge, then recurse into the body."""
-        name = self._get_identifier(node)
+        name = self.identifier_from_node(node)
         if not name:
             return
         qualified = ".".join([*scope_stack, name])
@@ -230,7 +239,7 @@ class GraphExtractor(BaseTreeSitterParser):
 
     def _handle_class_def(self, node, *, scope_stack: list[str]) -> None:
         """Create a CLASS node, DEFINES + INHERITS edges, then recurse."""
-        name = self._get_identifier(node)
+        name = self.identifier_from_node(node)
         if not name:
             return
         qualified = ".".join([*scope_stack, name])
@@ -262,7 +271,7 @@ class GraphExtractor(BaseTreeSitterParser):
                         "attribute",
                         "type_identifier",
                     ):
-                        if base_name := self._text(arg):
+                        if base_name := self.node_text(arg):
                             self._edges.append(
                                 GraphEdge(
                                     source=node_id,
@@ -284,7 +293,7 @@ class GraphExtractor(BaseTreeSitterParser):
         first_child = node.children[0] if node.children else None
         if first_child is None:
             return
-        raw_callee = self._text(first_child)
+        raw_callee = self.node_text(first_child)
         if not raw_callee:
             return
         callee_name = _extract_callee_name(raw_callee)
@@ -296,15 +305,3 @@ class GraphExtractor(BaseTreeSitterParser):
                     kind=EdgeKind.CALLS,
                 )
             )
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _get_identifier(self, node) -> str:
-        """Return the identifier name from a definition node."""
-        return self.identifier_from_node(node)
-
-    def _text(self, node) -> str:
-        """Decode the raw source text spanned by a syntax tree node."""
-        return self.node_text(node)

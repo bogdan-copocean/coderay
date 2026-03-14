@@ -7,18 +7,11 @@ chunking, skeleton extraction, and graph building can all rely on the same
 parsing primitives.
 """
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from pathlib import Path
+from typing import Any
 
 from tree_sitter import Parser, Tree
-
-
-class HasTreeSitterLanguage(Protocol):
-    """Protocol for objects that can provide a Tree-sitter Language handle."""
-
-    def language_fn(self) -> Any:  # pragma: no cover - structural typing only
-        ...
 
 
 @dataclass
@@ -34,6 +27,26 @@ class ParserContext:
     file_path: str
     content: str
     lang_cfg: Any
+
+
+def parse_file(path: str | Path, content: str) -> ParserContext | None:
+    """Resolve a file's language and build a parser context.
+
+    Args:
+        path: File path (used to determine the language via extension).
+        content: Source code contents.
+
+    Returns:
+        A ``ParserContext`` ready for use with any ``BaseTreeSitterParser``
+        subclass, or ``None`` if the file's language is not supported.
+    """
+    from coderay.parsing.languages import get_language_for_file
+
+    path_str = str(path) if isinstance(path, Path) else path
+    lang_cfg = get_language_for_file(path_str)
+    if lang_cfg is None:
+        return None
+    return ParserContext(file_path=path_str, content=content, lang_cfg=lang_cfg)
 
 
 class BaseTreeSitterParser:
@@ -97,36 +110,24 @@ class BaseTreeSitterParser:
     def identifier_from_node(self, node) -> str:
         """Extract an identifier name from a definition node.
 
-        This is a shared implementation used by multiple analyzers. It prefers
-        identifier-like child nodes and falls back to an empty string when no
-        suitable name is found.
+        Handles decorated definitions (unwraps decorators), keyword siblings
+        (e.g. ``def`` followed by ``identifier``), and identifier-like leaf
+        nodes.  Falls back to an empty string when no suitable name is found.
         """
+        if node.type == "decorated_definition":
+            for child in getattr(node, "children", []):
+                if child.type != "decorator":
+                    return self.identifier_from_node(child)
+            return ""
+
         for child in getattr(node, "children", []):
             if child.type in ("identifier", "type_identifier", "field_identifier"):
                 return self.node_text(child)
+            if child.type in ("class", "def", "func", "function", "type"):
+                for sibling in getattr(node, "children", []):
+                    if sibling.type == "identifier":
+                        return self.node_text(sibling)
+
+        if node.type in ("property_identifier", "field_identifier"):
+            return self.node_text(node)
         return ""
-
-    # ------------------------------------------------------------------
-    # Traversal
-    # ------------------------------------------------------------------
-
-    def walk(
-        self,
-        node,
-        *,
-        pre_visit: Callable[[Any], None] | None = None,
-        post_visit: Callable[[Any], None] | None = None,
-    ) -> None:
-        """Depth-first walk of the syntax tree.
-
-        Args:
-            node: Current Tree-sitter node.
-            pre_visit: Optional callback executed before visiting children.
-            post_visit: Optional callback executed after visiting children.
-        """
-        if pre_visit is not None:
-            pre_visit(node)
-        for child in getattr(node, "children", []):
-            self.walk(child, pre_visit=pre_visit, post_visit=post_visit)
-        if post_visit is not None:
-            post_visit(node)

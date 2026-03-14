@@ -1,6 +1,6 @@
 """Tests for multi-language registry."""
 
-from coderay.chunking.registry import (
+from coderay.parsing.languages import (
     LANGUAGE_REGISTRY,
     get_language_for_file,
     get_supported_extensions,
@@ -87,7 +87,12 @@ class TestGetSupportedExtensions:
 
 class TestLanguageConfigParser:
     def test_python_parser_loads(self):
+        from coderay.parsing.base import BaseTreeSitterParser, ParserContext
+
         cfg = LANGUAGE_REGISTRY["python"]
-        parser = cfg.get_parser()
-        tree = parser.parse(b"def foo(): pass")
+        ctx = ParserContext(
+            file_path="test.py", content="def foo(): pass", lang_cfg=cfg
+        )
+        parser = BaseTreeSitterParser(ctx)
+        tree = parser.get_tree()
         assert tree.root_node is not None
