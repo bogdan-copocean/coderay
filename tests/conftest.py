@@ -46,6 +46,8 @@ def helper():
     return g.greet("world")
 """
 
+TREE_SITTER_PLAYGROUND_PATH = Path(__file__).parent / "tree_sitter_playground.py"
+
 
 @pytest.fixture
 def mock_embedder() -> MockEmbedder:
@@ -90,6 +92,13 @@ def tmp_index_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def sample_python_code() -> str:
     return SAMPLE_PYTHON
+
+
+@pytest.fixture
+def tree_sitter_playground_source() -> tuple[str, str]:
+    """Return (path, source) for the Tree-sitter playground module."""
+    source = TREE_SITTER_PLAYGROUND_PATH.read_text(encoding="utf-8")
+    return (str(TREE_SITTER_PLAYGROUND_PATH), source)
 
 
 @pytest.fixture
