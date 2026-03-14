@@ -145,15 +145,39 @@ def _resolve_config_path(index_dir: Path) -> Path:
     return index_dir / name
 
 
-def load_config() -> Config:
-    """Load the application configuration as a frozen dataclass.
+_config_cache: Config | None = None
+
+
+def get_config() -> Config:
+    """Return the application config. Loaded once per process and cached.
+
+    Do not call Config() or load_config() directly; use this accessor so
+    configuration is consistent and not overridable at runtime.
 
     Returns:
-        Loaded configuration with resolved index path.
+        The single frozen Config instance for this process.
 
     Raises:
         ConfigError: If the config file contains unknown keys or is invalid.
     """
+    global _config_cache
+    if _config_cache is None:
+        _config_cache = _load_config_impl()
+    return _config_cache
+
+
+def _reset_config_for_testing(config: Config | None = None) -> None:
+    """Reset the config cache. For use in tests only.
+
+    If config is None, the next get_config() will reload from env/file.
+    If config is provided, the next get_config() will return it until reset again.
+    """
+    global _config_cache
+    _config_cache = config
+
+
+def _load_config_impl() -> Config:
+    """Load configuration from env and optional config file. Internal only."""
     index_dir = _resolve_index_dir()
 
     cfg_path = _resolve_config_path(index_dir)
