@@ -6,7 +6,7 @@ from typing import Any
 
 import lancedb
 
-from coderay.core.config import Config, load_config
+from coderay.core.config import get_config
 from coderay.core.models import Chunk
 
 logger = logging.getLogger(__name__)
@@ -23,12 +23,13 @@ def index_exists(index_dir: str | Path) -> bool:
 class Store:
     """LanceDB-backed vector store for code chunks."""
 
-    def __init__(self, config: Config | None = None):
-        """Initialize the LanceDB store."""
-        self._config: Config = config or load_config()
-        self.db_path = Path(self._config.index.path)
-        self.dimensions = self._config.embedder.dimensions
-        self.metric = self._config.semantic_search.metric
+    def __init__(self) -> None:
+        """Initialize the store from the application config."""
+        cfg = get_config()
+        self._config = cfg
+        self.db_path = Path(cfg.index.path)
+        self.dimensions = cfg.embedder.dimensions
+        self.metric = cfg.semantic_search.metric
         self._ensure_dir()
         self._db = lancedb.connect(str(self.db_path))
         self._table_known = False

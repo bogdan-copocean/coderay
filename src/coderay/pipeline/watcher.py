@@ -180,18 +180,16 @@ class FileWatcher:
         self,
         repo_root: Path,
         index_dir: Path,
-        config: dict[str, Any] | None = None,
         on_batch: Callable[[set[str], set[str]], None] | None = None,
         *,
         use_polling: bool = False,
     ) -> None:
-        """Initialize the file watcher."""
-        from coderay.core.config import Config, load_config
+        """Initialize the file watcher from the application config."""
+        from coderay.core.config import get_config
 
         self._repo_root = repo_root.resolve()
         self._index_dir = index_dir.resolve()
-        cfg: Config = config or load_config()
-        self._config = cfg
+        self._config = get_config()
         self._on_batch = on_batch
         self._use_polling = use_polling
 
@@ -276,11 +274,7 @@ class FileWatcher:
 
         try:
             with acquire_indexer_lock(self._index_dir, timeout=30):
-                indexer = Indexer(
-                    self._repo_root,
-                    self._index_dir,
-                    config=self._config,
-                )
+                indexer = Indexer(self._repo_root)
                 if total >= self._threshold:
                     result = indexer.update_incremental()
                 else:

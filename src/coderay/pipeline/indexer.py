@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from coderay.chunking.chunker import chunk_file
-from coderay.core.config import Config, load_config
+from coderay.core.config import Config, get_config
 from coderay.core.timing import timed, timed_phase
 from coderay.core.utils import files_with_changed_content, hash_content, read_from_path
 from coderay.embedding.base import Embedder, load_embedder_from_config
@@ -43,17 +43,16 @@ class Indexer:
     def __init__(
         self,
         repo_root: str | Path = DEFAULT_REPO_ROOT,
-        config: Config | None = None,
         embedder: Embedder | None = None,
     ) -> None:
         """Initialize the indexer."""
         self._repo_root = Path(repo_root)
-        self._config: Config = config or load_config()
+        self._config = get_config()
         self._index_dir = Path(self._config.index.path)
         self._git = Git(self._repo_root)
-        self._state = StateMachine(self._index_dir)
-        self._embedder = embedder or load_embedder_from_config(self._config)
-        self._store = Store(self._index_dir, config=self._config)
+        self._state = StateMachine()
+        self._embedder = embedder or load_embedder_from_config()
+        self._store = Store()
         check_index_version(self._index_dir)
 
     @property
@@ -340,7 +339,6 @@ class Indexer:
         try:
             build_and_save_graph(
                 self._repo_root,
-                config=self._config,
                 changed_paths=changed_paths,
             )
         except Exception as e:

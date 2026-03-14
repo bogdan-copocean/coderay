@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 
-from coderay.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +22,13 @@ class Embedder(ABC):
         ...
 
 
-def load_embedder_from_config(config: Config) -> Embedder:
-    """Build an Embedder from a Config dataclass."""
+def load_embedder_from_config() -> Embedder:
+    """Build an Embedder from the application config."""
 
+    from coderay.core.config import get_config
     from coderay.embedding.local import LocalEmbedder
 
+    config = get_config()
     return LocalEmbedder(
         model=config.embedder.model,
         dimensions=config.embedder.dimensions,
