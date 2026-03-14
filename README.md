@@ -19,7 +19,7 @@ AI coding assistants and a standalone CLI.
 pip install coderay
 ```
 
-With all extras (OpenAI embeddings, JS/TS/Go support, MCP server):
+With all extras (JS/TS/Go support, MCP server tools):
 
 ```bash
 pip install "coderay[all]"
@@ -79,7 +79,7 @@ Optional `config.yaml` in the index directory:
 
 ```yaml
 embedder:
-  provider: local           # local | openai
+  provider: local
   model: all-MiniLM-L6-v2
   dimensions: 384
 

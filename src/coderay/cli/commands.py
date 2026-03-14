@@ -14,7 +14,7 @@ from coderay.retrieval.search import Retrieval
 from coderay.state.machine import StateMachine
 from coderay.storage.lancedb import index_exists
 
-# Load .env so OPENAI_API_KEY etc. are available (e.g. for embedder).
+# Load .env so configuration and environment variables are available.
 load_dotenv()
 
 # ANSI colors (safe when not TTY we can strip or leave)
@@ -39,8 +39,8 @@ def _setup_logging(verbose: bool = False) -> None:
         level=level,
         datefmt="%H:%M:%S",
     )
-    # Suppress noisy OpenAI/HTTP logging; keep only warnings and errors
-    for name in ("openai", "httpx", "httpcore"):
+    # Suppress noisy HTTP logging; keep only warnings and errors
+    for name in ("httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
