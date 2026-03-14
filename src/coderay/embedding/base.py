@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
 
-from coderay.core.config import get_embedding_dimensions
+from coderay.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +23,12 @@ class Embedder(ABC):
         ...
 
 
-def load_embedder_from_config(config: dict[str, Any]) -> Embedder:
-    """Build an Embedder from a config dict."""
-    emb = config.get("embedder") or {}
+def load_embedder_from_config(config: Config) -> Embedder:
+    """Build an Embedder from a Config dataclass."""
 
     from coderay.embedding.local import LocalEmbedder
 
     return LocalEmbedder(
-        model=emb.get("model"),
-        dimensions=get_embedding_dimensions(config),
+        model=config.embedder.model,
+        dimensions=config.embedder.dimensions,
     )

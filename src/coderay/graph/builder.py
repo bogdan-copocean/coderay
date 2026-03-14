@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from coderay.core.config import Config, load_config
 from coderay.graph.code_graph import CodeGraph
 from coderay.graph.extractor import GraphExtractor
 
@@ -16,7 +17,7 @@ GRAPH_FILENAME = "graph.json"
 def build_graph(
     repo_root: str | Path,
     file_paths_and_contents: list[tuple[str, str]],
-    config: dict[str, Any] | None = None,
+    config: Config | None = None,
 ) -> CodeGraph:
     """Extract a CodeGraph from the given files.
 
@@ -69,12 +70,11 @@ def build_and_save_graph(
     changed_paths: list[str] | None = None,
 ) -> None:
     """Build or incrementally update the graph, then save."""
-    from coderay.core.config import load_config
     from coderay.state.machine import StateMachine
 
     repo = Path(repo_root)
     idx_dir = Path(index_dir)
-    config = load_config(idx_dir)
+    config = load_config()
 
     existing_graph = load_graph(idx_dir) if changed_paths else None
     incremental = existing_graph is not None and changed_paths is not None

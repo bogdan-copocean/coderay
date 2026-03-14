@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from coderay.core.config import load_config
 from coderay.mcp_server.errors import IndexNotBuiltError
 from coderay.retrieval.models import SearchResult
 
@@ -32,15 +33,14 @@ mcp = FastMCP(
     ),
 )
 
-DEFAULT_INDEX_DIR = ".index"
-
 _retrieval_cache: dict[Path, Any] = {}
 _state_machine_cache: dict[Path, Any] = {}
 
 
 def _resolve_index_dir() -> Path:
     """Resolve the index directory to an absolute path."""
-    return Path(DEFAULT_INDEX_DIR).resolve()
+    cfg = load_config()
+    return Path(cfg.index.path).resolve()
 
 
 def _get_retrieval():
@@ -49,7 +49,7 @@ def _get_retrieval():
     if idx not in _retrieval_cache:
         from coderay.retrieval.search import Retrieval
 
-        _retrieval_cache[idx] = Retrieval(idx)
+        _retrieval_cache[idx] = Retrieval()
     return _retrieval_cache[idx]
 
 
@@ -193,7 +193,6 @@ def index_status() -> dict:
     if state is None:
         raise IndexNotBuiltError()
 
-    from coderay.core.config import get_embedding_dimensions, load_config
     from coderay.state.version import read_index_version
     from coderay.storage.lancedb import index_exists as idx_exists
 
@@ -203,8 +202,7 @@ def index_status() -> dict:
     if has_store:
         from coderay.storage.lancedb import Store
 
-        config = load_config(idx_dir)
-        store = Store(idx_dir, dimensions=get_embedding_dimensions(config))
+        store = Store()
         chunk_count = store.chunk_count()
 
     return {
