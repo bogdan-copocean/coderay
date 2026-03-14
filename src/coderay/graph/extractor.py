@@ -205,12 +205,12 @@ class GraphExtractor(BaseTreeSitterParser):
         if not name:
             return
         qualified = ".".join([*scope_stack, name])
-        node_id = f"{self._file_path}::{qualified}"
+        node_id = f"{self.file_path}::{qualified}"
         self._nodes.append(
             GraphNode(
                 id=node_id,
                 kind=NodeKind.FUNCTION,
-                file_path=self._file_path,
+                file_path=self.file_path,
                 start_line=node.start_point[0] + 1,
                 end_line=node.end_point[0] + 1,
                 name=name,
@@ -234,12 +234,12 @@ class GraphExtractor(BaseTreeSitterParser):
         if not name:
             return
         qualified = ".".join([*scope_stack, name])
-        node_id = f"{self._file_path}::{qualified}"
+        node_id = f"{self.file_path}::{qualified}"
         self._nodes.append(
             GraphNode(
                 id=node_id,
                 kind=NodeKind.CLASS,
-                file_path=self._file_path,
+                file_path=self.file_path,
                 start_line=node.start_point[0] + 1,
                 end_line=node.end_point[0] + 1,
                 name=name,
@@ -276,11 +276,7 @@ class GraphExtractor(BaseTreeSitterParser):
 
     def _handle_call(self, node, *, scope_stack: list[str]) -> None:
         """Create a CALLS edge from the enclosing scope to the callee."""
-        caller_id = (
-            f"{self._file_path}::{'.'.join(scope_stack)}"
-            if scope_stack
-            else self._module_id
-        )
+        caller_id = f"{self.file_path}::{'.'.join(scope_stack)}" if scope_stack else self._module_id
         first_child = node.children[0] if node.children else None
         if first_child is None:
             return
