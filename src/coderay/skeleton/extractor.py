@@ -4,8 +4,20 @@ import logging
 from pathlib import Path
 
 from coderay.chunking.registry import get_language_for_file
+from coderay.parsing.base import BaseTreeSitterParser, ParserContext
 
 logger = logging.getLogger(__name__)
+
+
+class SkeletonTreeSitterParser(BaseTreeSitterParser):
+    """Tree-sitter based skeleton extractor for source files."""
+
+    def collect_lines(self) -> list[str]:
+        """Return the skeleton of the file as a list of lines."""
+        tree = self.get_tree()
+        lines: list[str] = []
+        _visit_skeleton(tree.root_node, self._source_bytes, lines, depth=0)
+        return lines
 
 
 def extract_skeleton(
@@ -18,15 +30,12 @@ def extract_skeleton(
     if lang_cfg is None:
         return content
 
+    context = ParserContext(file_path=path_str, content=content, lang_cfg=lang_cfg)
+    parser = SkeletonTreeSitterParser(context)
     try:
-        parser = lang_cfg.get_parser()
-    except Exception:
+        lines = parser.collect_lines()
+    except Exception:  # pragma: no cover - defensive fallback
         return content
-
-    source_bytes = content.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    lines: list[str] = []
-    _visit_skeleton(tree.root_node, source_bytes, lines, depth=0)
     return "\n".join(lines)
 
 

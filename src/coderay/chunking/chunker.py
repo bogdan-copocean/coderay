@@ -5,8 +5,58 @@ from pathlib import Path
 
 from coderay.chunking.registry import LanguageConfig, get_language_for_file
 from coderay.core.models import Chunk
+from coderay.parsing.base import BaseTreeSitterParser, ParserContext
 
 logger = logging.getLogger(__name__)
+
+
+class ChunkingTreeSitterParser(BaseTreeSitterParser):
+    """Tree-sitter based chunker for source files."""
+
+    def collect_chunks(self) -> list[Chunk]:
+        """Collect all chunks for the configured file and language."""
+        tree = self.get_tree()
+        root = tree.root_node
+        chunks: list[Chunk] = []
+
+        if preamble_lines := _collect_preamble_lines(
+            root, self._source_bytes, self._ctx.lang_cfg.chunk_types
+        ):
+            chunks.append(
+                Chunk(
+                    path=self.file_path,
+                    start_line=1,
+                    end_line=root.end_point[0] + 1,
+                    symbol="<module>",
+                    content="\n".join(preamble_lines),
+                )
+            )
+
+        def _dfs(node) -> None:
+            if node.type in self._ctx.lang_cfg.chunk_types:
+                if node.parent and node.parent.type in self._ctx.lang_cfg.chunk_types:
+                    for child in node.children:
+                        _dfs(child)
+                    return
+                start_line = node.start_point[0] + 1
+                end_line = node.end_point[0] + 1
+                text = self.node_text(node)
+                symbol = _get_symbol_name(node, self._source_bytes) or f"<{node.type}>"
+                chunks.append(
+                    Chunk(
+                        path=self.file_path,
+                        start_line=start_line,
+                        end_line=end_line,
+                        symbol=symbol,
+                        content=text,
+                    )
+                )
+            for child in node.children:
+                _dfs(child)
+
+        _dfs(root)
+        logger.debug("Chunked %s: %d chunks", self.file_path, len(chunks))
+        return chunks
 
 
 def _get_symbol_name(node, source_bytes: bytes) -> str:
@@ -59,61 +109,13 @@ def _chunk_file_with_config(
     lang_cfg: LanguageConfig,
 ) -> list[Chunk]:
     """Chunk a file using the provided language configuration."""
+    context = ParserContext(file_path=path, content=content, lang_cfg=lang_cfg)
+    parser = ChunkingTreeSitterParser(context)
     try:
-        parser = lang_cfg.get_parser()
-    except Exception as e:
-        logger.warning("Could not load parser for %s (%s): %s", path, lang_cfg.name, e)
+        return parser.collect_chunks()
+    except Exception as e:  # pragma: no cover - defensive logging
+        logger.warning("Chunking failed for %s (%s): %s", path, lang_cfg.name, e)
         return []
-
-    source_bytes = content.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    root = tree.root_node
-    chunks: list[Chunk] = []
-
-    def dfs(node) -> None:
-        if node.type in lang_cfg.chunk_types:
-            # [py] Avoid duplicates on decorated functions.
-            # [py] Decorators are stored with symbol of the function that is decorating
-            # [py] But the content field of the decorated function will capture them
-            if node.parent and node.parent.type in lang_cfg.chunk_types:
-                for child in node.children:
-                    dfs(child)
-                return
-            start_line = node.start_point[0] + 1
-            end_line = node.end_point[0] + 1
-            text = source_bytes[node.start_byte : node.end_byte].decode(
-                "utf-8", errors="replace"
-            )
-            symbol = _get_symbol_name(node, source_bytes) or f"<{node.type}>"
-            chunks.append(
-                Chunk(
-                    path=path,
-                    start_line=start_line,
-                    end_line=end_line,
-                    symbol=symbol,
-                    content=text,
-                )
-            )
-        for child in node.children:
-            dfs(child)
-
-    if preamble_lines := _collect_preamble_lines(
-        root, source_bytes, lang_cfg.chunk_types
-    ):
-        chunks.append(
-            Chunk(
-                path=path,
-                start_line=1,
-                end_line=root.end_point[0] + 1,
-                symbol="<module>",
-                content="\n".join(preamble_lines),
-            ),
-        )
-
-    dfs(root)
-
-    logger.debug("Chunked %s: %d chunks", path, len(chunks))
-    return chunks
 
 
 def chunk_file(path: str | Path, content: str) -> list[Chunk]:

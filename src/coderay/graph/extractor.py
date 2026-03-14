@@ -7,6 +7,7 @@ from typing import Any
 from coderay.chunking.registry import LanguageConfig, get_language_for_file
 from coderay.core.config import get_config
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.parsing.base import BaseTreeSitterParser, ParserContext
 
 logger = logging.getLogger(__name__)
 
@@ -70,14 +71,14 @@ def _extract_callee_name(text: str) -> str:
     return parts[-1] if parts else cleaned
 
 
-class GraphExtractor:
+class GraphExtractor(BaseTreeSitterParser):
     """Extract graph nodes and edges from source files."""
 
     def __init__(self) -> None:
         """Initialize the extractor from the application config."""
+        dummy_ctx = ParserContext(file_path="", content="", lang_cfg=None)
+        super().__init__(dummy_ctx)
         self._excluded_callees = build_callee_filter()
-        self._source_bytes: bytes = b""
-        self._file_path: str = ""
         self._module_id: str = ""
         self._lang_cfg: LanguageConfig | None = None
         self._nodes: list[GraphNode] = []
@@ -98,19 +99,20 @@ class GraphExtractor:
         if lang_cfg is None:
             return [], []
 
-        try:
-            parser = lang_cfg.get_parser()
-        except Exception:
-            return [], []
-
-        self._source_bytes = content.encode("utf-8")
-        self._file_path = file_path
+        context = ParserContext(file_path=file_path, content=content, lang_cfg=lang_cfg)
+        # Reinitialize the base parser with the real context for this file.
+        self.__init__()
+        self._ctx = context
+        self._source_bytes = context.content.encode("utf-8")
         self._module_id = file_path
         self._lang_cfg = lang_cfg
         self._nodes = []
         self._edges = []
 
-        tree = parser.parse(self._source_bytes)
+        try:
+            tree = self.get_tree()
+        except Exception:
+            return [], []
 
         module_node = GraphNode(
             id=self._module_id,
@@ -301,15 +303,8 @@ class GraphExtractor:
 
     def _get_identifier(self, node) -> str:
         """Return the identifier name from a definition node."""
-        for child in node.children:
-            if child.type in ("identifier", "type_identifier", "field_identifier"):
-                return self._source_bytes[child.start_byte : child.end_byte].decode(
-                    "utf-8", errors="replace"
-                )
-        return ""
+        return self.identifier_from_node(node)
 
     def _text(self, node) -> str:
         """Decode the raw source text spanned by a syntax tree node."""
-        return self._source_bytes[node.start_byte : node.end_byte].decode(
-            "utf-8", errors="replace"
-        )
+        return self.node_text(node)

@@ -1,3 +1,23 @@
+"""Tests for skeleton.extractor."""
+
+from coderay.skeleton.extractor import extract_skeleton
+
+
+class TestExtractSkeleton:
+    def test_returns_original_content_for_unsupported_language(self) -> None:
+        """Ensure non-supported files are passed through unchanged."""
+        content = "just some text"
+        result = extract_skeleton("notes.txt", content)
+        assert result == content
+
+    def test_simple_function_signature(self) -> None:
+        """Extract a single Python function signature with ellipsis."""
+        code = "def hello(name: str) -> str:\n    return f'hi {name}'\n"
+        result = extract_skeleton("example.py", code)
+        assert "def hello" in result
+        assert "..." in result
+
+
 """Tests for file skeleton extraction."""
 
 from coderay.skeleton.extractor import extract_skeleton
