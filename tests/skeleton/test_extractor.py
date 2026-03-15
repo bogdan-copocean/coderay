@@ -92,3 +92,10 @@ class TestExtractSkeleton:
     def test_unsupported_extension_returns_raw_content(self):
         skeleton = extract_skeleton("noext", SAMPLE_PYTHON)
         assert skeleton == SAMPLE_PYTHON
+
+    def test_tree_sitter_playground_skeleton(
+        self, tree_sitter_playground_source, expected_tree_sitter_playground_skeleton
+    ):
+        """Verify skeleton extraction for the eclectic tree_sitter_playground module."""
+        skeleton = extract_skeleton(*tree_sitter_playground_source)
+        assert skeleton == expected_tree_sitter_playground_skeleton

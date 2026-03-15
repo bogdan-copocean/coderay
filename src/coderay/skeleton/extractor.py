@@ -23,6 +23,7 @@ def extract_skeleton(
     try:
         lines = parser.collect_lines()
     except Exception:  # pragma: no cover - defensive fallback
+        logger.exception("Skeleton extraction failed")
         return content
     return "\n".join(lines)
 
@@ -34,26 +35,42 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         """Return the skeleton of a file as a list of lines."""
         tree = self.get_tree()
         lines: list[str] = []
-        self._visit_skeleton(tree.root_node, lines, depth=0)
+        self._seen = set()
+        self._dfs(tree.root_node, lines, depth=0)
         return lines
+
+    def _extract_text(self, node) -> str | None:
+        """Extract string text from an expression_statement, or None."""
+        if node.type == "expression_statement":
+            for sub in node.children:
+                if sub.type == "string":
+                    return self.node_text(sub).strip()
+        return None
 
     def _get_docstring(self, node) -> str | None:
         """Extract docstring from the first child of the body block, if present."""
         if not hasattr(node, "children"):
             return None
-        body = None
+
+        # For class/function level docstring
+        if node.type in ("function_definition", "class_definition"):
+            body = None
+            for child in node.children:
+                if child.type in ("block", "statement_block"):
+                    body = child
+                    break
+
+            if body is None:
+                return None
+
+            for child in body.children:
+                if text := self._extract_text(child):
+                    return text
+
+        # Module-level or other: first expression_statement with string
         for child in node.children:
-            if child.type in ("block", "statement_block"):
-                body = child
-                break
-        if body is None:
-            return None
-        for child in body.children:
-            if child.type == "expression_statement":
-                for sub in child.children:
-                    if sub.type == "string":
-                        return self.node_text(sub)
-            break
+            if text := self._extract_text(child):
+                return text
         return None
 
     def _get_signature_line(self, node) -> str:
@@ -66,56 +83,68 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         first_line = text.split("\n")[0]
         return first_line
 
-    def _visit_skeleton(
-        self,
-        node,
-        lines: list[str],
-        depth: int,
-    ) -> None:
+    def _dfs(self, node, lines: list[str], depth: int) -> None:
         indent = "    " * depth
         ntype = node.type
-
         lang_cfg = self._ctx.lang_cfg
-        skel_cfg = lang_cfg.skeleton
+
+        interesting = (
+            "module",
+            *lang_cfg.import_types,
+            *lang_cfg.function_scope_types,
+            *lang_cfg.class_scope_types,
+            *lang_cfg.decorator_scope_types,
+        )
+
+        if node.id in self._seen:
+            return
+
+        if ntype not in interesting:
+            skel_cfg = lang_cfg.skeleton
+            if depth == 0 and ntype in skel_cfg.top_level_expr_types:
+                text = self.node_text(node).strip()
+
+                if text and (text.startswith(('"""', "'''", '"', "'")) or "=" in text):
+                    lines.append(text)
+            for child in node.children:
+                self._dfs(child, lines, depth)
+            return
+
         if ntype in lang_cfg.import_types:
             lines.append(indent + self.node_text(node).strip())
+
+        if ntype in lang_cfg.decorator_scope_types:
+            for child in node.named_children:
+                if child.type == "decorator":
+                    lines.append(indent + self.node_text(child).strip())
+                    self._seen.add(child.id)
+                    continue
+                if child.type in (
+                    *lang_cfg.function_scope_types,
+                    *lang_cfg.class_scope_types,
+                ):
+                    self._dfs(child, lines, depth)
+                    break
+            self._seen.add(node.id)
             return
 
         if ntype in lang_cfg.function_scope_types:
-            sig = self._get_signature_line(node).strip()
-            lines.append(indent + sig)
-            docstring = self._get_docstring(node)
-            if docstring:
-                lines.append(indent + "    " + docstring)
-            lines.append(indent + f"    {ELLIPSIS}")
-            lines.append("")
+            lines.append(indent + self._get_signature_line(node))
+            if docstr := self._get_docstring(node):
+                lines.append(indent + "    " + docstr)
+            lines.append(indent + "    " + ELLIPSIS)
+            self._seen.add(node.id)
             return
 
-        class_like_types = lang_cfg.class_scope_types + skel_cfg.extra_class_like_types
-        if ntype in class_like_types:
-            sig = self._get_signature_line(node).strip()
-            lines.append(indent + sig)
-            docstring = self._get_docstring(node)
-            if docstring:
-                lines.append(indent + "    " + docstring)
+        if ntype in lang_cfg.class_scope_types:
+            lines.append(indent + self._get_signature_line(node))
+            if docstr := self._get_docstring(node):
+                lines.append(indent + "    " + docstr)
+            self._seen.add(node.id)
             for child in node.children:
-                if child.type in ("block", "class_body", "statement_block"):
-                    for member in child.children:
-                        self._visit_skeleton(member, lines, depth + 1)
-            lines.append("")
+                self._dfs(child, lines, depth + 1)
             return
 
-        if ntype in skel_cfg.top_level_expr_types and depth == 0:
-            text = self.node_text(node).strip()
-            if text.startswith(('"""', "'''", '"', "'")) or "=" in text:
-                lines.append(indent + text)
-            return
-
-        if ntype in skel_cfg.export_like_types and depth == 0:
-            text = self.node_text(node)
-            first_line = text.split("\n")[0].strip()
-            lines.append(indent + first_line)
-            return
-
+        self._seen.add(node.id)
         for child in node.children:
-            self._visit_skeleton(child, lines, depth)
+            self._dfs(child, lines, depth)
