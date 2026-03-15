@@ -8,9 +8,9 @@ consumers (chunking, skeleton extraction, graph building, etc.).
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,7 @@ class GraphConfig:
     extra_class_scope_types: tuple[str, ...] = ()
 
 
-@dataclass
-class LanguageConfig:
+class LanguageConfigProtocol(Protocol):
     """Describe how a programming language is parsed with Tree-sitter.
 
     Shared node type sets (``import_types``, ``function_scope_types``,
@@ -52,13 +51,9 @@ class LanguageConfig:
     name: str
     extensions: tuple[str, ...]
     language_fn: Callable[[], Any]
-    import_types: tuple[str, ...]
-    function_scope_types: tuple[str, ...]
-    class_scope_types: tuple[str, ...]
+    graph: GraphConfig
     skeleton: SkeletonConfig
     chunker: ChunkerConfig
-    graph: GraphConfig
-    init_filenames: tuple[str, ...] = ()
 
 
 def _python_language():
@@ -85,113 +80,147 @@ def _go_language():
     return tsgo.language()
 
 
-PYTHON_CONFIG = LanguageConfig(
-    name="python",
-    extensions=(".py", ".pyi"),
-    language_fn=_python_language,
-    import_types=("import_statement", "import_from_statement"),
-    function_scope_types=("function_definition",),
-    class_scope_types=("class_definition",),
-    skeleton=SkeletonConfig(),
-    chunker=ChunkerConfig(
-        chunk_types=(
-            "function_definition",
-            "class_definition",
-            "decorated_definition",
+@dataclass
+class PythonConfig:
+    name: str = "python"
+    extensions: tuple[str, ...] = (".py", ".pyi")
+    language_fn: Callable[[], Any] = _python_language
+    import_types: tuple[str, ...] = (
+        "import_statement",
+        "import_from_statement",
+        "future_import_statement",
+    )
+    function_scope_types: tuple[str, ...] = ("function_definition",)
+    class_scope_types: tuple[str, ...] = ("class_definition",)
+    decorator_scope_types: tuple[str, ...] = ("decorated_definition",)
+    skeleton: SkeletonConfig = field(default_factory=SkeletonConfig)
+    chunker: ChunkerConfig = field(
+        default_factory=lambda: ChunkerConfig(
+            chunk_types=(
+                "function_definition",
+                "class_definition",
+                "decorated_definition",
+            ),
         ),
-    ),
-    graph=GraphConfig(
-        call_types=("call",),
-    ),
-    init_filenames=("__init__",),
-)
-
-JAVASCRIPT_CONFIG = LanguageConfig(
-    name="javascript",
-    extensions=(".js", ".jsx", ".mjs", ".cjs"),
-    language_fn=_javascript_language,
-    import_types=("import_statement",),
-    function_scope_types=("function_declaration", "method_definition"),
-    class_scope_types=("class_declaration",),
-    skeleton=SkeletonConfig(),
-    chunker=ChunkerConfig(
-        chunk_types=(
-            "function_declaration",
-            "class_declaration",
-            "method_definition",
-            "arrow_function",
-            "export_statement",
-            "lexical_declaration",
-        ),
-    ),
-    graph=GraphConfig(
-        call_types=("call_expression",),
-    ),
-    init_filenames=("index",),
-)
-
-TYPESCRIPT_CONFIG = LanguageConfig(
-    name="typescript",
-    extensions=(".ts", ".tsx"),
-    language_fn=_typescript_language,
-    import_types=("import_statement",),
-    function_scope_types=("function_declaration", "method_definition"),
-    class_scope_types=("class_declaration",),
-    skeleton=SkeletonConfig(
-        extra_class_like_types=(
-            "interface_declaration",
-            "type_alias_declaration",
-            "type_declaration",
-        ),
-    ),
-    chunker=ChunkerConfig(
-        chunk_types=(
-            "function_declaration",
-            "class_declaration",
-            "method_definition",
-            "arrow_function",
-            "export_statement",
-            "lexical_declaration",
-            "interface_declaration",
-            "type_alias_declaration",
-        ),
-    ),
-    graph=GraphConfig(
-        call_types=("call_expression",),
-        extra_class_scope_types=("interface_declaration",),
-    ),
-    init_filenames=("index",),
-)
-
-GO_CONFIG = LanguageConfig(
-    name="go",
-    extensions=(".go",),
-    language_fn=_go_language,
-    import_types=("import_declaration",),
-    function_scope_types=("function_declaration", "method_declaration"),
-    class_scope_types=(),
-    skeleton=SkeletonConfig(
-        extra_class_like_types=("type_declaration",),
-    ),
-    chunker=ChunkerConfig(
-        chunk_types=(
-            "function_declaration",
-            "method_declaration",
-            "type_declaration",
-        ),
-    ),
-    graph=GraphConfig(
-        call_types=("call_expression",),
-    ),
-    init_filenames=(),
-)
+    )
+    graph: GraphConfig = field(
+        default_factory=lambda: GraphConfig(call_types=("call",))
+    )
+    init_filenames: tuple[str, ...] = ("__init__",)
 
 
-LANGUAGE_REGISTRY: dict[str, LanguageConfig] = {
-    "python": PYTHON_CONFIG,
-    "javascript": JAVASCRIPT_CONFIG,
-    "typescript": TYPESCRIPT_CONFIG,
-    "go": GO_CONFIG,
+@dataclass
+class JavaScriptConfig:
+    name: str = "javascript"
+    extensions: tuple[str, ...] = (".js", ".jsx", ".mjs", ".cjs")
+    language_fn: Callable[[], Any] = _javascript_language
+    import_types: tuple[str, ...] = ("import_statement",)
+    function_scope_types: tuple[str, ...] = (
+        "function_declaration",
+        "method_definition",
+    )
+    class_scope_types: tuple[str, ...] = ("class_declaration",)
+    decorator_scope_types: tuple[str, ...] = ()
+    skeleton: SkeletonConfig = field(default_factory=SkeletonConfig)
+    chunker: ChunkerConfig = field(
+        default_factory=lambda: ChunkerConfig(
+            chunk_types=(
+                "function_declaration",
+                "class_declaration",
+                "method_definition",
+                "arrow_function",
+                "export_statement",
+                "lexical_declaration",
+            ),
+        ),
+    )
+    graph: GraphConfig = field(
+        default_factory=lambda: GraphConfig(call_types=("call_expression",)),
+    )
+    init_filenames: tuple[str, ...] = ("index",)
+
+
+@dataclass
+class TypeScriptConfig:
+    name: str = "typescript"
+    extensions: tuple[str, ...] = (".ts", ".tsx")
+    language_fn: Callable[[], Any] = _typescript_language
+    import_types: tuple[str, ...] = ("import_statement",)
+    function_scope_types: tuple[str, ...] = (
+        "function_declaration",
+        "method_definition",
+    )
+    class_scope_types: tuple[str, ...] = ("class_declaration",)
+    decorator_scope_types: tuple[str, ...] = ()
+    skeleton: SkeletonConfig = field(
+        default_factory=lambda: SkeletonConfig(
+            extra_class_like_types=(
+                "interface_declaration",
+                "type_alias_declaration",
+                "type_declaration",
+            ),
+        ),
+    )
+    chunker: ChunkerConfig = field(
+        default_factory=lambda: ChunkerConfig(
+            chunk_types=(
+                "function_declaration",
+                "class_declaration",
+                "method_definition",
+                "arrow_function",
+                "export_statement",
+                "lexical_declaration",
+                "interface_declaration",
+                "type_alias_declaration",
+            ),
+        ),
+    )
+    graph: GraphConfig = field(
+        default_factory=lambda: GraphConfig(
+            call_types=("call_expression",),
+            extra_class_scope_types=("interface_declaration",),
+        ),
+    )
+    init_filenames: tuple[str, ...] = ("index",)
+
+
+@dataclass
+class GoConfig:
+    name: str = "go"
+    extensions: tuple[str, ...] = (".go",)
+    language_fn: Callable[[], Any] = _go_language
+    import_types: tuple[str, ...] = ("import_declaration",)
+    function_scope_types: tuple[str, ...] = (
+        "function_declaration",
+        "method_declaration",
+    )
+    class_scope_types: tuple[str, ...] = ()
+    decorator_scope_types: tuple[str, ...] = ()
+    skeleton: SkeletonConfig = field(
+        default_factory=lambda: SkeletonConfig(
+            extra_class_like_types=("type_declaration",),
+        ),
+    )
+    chunker: ChunkerConfig = field(
+        default_factory=lambda: ChunkerConfig(
+            chunk_types=(
+                "function_declaration",
+                "method_declaration",
+                "type_declaration",
+            ),
+        ),
+    )
+    graph: GraphConfig = field(
+        default_factory=lambda: GraphConfig(call_types=("call_expression",)),
+    )
+    init_filenames: tuple[str, ...] = ()
+
+
+LANGUAGE_REGISTRY: dict[str, LanguageConfigProtocol] = {
+    "python": PythonConfig(),
+    "javascript": JavaScriptConfig(),
+    "typescript": TypeScriptConfig(),
+    "go": GoConfig(),
 }
 
 _EXTENSION_MAP: dict[str, str] = {}
@@ -200,7 +229,7 @@ for _lang_name, _cfg in LANGUAGE_REGISTRY.items():
         _EXTENSION_MAP[_ext] = _lang_name
 
 
-def get_language_for_file(path: str | Path) -> LanguageConfig | None:
+def get_language_for_file(path: str | Path) -> LanguageConfigProtocol | None:
     """Return the LanguageConfig for a file based on its extension, or None."""
     ext = Path(path).suffix.lower()
     lang_name = _EXTENSION_MAP.get(ext)
