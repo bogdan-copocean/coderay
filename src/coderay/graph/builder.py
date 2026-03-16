@@ -6,7 +6,7 @@ from pathlib import Path
 
 from coderay.core.config import get_config
 from coderay.graph.code_graph import CodeGraph
-from coderay.graph.extractor import build_callee_filter, extract_graph_from_file
+from coderay.graph.extractor import build_module_filter, extract_graph_from_file
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,12 @@ def build_graph(
     Returns:
         Built CodeGraph with resolved edges.
     """
-    excluded = build_callee_filter()
+    excluded = build_module_filter()
     graph = CodeGraph()
     for file_path, content in file_paths_and_contents:
         try:
             nodes, edges = extract_graph_from_file(
-                file_path, content, excluded_callees=excluded
+                file_path, content, excluded_modules=excluded
             )
             graph.add_nodes_and_edges(nodes, edges)
         except Exception as exc:
@@ -128,13 +128,13 @@ def build_and_save_graph(
         files_with_content = _read_files(repo, paths_to_parse)
 
     if incremental:
-        excluded = build_callee_filter()
+        excluded = build_module_filter()
         for fp in paths_to_parse:
             existing_graph.remove_file(fp)
         for fp, content in files_with_content:
             try:
                 nodes, edges = extract_graph_from_file(
-                    fp, content, excluded_callees=excluded
+                    fp, content, excluded_modules=excluded
                 )
                 existing_graph.add_nodes_and_edges(nodes, edges)
             except Exception as exc:

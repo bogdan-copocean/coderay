@@ -46,18 +46,33 @@ class TestGraphPlayground:
         assert "tracing.inner" in qualified
 
     def test_file_service_inherits_base_service(self, playground_graph):
-        """Verify FileService -> BaseService inheritance."""
+        """Verify FileService -> BaseService inheritance resolves fully."""
         _, edges = playground_graph
         inherits = [e for e in edges if e.kind == EdgeKind.INHERITS]
         targets = {e.target for e in inherits}
-        assert "BaseService" in targets
+        assert any(t.endswith("::BaseService") for t in targets)
 
     def test_local_imports_captured(self, playground_graph):
         """Verify imports inside local_imports_example (json, itertools) are found."""
         _, edges = playground_graph
         import_targets = {e.target for e in edges if e.kind == EdgeKind.IMPORTS}
         assert "json" in import_targets
-        assert "itertools" in import_targets
+        assert "itertools::chain" in import_targets
+
+    def test_bare_imports_captured(self, playground_graph):
+        """Verify bare imports (asyncio, dataclasses, logging) are found."""
+        _, edges = playground_graph
+        import_targets = {e.target for e in edges if e.kind == EdgeKind.IMPORTS}
+        assert "asyncio" in import_targets
+        assert "dataclasses" in import_targets
+        assert "logging" in import_targets
+
+    def test_aliased_imports_captured(self, playground_graph):
+        """Verify aliased imports (math as m, defaultdict as dd) resolve correctly."""
+        _, edges = playground_graph
+        import_targets = {e.target for e in edges if e.kind == EdgeKind.IMPORTS}
+        assert "math" in import_targets
+        assert "collections::defaultdict" in import_targets
 
     def test_chained_calls_captured(self, playground_graph):
         """Verify chained_calls_example captures repo.get, user.to_dict, .get."""
@@ -69,17 +84,31 @@ class TestGraphPlayground:
         assert "to_dict" in callees
 
     def test_module_level_calls_from_main_block(self, playground_graph):
-        """Verify __main__ block calls (Path, FileService, process, info) are captured."""
+        """Verify __main__ block calls resolve via file context."""
+        _, edges = playground_graph
+        pg = str(PLAYGROUND_PATH)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        module_calls = [e for e in calls if e.source == pg]
+        callees = {e.target for e in module_calls}
+        assert any("pathlib::Path" in c for c in callees)
+        assert any("FileService" in c for c in callees)
+        assert "info" in callees
+
+    def test_instance_method_call_resolved(self, playground_graph):
+        """Verify service.process(payload) resolves to FileService.process."""
+        _, edges = playground_graph
+        pg = str(PLAYGROUND_PATH)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        module_calls = [e for e in calls if e.source == pg]
+        callees = {e.target for e in module_calls}
+        assert any("FileService.process" in c for c in callees)
+
+    def test_aliased_call_resolved(self, playground_graph):
+        """Verify dd(int) resolves to collections::defaultdict."""
         _, edges = playground_graph
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-        module_calls = [
-            e for e in calls if e.source.endswith("tree_sitter_playground.py")
-        ]
-        callees = {e.target for e in module_calls}
-        assert "Path" in callees
-        assert "FileService" in callees
-        assert "process" in callees
-        assert "info" in callees
+        callees = {e.target for e in calls}
+        assert "collections::defaultdict" in callees
 
 
 # --- Uncomment and run to print full graph (useful for exploration) ---
