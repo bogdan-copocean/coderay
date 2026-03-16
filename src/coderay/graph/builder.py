@@ -33,11 +33,13 @@ def build_graph(
         except Exception as exc:
             logger.warning("Graph extraction failed for %s: %s", file_path, exc)
     resolved = graph.resolve_edges()
+    pruned = graph.prune_phantom_edges()
     logger.info(
-        "Graph built: %d nodes, %d edges (%d call edges resolved)",
+        "Graph built: %d nodes, %d edges (%d resolved, %d phantoms pruned)",
         graph.node_count,
         graph.edge_count,
         resolved,
+        pruned,
     )
     return graph
 
@@ -140,6 +142,7 @@ def build_and_save_graph(
             except Exception as exc:
                 logger.warning("Graph extraction failed for %s: %s", fp, exc)
         existing_graph.resolve_edges()
+        existing_graph.prune_phantom_edges()
         graph = existing_graph
         logger.info(
             "Graph incremental update: re-parsed %d files",
