@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import builtins
 import logging
+from collections import defaultdict
+from operator import call
 
 from coderay.core.config import get_config
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
@@ -116,6 +118,7 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         self._module_id: str = context.file_path
         self._nodes: list[GraphNode] = []
         self._edges: list[GraphEdge] = []
+        self._file_ctx = defaultdict(list)
 
     def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
         """Walk the syntax tree and return all graph nodes and edges."""
@@ -132,14 +135,10 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         )
         self._nodes.append(module_node)
 
-        self._visit(tree.root_node, scope_stack=[])
+        self._dfs(tree.root_node, scope_stack=[])
         return self._nodes, self._edges
 
-    # ------------------------------------------------------------------
-    # Tree traversal
-    # ------------------------------------------------------------------
-
-    def _visit(self, node, *, scope_stack: list[str]) -> None:
+    def _dfs(self, node, *, scope_stack: list[str]) -> None:
         """Recursively walk the syntax tree, dispatching to type-specific handlers."""
         ntype = node.type
         lang_cfg = self._ctx.lang_cfg
@@ -158,55 +157,60 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
             self._handle_call(node, scope_stack=scope_stack)
 
         for child in node.children:
-            self._visit(child, scope_stack=scope_stack)
-
-    # ------------------------------------------------------------------
-    # Node-type handlers
-    # ------------------------------------------------------------------
+            self._dfs(child, scope_stack=scope_stack)
 
     def _handle_import(self, node) -> None:
         """Create IMPORTS edges for an import statement."""
-        is_from_import = node.type == "import_from_statement"
-        found_module = False
+        ntype = node.type
+        module = []
+        imported = []
+
         for child in node.children:
-            if child.type in ("dotted_name", "relative_import"):
-                if is_from_import and found_module:
+            # from my_module import my_func
+            # from ..my_module import my_func
+            if ntype == "import_from_statement":
+                if child.prev_sibling and child.prev_sibling.type == "from":
+                    child_text = self.node_text(child).strip()
+                    if child_text and child_text[0] == ".":
+                        child_text = _resolve_relative_import(
+                            self._module_id, child_text
+                        )
+                    module.append(child_text)
                     continue
-                target = self.node_text(child)
-                if target:
-                    if child.type == "relative_import" and target.startswith("."):
-                        resolved = _resolve_relative_import(self._module_id, target)
-                        if resolved:
-                            target = resolved
-                    self._edges.append(
-                        GraphEdge(
-                            source=self._module_id,
-                            target=target,
-                            kind=EdgeKind.IMPORTS,
+                if child.type == "dotted_name":
+                    imported.append(self.node_text(child).strip())
+            # import my_module
+            # import ...my_module
+            elif ntype == "import_statement":
+                if child.prev_sibling and child.prev_sibling.type == "import":
+                    child_text = self.node_text(child).strip()
+                    if child_text and child_text[0] == ".":
+                        child_text = _resolve_relative_import(
+                            self._module_id, child_text
                         )
-                    )
-                    if is_from_import:
-                        found_module = True
-            elif child.type == "string":
-                target = self.node_text(child).strip("'\"")
-                if target:
-                    self._edges.append(
-                        GraphEdge(
-                            source=self._module_id,
-                            target=target,
-                            kind=EdgeKind.IMPORTS,
-                        )
-                    )
-            elif child.type == "interpreted_string_literal":
-                target = self.node_text(child).strip('"')
-                if target:
-                    self._edges.append(
-                        GraphEdge(
-                            source=self._module_id,
-                            target=target,
-                            kind=EdgeKind.IMPORTS,
-                        )
-                    )
+                    module.append(child_text)
+                continue
+            # from __future__ import annotations
+            elif ntype == "future_import_statement":
+                if child.prev_sibling and child.prev_sibling.type == "from":
+                    module.append(self.node_text(child).strip())
+                    continue
+                if child.type == "dotted_name":
+                    imported.append(self.node_text(child).strip())
+
+        for imp in imported:
+            qualified_name = f"{module[0]}::{imp}"
+            self._edges.append(
+                GraphEdge(
+                    source=self._module_id,
+                    target=qualified_name,
+                    kind=EdgeKind.IMPORTS,
+                )
+            )
+            # Saving imported names for resolving them later on calling.
+            # last appended one should be the source of truth if the same name
+            # is imported multiple times
+            self._file_ctx[imp].append(qualified_name)
 
     def _handle_function_def(self, node, *, scope_stack: list[str]) -> None:
         """Create a FUNCTION node and DEFINES edge, then recurse into the body."""
@@ -235,7 +239,7 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         )
         new_scope = [*scope_stack, name]
         for child in node.children:
-            self._visit(child, scope_stack=new_scope)
+            self._dfs(child, scope_stack=new_scope)
 
     def _handle_class_def(self, node, *, scope_stack: list[str]) -> None:
         """Create a CLASS node, DEFINES + INHERITS edges, then recurse."""
@@ -281,7 +285,9 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
                             )
         new_scope = [*scope_stack, name]
         for child in node.children:
-            self._visit(child, scope_stack=new_scope)
+            self._dfs(child, scope_stack=new_scope)
+
+        self._file_ctx[qualified].append(node_id)
 
     def _handle_call(self, node, *, scope_stack: list[str]) -> None:
         """Create a CALLS edge from the enclosing scope to the callee."""
@@ -297,6 +303,16 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         if not raw_callee:
             return
         callee_name = _extract_callee_name(raw_callee)
+
+        # Resolving them from the import level and considering
+        # the last one is the source of truth
+        if callee_name in self._file_ctx:
+            callee_name = self._file_ctx[callee_name][-1]
+        else:
+            callee_name = f"{caller_id}::{callee_name}"
+
+        # print(self._file_ctx)
+
         if callee_name and callee_name not in self._excluded_callees:
             self._edges.append(
                 GraphEdge(
