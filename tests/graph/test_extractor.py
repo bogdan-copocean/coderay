@@ -2,9 +2,11 @@
 
 from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.extractor import (
-    _extract_callee_name,
+    _PYTHON_BUILTINS,
+    FileContext,
+    GraphTreeSitterParser,
     _resolve_relative_import,
-    build_callee_filter,
+    build_module_filter,
     extract_graph_from_file,
 )
 
@@ -51,24 +53,49 @@ class TestResolveRelativeImport:
         assert result is None
 
 
-class TestExtractCalleeName:
-    def test_simple_name(self):
-        assert _extract_callee_name("foo") == "foo"
+class TestFileContext:
+    """Unit tests for the FileContext name-resolution data structure."""
 
-    def test_strips_self(self):
-        assert _extract_callee_name("self.bark") == "bark"
+    def test_register_and_resolve_import(self):
+        ctx = FileContext()
+        ctx.register_import("Flask", "flask::Flask")
+        assert ctx.resolve("Flask") == "flask::Flask"
 
-    def test_strips_self_chain(self):
-        assert _extract_callee_name("self._store.delete_by_paths") == "delete_by_paths"
+    def test_register_and_resolve_definition(self):
+        ctx = FileContext()
+        ctx.register_definition("MyClass", "file.py::MyClass", is_class=True)
+        assert ctx.resolve("MyClass") == "file.py::MyClass"
+        assert ctx.is_class("MyClass")
 
-    def test_strips_this(self):
-        assert _extract_callee_name("this.render") == "render"
+    def test_function_definition_not_class(self):
+        ctx = FileContext()
+        ctx.register_definition("helper", "file.py::helper")
+        assert ctx.resolve("helper") == "file.py::helper"
+        assert not ctx.is_class("helper")
 
-    def test_dotted_chain(self):
-        assert _extract_callee_name("a.b.c") == "c"
+    def test_register_instance_and_method_call(self):
+        ctx = FileContext()
+        ctx.register_instance("app", "flask::Flask")
+        assert ctx.resolve_instance("app") == "flask::Flask"
+        assert ctx.resolve_method_call("app", "run") == "flask::Flask.run"
 
-    def test_single_method(self):
-        assert _extract_callee_name("obj.method") == "method"
+    def test_register_alias(self):
+        ctx = FileContext()
+        ctx.register_import("func", "module::func")
+        ctx.register_alias("my_func", "module::func")
+        assert ctx.resolve("my_func") == "module::func"
+
+    def test_last_write_wins(self):
+        ctx = FileContext()
+        ctx.register_import("name", "a::name")
+        ctx.register_import("name", "b::name")
+        assert ctx.resolve("name") == "b::name"
+
+    def test_resolve_unknown_returns_none(self):
+        ctx = FileContext()
+        assert ctx.resolve("unknown") is None
+        assert ctx.resolve_instance("unknown") is None
+        assert ctx.resolve_method_call("unknown", "method") is None
 
 
 class TestGraphExtraction:
@@ -83,7 +110,7 @@ class TestGraphExtraction:
         import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
         targets = {e.target for e in import_edges}
         assert "os" in targets
-        assert "pathlib" in targets
+        assert "pathlib::Path" in targets
 
     def test_extracts_class_and_function_nodes(self):
         nodes, edges = extract_graph_from_file("test.py", SAMPLE)
@@ -107,13 +134,15 @@ class TestGraphExtraction:
         assert len(inherits) >= 1
         assert any("Animal" in e.target for e in inherits)
 
-    def test_extracts_calls_edges_with_stripped_self(self):
+    def test_self_call_resolves_to_class_method(self):
+        """self.bark() inside Dog.speak resolves to test.py::Dog.bark."""
         nodes, edges = extract_graph_from_file("test.py", SAMPLE)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-        callee_names = {e.target for e in calls}
-        assert "bark" in callee_names
+        targets = {e.target for e in calls}
+        assert "test.py::Dog.bark" in targets
 
-    def test_call_targets_are_short_names(self):
+    def test_self_simple_method_resolves(self):
+        """self.helper() inside Foo.run resolves to test.py::Foo.helper."""
         code = (
             "class Foo:\n"
             "    def run(self):\n"
@@ -123,7 +152,7 @@ class TestGraphExtraction:
         nodes, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
-        assert "helper" in targets
+        assert "test.py::Foo.helper" in targets
         assert "save" in targets
         assert "self.helper" not in targets
 
@@ -140,19 +169,20 @@ class TestGraphExtraction:
         assert len(dog_speak) >= 1
 
     def test_module_level_calls_captured(self):
+        """Imported Flask resolves to flask::Flask when called."""
         code = "from flask import Flask\napp = Flask(__name__)\n"
         nodes, edges = extract_graph_from_file("app.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         assert len(calls) >= 1
         assert calls[0].source == "app.py"
-        assert calls[0].target == "Flask"
+        assert calls[0].target == "flask::Flask"
 
     def test_relative_import_resolved(self):
         code = "from ..common.base_repo import BaseRepo\n"
         nodes, edges = extract_graph_from_file("src/a/b/c/file.py", code)
         import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
         assert len(import_edges) == 1
-        assert import_edges[0].target == "src/a/b/common/base_repo"
+        assert import_edges[0].target == "src/a/b/common/base_repo::BaseRepo"
 
     def test_di_style_call_creates_edge(self):
         """self.injected_service.method() should produce a CALLS edge to 'method'."""
@@ -210,55 +240,147 @@ class TestGraphExtraction:
         assert "forEach" in targets
         assert "custom_func" in targets
 
+    # ------------------------------------------------------------------
+    # New resolution tests
+    # ------------------------------------------------------------------
 
-class TestBuildCalleeFilter:
-    """Tests for the configurable callee filter."""
+    def test_bare_import_creates_edge(self):
+        """``import os`` should produce an IMPORTS edge with target 'os'."""
+        code = "import os\nimport sys\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        targets = {e.target for e in import_edges}
+        assert "os" in targets
+        assert "sys" in targets
 
-    def test_default_excludes_python_builtins(self):
-        filt = build_callee_filter()
-        assert "len" in filt
-        assert "print" in filt
-        assert "isinstance" in filt
-        assert "int" in filt
+    def test_aliased_import_resolution(self):
+        """``import math as m`` then ``m.sqrt()`` resolves via alias."""
+        code = "import math as m\nm.sqrt(4)\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        assert any(e.target == "math" for e in import_edges)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "math.sqrt" in targets
 
-    def test_non_builtins_not_excluded_by_default(self):
-        """Common methods like append/forEach are NOT in the default filter."""
-        filt = build_callee_filter()
-        assert "append" not in filt
-        assert "forEach" not in filt
-        assert "Println" not in filt
+    def test_aliased_from_import_resolution(self):
+        """``from collections import defaultdict as dd`` then ``dd()``."""
+        code = "from collections import defaultdict as dd\ndd(int)\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        assert any(e.target == "collections::defaultdict" for e in import_edges)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "collections::defaultdict" in targets
 
-    def test_exclude_callees_adds_names(self):
+    def test_function_defined_and_called_locally(self):
+        """A function defined and called in the same file resolves to full path."""
+        code = "def my_helper():\n    pass\n\nmy_helper()\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "test.py::my_helper" in targets
+
+    def test_instance_method_call_resolved(self):
+        """``obj = MyClass()`` then ``obj.method()`` resolves to MyClass.method."""
+        code = (
+            "class MyClass:\n"
+            "    def method(self):\n"
+            "        pass\n"
+            "\n"
+            "obj = MyClass()\n"
+            "obj.method()\n"
+        )
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "test.py::MyClass.method" in targets
+
+    def test_imported_instance_method_resolved(self):
+        """Instance of an imported class resolves method calls."""
+        code = "from flask import Flask\napp = Flask(__name__)\napp.run()\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "flask::Flask.run" in targets
+
+    def test_alias_assignment_resolved(self):
+        """``my_func = imported_func`` then ``my_func()`` resolves to original."""
+        code = "from module import func\nmy_func = func\nmy_func()\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "module::func" in targets
+
+    def test_self_method_resolves_to_enclosing_class(self):
+        """self.method() resolves to EnclosingClass.method."""
+        code = (
+            "class Dog:\n"
+            "    def speak(self):\n"
+            "        return self.bark()\n"
+            "    def bark(self):\n"
+            "        return 'Woof'\n"
+        )
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "test.py::Dog.bark" in targets
+
+    def test_multiple_bare_imports(self):
+        """``import os, sys`` creates IMPORTS edges for both."""
+        code = "import os, sys\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        targets = {e.target for e in import_edges}
+        assert "os" in targets
+        assert "sys" in targets
+
+
+class TestBuildModuleFilter:
+    """Tests for the configurable module filter."""
+
+    def test_default_excludes_core_modules(self):
+        filt = build_module_filter()
+        assert "builtins" in filt
+        assert "typing" in filt
+        assert "abc" in filt
+
+    def test_project_modules_not_excluded(self):
+        """Common project dependencies are NOT in the default filter."""
+        filt = build_module_filter()
+        assert "flask" not in filt
+        assert "myproject" not in filt
+
+    def test_exclude_modules_adds_entries(self):
         from types import SimpleNamespace
 
         from coderay.core.config import _reset_config_for_testing
 
         _reset_config_for_testing(
-            SimpleNamespace(graph={"exclude_callees": ["our_sdk_helper", "append"]})
+            SimpleNamespace(graph={"exclude_modules": ["numpy", "pandas"]})
         )
         try:
-            filt = build_callee_filter()
+            filt = build_module_filter()
         finally:
             _reset_config_for_testing(None)
-        assert "our_sdk_helper" in filt
-        assert "append" in filt
-        assert "len" in filt  # builtins still present
+        assert "numpy" in filt
+        assert "pandas" in filt
+        assert "builtins" in filt
 
-    def test_include_callees_overrides_default(self):
+    def test_include_modules_overrides_default(self):
         from types import SimpleNamespace
 
         from coderay.core.config import _reset_config_for_testing
 
         _reset_config_for_testing(
-            SimpleNamespace(graph={"include_callees": ["isinstance", "print"]})
+            SimpleNamespace(graph={"include_modules": ["typing"]})
         )
         try:
-            filt = build_callee_filter()
+            filt = build_module_filter()
         finally:
             _reset_config_for_testing(None)
-        assert "isinstance" not in filt
-        assert "print" not in filt
-        assert "len" in filt  # other builtins still present
+        assert "typing" not in filt
+        assert "builtins" in filt
 
     def test_both_exclude_and_include(self):
         from types import SimpleNamespace
@@ -268,72 +390,70 @@ class TestBuildCalleeFilter:
         _reset_config_for_testing(
             SimpleNamespace(
                 graph={
-                    "exclude_callees": ["my_helper"],
-                    "include_callees": ["isinstance"],
+                    "exclude_modules": ["requests"],
+                    "include_modules": ["typing"],
                 }
             )
         )
         try:
-            filt = build_callee_filter()
+            filt = build_module_filter()
         finally:
             _reset_config_for_testing(None)
-        assert "my_helper" in filt
-        assert "isinstance" not in filt
+        assert "requests" in filt
+        assert "typing" not in filt
 
     def test_none_config_uses_defaults(self):
-        filt = build_callee_filter()
-        assert "len" in filt
+        filt = build_module_filter()
+        assert "builtins" in filt
 
-    def test_empty_config_uses_defaults(self):
-        filt = build_callee_filter()
-        assert "len" in filt
+    def test_python_builtins_constant(self):
+        """Verify the _PYTHON_BUILTINS set contains expected names."""
+        assert "print" in _PYTHON_BUILTINS
+        assert "len" in _PYTHON_BUILTINS
+        assert "isinstance" in _PYTHON_BUILTINS
 
 
 class TestConfigurableExtraction:
-    """Test that extraction respects config (via get_config()) end-to-end."""
-
-    def test_include_callees_creates_edge_for_builtin(self):
-        """When 'isinstance' is included via config, it appears as a CALLS edge."""
-        from types import SimpleNamespace
-
-        from coderay.core.config import _reset_config_for_testing
-
-        _reset_config_for_testing(
-            SimpleNamespace(graph={"include_callees": ["isinstance"]})
-        )
-        try:
-            code = "def check(x):\n    isinstance(x, str)\n"
-            _, edges = extract_graph_from_file("test.py", code)
-            calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-            targets = {e.target for e in calls}
-            assert "isinstance" in targets
-        finally:
-            _reset_config_for_testing(None)
-
-    def test_exclude_callees_filters_custom_name(self):
-        """A user-excluded name should not appear as a CALLS edge."""
-        from types import SimpleNamespace
-
-        from coderay.core.config import _reset_config_for_testing
-
-        _reset_config_for_testing(
-            SimpleNamespace(graph={"exclude_callees": ["my_custom_func"]})
-        )
-        try:
-            code = "def run():\n    my_custom_func()\n    other_func()\n"
-            _, edges = extract_graph_from_file("test.py", code)
-            calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-            targets = {e.target for e in calls}
-            assert "my_custom_func" not in targets
-            assert "other_func" in targets
-        finally:
-            _reset_config_for_testing(None)
+    """Test that extraction respects module-based filtering end-to-end."""
 
     def test_default_extraction_filters_builtins(self, default_config):
-        """Default extraction (no config) still filters builtins."""
+        """Unresolved bare builtins (print, len) are filtered by default."""
         code = "def f():\n    len([])\n    custom()\n"
         _, edges = extract_graph_from_file("test.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "len" not in targets
         assert "custom" in targets
+
+    def test_excluded_module_filters_resolved_call(self):
+        """Calls resolved to an excluded module are filtered."""
+        code = "from typing import cast\ncast(str, x)\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "typing::cast" not in targets
+
+    def test_project_defined_shadowing_builtin_not_filtered(self):
+        """A locally defined function named 'print' should NOT be filtered."""
+        code = "def print(msg):\n    pass\n\ndef run():\n    print('hello')\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert any("print" in t for t in targets)
+
+    def test_excluded_module_filters_import_edge(self):
+        """Imports from excluded modules should not produce IMPORTS edges."""
+        code = "from typing import Optional\nfrom flask import Flask\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_targets = {e.target for e in edges if e.kind == EdgeKind.IMPORTS}
+        assert "typing::Optional" not in import_targets
+        assert "flask::Flask" in import_targets
+
+    def test_excluded_module_import_still_resolves(self):
+        """Excluded imports are filtered from edges but still resolve in calls."""
+        code = "from typing import cast\n\ndef f():\n    cast(str, x)\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_targets = {e.target for e in edges if e.kind == EdgeKind.IMPORTS}
+        assert "typing::cast" not in import_targets
+        call_targets = {e.target for e in edges if e.kind == EdgeKind.CALLS}
+        assert "typing::cast" not in call_targets

@@ -110,24 +110,30 @@ class BaseTreeSitterParser:
     def identifier_from_node(self, node) -> str:
         """Extract an identifier name from a definition node.
 
-        Handles decorated definitions (unwraps decorators), keyword siblings
-        (e.g. ``def`` followed by ``identifier``), and identifier-like leaf
-        nodes.  Falls back to an empty string when no suitable name is found.
+        Returns:
+            The identifier text, or an empty string when no name is found.
         """
+        # Unwrap decorated definitions (e.g. @decorator … def func)
         if node.type == "decorated_definition":
-            for child in getattr(node, "children", []):
-                if child.type != "decorator":
-                    return self.identifier_from_node(child)
-            return ""
+            inner = node.child_by_field_name("definition")
+            return self.identifier_from_node(inner) if inner else ""
 
-        for child in getattr(node, "children", []):
+        # Preferred: use the grammar's "name" field (explicit, no guessing)
+        name_node = node.child_by_field_name("name")
+        if name_node and name_node.type in (
+            "identifier",
+            "type_identifier",
+            "field_identifier",
+        ):
+            return self.node_text(name_node)
+
+        # Fallback: scan named children for an identifier-like node
+        for child in node.named_children:
             if child.type in ("identifier", "type_identifier", "field_identifier"):
                 return self.node_text(child)
-            if child.type in ("class", "def", "func", "function", "type"):
-                for sibling in getattr(node, "children", []):
-                    if sibling.type == "identifier":
-                        return self.node_text(sibling)
 
+        # Leaf node that is itself an identifier (e.g. property_identifier)
         if node.type in ("property_identifier", "field_identifier"):
             return self.node_text(node)
+
         return ""
