@@ -391,12 +391,13 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
             )
         )
 
-        # Top-level functions are registered in FileContext so calls
-        # like ``my_func()`` resolve to the fully qualified node_id.
-        # TODO: register class methods too (e.g. ClassName.method) so that
-        #  static/classmethod calls at module level can resolve
+        # Register in FileContext so calls resolve to the full node_id.
+        # Top-level: ``my_func()`` → node_id
+        # Class methods: ``ClassName.method()`` → node_id (via qualified name)
         if not scope_stack:
             self._file_ctx.register_definition(name, node_id)
+        else:
+            self._file_ctx.register_definition(qualified, node_id)
 
         # Recurse into the function body under a new scope
         new_scope = [*scope_stack, name]

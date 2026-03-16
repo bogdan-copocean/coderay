@@ -74,6 +74,10 @@ class CodeGraph:
         # (e.g. two files both define a function called "helper").
         self._symbol_index: dict[str, set[str]] = defaultdict(set)
 
+        # qualified_name -> {full node IDs} — enables resolving dotted names
+        # like "ClassName.method" to "src/a.py::ClassName.method".
+        self._qualified_index: dict[str, set[str]] = defaultdict(set)
+
         # dotted module name -> node ID — maps Python-style import paths
         # (e.g. "core.models") to the MODULE node they refer to.
         self._module_index: dict[str, str] = {}
@@ -85,6 +89,8 @@ class CodeGraph:
     def _index_node(self, node: GraphNode) -> None:
         """Register a node in all secondary indexes."""
         self._symbol_index[node.name].add(node.id)
+        if node.qualified_name != node.name:
+            self._qualified_index[node.qualified_name].add(node.id)
         self._file_index[node.file_path].add(node.id)
         if node.kind == NodeKind.MODULE:
             # Register all suffix variants so that "import models" and
@@ -98,6 +104,10 @@ class CodeGraph:
         sym_entries = self._symbol_index.get(node.name)
         if sym_entries is not None:
             sym_entries.discard(node.id)
+        if node.qualified_name != node.name:
+            qual_entries = self._qualified_index.get(node.qualified_name)
+            if qual_entries is not None:
+                qual_entries.discard(node.id)
         file_entries = self._file_index.get(node.file_path)
         if file_entries is not None:
             file_entries.discard(node.id)
@@ -140,17 +150,27 @@ class CodeGraph:
         return len(to_remove)
 
     def resolve_symbol(self, name: str, caller_file: str | None = None) -> str | None:
-        """Resolve a short/bare name to a fully-qualified node ID.
+        """Resolve a short, qualified, or dotted name to a fully-qualified node ID.
+
+        Lookup order:
+            1. Exact node ID match (fast path).
+            2. Bare name via ``_symbol_index`` (unique match only).
+            3. Qualified name via ``_qualified_index`` (e.g. "ClassName.method").
 
         Returns:
             Full node ID, or None if the name cannot be uniquely resolved.
         """
-        # Already a full node ID (e.g. "src/a.py::foo") — fast path
         if name in self._g and self._g.nodes[name].get("data") is not None:
             return name
+
         candidates = self._symbol_index.get(name, set())
         if len(candidates) == 1:
             return next(iter(candidates))
+
+        qual_candidates = self._qualified_index.get(name, set())
+        if len(qual_candidates) == 1:
+            return next(iter(qual_candidates))
+
         return None
 
     def resolve_edges(self) -> int:
@@ -193,6 +213,46 @@ class CodeGraph:
         if to_add:
             logger.info("Resolved %d edges via symbol/module index", len(to_add))
         return len(to_add)
+
+    def prune_phantom_edges(self) -> int:
+        """Remove CALLS edges whose target is a phantom with no resolution candidates.
+
+        These are typically stdlib/third-party methods (``append``, ``get``,
+        ``join``, etc.) that will never resolve to a project node.  Removing
+        them reduces noise and improves ``get_impact_radius`` traversal.
+
+        Returns:
+            Number of edges pruned.
+        """
+        to_remove: list[tuple[str, str]] = []
+        for u, v, data in self._g.edges(data=True):
+            if data.get("kind") != EdgeKind.CALLS:
+                continue
+            node_data = self._g.nodes.get(v, {})
+            if node_data and node_data.get("data") is not None:
+                continue
+            if (
+                not self._symbol_index.get(v)
+                and not self._qualified_index.get(v)
+            ):
+                to_remove.append((u, v))
+
+        for u, v in to_remove:
+            if self._g.has_edge(u, v):
+                self._g.remove_edge(u, v)
+
+        # Clean up orphan phantom nodes (no remaining edges)
+        phantom_nodes = [
+            n for n in list(self._g.nodes)
+            if self._g.nodes[n].get("data") is None
+            and self._g.degree(n) == 0
+        ]
+        for n in phantom_nodes:
+            self._g.remove_node(n)
+
+        if to_remove:
+            logger.info("Pruned %d phantom CALLS edges", len(to_remove))
+        return len(to_remove)
 
     def _resolve_path_target(self, target: str) -> str | None:
         """Try to match a path-style target to an existing MODULE node."""

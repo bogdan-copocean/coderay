@@ -294,3 +294,123 @@ class TestCodeGraph:
         removed = g2.remove_file("a.py")
         assert removed == 2
         assert g2.node_count == 0
+
+    # ------------------------------------------------------------------
+    # Qualified index
+    # ------------------------------------------------------------------
+
+    def test_qualified_index_populated(self):
+        g = CodeGraph()
+        n = GraphNode(
+            id="a.py::MyClass.method",
+            kind=NodeKind.FUNCTION,
+            file_path="a.py",
+            start_line=5,
+            end_line=10,
+            name="method",
+            qualified_name="MyClass.method",
+        )
+        g.add_node(n)
+        assert "MyClass.method" in g._qualified_index
+        assert "a.py::MyClass.method" in g._qualified_index["MyClass.method"]
+
+    def test_resolve_symbol_via_qualified_name(self):
+        g = CodeGraph()
+        g.add_node(
+            GraphNode(
+                id="a.py::MyClass.run",
+                kind=NodeKind.FUNCTION,
+                file_path="a.py",
+                start_line=1,
+                end_line=5,
+                name="run",
+                qualified_name="MyClass.run",
+            )
+        )
+        # "run" is ambiguous-possible but qualified name is unique
+        assert g.resolve_symbol("MyClass.run") == "a.py::MyClass.run"
+
+    def test_resolve_symbol_qualified_fallback_on_ambiguous_bare(self):
+        """When bare name has multiple candidates, qualified name disambiguates."""
+        g = CodeGraph()
+        g.add_node(
+            GraphNode(
+                id="a.py::Foo.run",
+                kind=NodeKind.FUNCTION,
+                file_path="a.py",
+                start_line=1,
+                end_line=5,
+                name="run",
+                qualified_name="Foo.run",
+            )
+        )
+        g.add_node(
+            GraphNode(
+                id="b.py::Bar.run",
+                kind=NodeKind.FUNCTION,
+                file_path="b.py",
+                start_line=1,
+                end_line=5,
+                name="run",
+                qualified_name="Bar.run",
+            )
+        )
+        assert g.resolve_symbol("run") is None
+        assert g.resolve_symbol("Foo.run") == "a.py::Foo.run"
+        assert g.resolve_symbol("Bar.run") == "b.py::Bar.run"
+
+    def test_qualified_index_cleaned_on_remove(self):
+        g = CodeGraph()
+        n = GraphNode(
+            id="a.py::X.do",
+            kind=NodeKind.FUNCTION,
+            file_path="a.py",
+            start_line=1,
+            end_line=5,
+            name="do",
+            qualified_name="X.do",
+        )
+        g.add_node(n)
+        assert g._qualified_index["X.do"] == {"a.py::X.do"}
+        g.remove_file("a.py")
+        assert "a.py::X.do" not in g._qualified_index.get("X.do", set())
+
+    # ------------------------------------------------------------------
+    # Phantom edge pruning
+    # ------------------------------------------------------------------
+
+    def test_prune_phantom_edges_removes_unresolvable(self):
+        g = CodeGraph()
+        caller = _make_node("a.py::main", NodeKind.FUNCTION, "main")
+        g.add_node(caller)
+        g.add_edge(_make_edge("a.py::main", "some_unknown_func", EdgeKind.CALLS))
+        g.add_edge(_make_edge("a.py::main", "append", EdgeKind.CALLS))
+
+        pruned = g.prune_phantom_edges()
+        assert pruned == 2
+        assert g.edge_count == 0
+
+    def test_prune_phantom_edges_keeps_resolvable(self):
+        g = CodeGraph()
+        caller = _make_node("a.py::main", NodeKind.FUNCTION, "main")
+        callee = _make_node("b.py::helper", NodeKind.FUNCTION, "helper")
+        g.add_node(caller)
+        g.add_node(callee)
+        # Phantom target "helper" has a candidate in _symbol_index
+        g.add_edge(_make_edge("a.py::main", "helper", EdgeKind.CALLS))
+        # Truly unknown target
+        g.add_edge(_make_edge("a.py::main", "no_such_thing", EdgeKind.CALLS))
+
+        pruned = g.prune_phantom_edges()
+        assert pruned == 1
+        assert g.edge_count == 1
+
+    def test_prune_removes_orphan_phantom_nodes(self):
+        g = CodeGraph()
+        caller = _make_node("a.py::main", NodeKind.FUNCTION, "main")
+        g.add_node(caller)
+        g.add_edge(_make_edge("a.py::main", "ghost", EdgeKind.CALLS))
+
+        assert g.node_count == 2  # caller + phantom "ghost"
+        g.prune_phantom_edges()
+        assert g.node_count == 1  # only caller remains
