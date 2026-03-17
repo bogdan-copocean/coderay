@@ -80,18 +80,12 @@ class Indexer:
         """Full rebuild: discover, chunk, embed, and store all source files."""
 
         current = self._state.current_state
-        last_branch = current.branch if current is not None else None
-        branch_switched = self._git.is_branch_switched(last_branch=last_branch)
-        if branch_switched:
-            return self.update_incremental()
-
         current_run = current.current_run if current else None
         saved_paths = current_run.paths_to_process if current_run else []
         processed_count = current_run.processed_count if current_run else 0
 
         can_resume = (
-            not branch_switched
-            and self._state.is_in_progress
+            self._state.is_in_progress
             and self._state.has_partial_progress
         )
 
@@ -150,17 +144,6 @@ class Indexer:
         self._state.set_incomplete()
 
         current = self._state.current_state
-        state_branch = current.branch if current else None
-        active_branch = self._git.get_current_branch()
-
-        if self._git.is_branch_switched(last_branch=state_branch):
-            logger.info(
-                "Branch switched %s -> %s; syncing index",
-                state_branch,
-                active_branch,
-            )
-            return self._sync_after_branch_switch()
-
         to_add, to_remove = self._git.get_files_to_index(
             last_commit=current.last_commit if current else None
         )
@@ -186,55 +169,6 @@ class Indexer:
             )
             self._refresh_graph()
             logger.info("Nothing to update")
-            return IndexResult(cached=len(self._state.file_hashes))
-
-        return self._update(
-            paths_to_add=changed_files,
-            file_hashes=file_hashes,
-        )
-
-    def _sync_after_branch_switch(self) -> IndexResult:
-        """Sync index to current branch after a switch. Returns IndexResult."""
-        file_hashes = self._state.file_hashes.copy()
-        py_files = self._git.discover_files()
-
-        # All .py files were deleted from git
-        to_remove: list[str] = []
-        if not py_files:
-            to_remove = list(file_hashes)
-
-        if to_remove:
-            self._store.delete_by_paths(to_remove)
-            index_result = IndexResult(removed=len(file_hashes))
-            file_hashes.clear()
-
-            self._state.file_hashes = file_hashes
-            self._state.finish(
-                last_commit=self._git.get_head_commit(),
-                branch=self._git.get_current_branch(),
-            )
-            self._refresh_graph()
-            return index_result
-
-        rel_paths_current = {str(p.relative_to(self._repo_root)) for p in py_files}
-        # Deleted files on current branch
-        to_remove = [p for p in file_hashes if p not in rel_paths_current]
-        if to_remove:
-            self._store.delete_by_paths(to_remove)
-            for p in to_remove:
-                file_hashes.pop(p, None)
-
-        changed_files = files_with_changed_content(
-            repo=self._repo_root, paths=py_files, file_hashes=file_hashes
-        )
-
-        if not changed_files and not to_remove:
-            self._state.finish(
-                last_commit=self._git.get_head_commit(),
-                branch=self._git.get_current_branch(),
-            )
-            self._refresh_graph()
-            logger.info("Branch switch: index already in sync (no changes)")
             return IndexResult(cached=len(self._state.file_hashes))
 
         return self._update(
@@ -422,6 +356,12 @@ class Indexer:
     def index_exists(self) -> bool:
         """Return True if the index exists at index_dir."""
         return index_exists(self._index_dir)
+
+    def ensure_index(self) -> IndexResult:
+        """Build full index if missing, else incremental update."""
+        if not self.index_exists():
+            return self.build_full()
+        return self.update_incremental()
 
     def error(self, exc: str) -> None:
         """Mark the current run as errored with the given exception message."""
