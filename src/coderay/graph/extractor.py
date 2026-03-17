@@ -21,24 +21,23 @@ from coderay.graph._handlers import (
     TypeResolutionMixin,
 )
 from coderay.graph._handlers.calls import _PYTHON_BUILTINS
+from coderay.graph._utils import is_init_file, resolve_relative_import
+from coderay.graph.identifiers import file_path_to_module_names
+from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
+
+# Re-export for tests that assert on internal helpers
+_resolve_relative_import = resolve_relative_import
 
 __all__ = [
     "FileContext",
     "GraphTreeSitterParser",
     "ModuleIndex",
-    "PackageIndex",
     "_PYTHON_BUILTINS",
     "_resolve_relative_import",
-    "build_module_and_package_indexes",
     "build_module_filter",
+    "build_module_index",
     "extract_graph_from_file",
 ]
-from coderay.graph._utils import is_init_file, resolve_relative_import
-
-# Re-export for tests that assert on internal helpers
-_resolve_relative_import = resolve_relative_import
-from coderay.graph.identifiers import file_path_to_module_names
-from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -55,32 +54,16 @@ _DEFAULT_EXCLUDED_MODULES: frozenset[str] = frozenset(
 )
 
 ModuleIndex = dict[str, str]
-PackageIndex = dict[str, list[str]]
 
 
-def build_module_and_package_indexes(
-    file_paths: list[str],
-) -> tuple[ModuleIndex, PackageIndex]:
-    """Build module and package indexes from a list of file paths.
-
-    The module index maps dotted module names to file paths.
-    The package index maps package directory prefixes to their files.
-    """
+def build_module_index(file_paths: list[str]) -> ModuleIndex:
+    """Build module index mapping dotted module names to file paths."""
     module_index: ModuleIndex = {}
-    package_index: PackageIndex = {}
-
     for fp in file_paths:
         for mod_name in file_path_to_module_names(fp):
             if mod_name not in module_index:
                 module_index[mod_name] = fp
-
-        dir_path = fp.rsplit("/", 1)[0] + "/" if "/" in fp else ""
-        if dir_path:
-            if dir_path not in package_index:
-                package_index[dir_path] = []
-            package_index[dir_path].append(fp)
-
-    return module_index, package_index
+    return module_index
 
 
 class FileContext:
@@ -92,18 +75,13 @@ class FileContext:
     (last-write-wins), which mirrors Python's runtime semantics.
     """
 
-    def __init__(
-        self,
-        module_index: ModuleIndex | None = None,
-        package_index: PackageIndex | None = None,
-    ) -> None:
+    def __init__(self, module_index: ModuleIndex | None = None) -> None:
         self._symbols: dict[str, str] = {}
         self._instances: dict[str, str] = {}
         self._instance_unions: dict[str, list[str]] = {}
         self._class_attributes: dict[str, str] = {}
         self._classes: set[str] = set()
         self._module_index = module_index or {}
-        self._package_index = package_index or {}
 
     def _resolve_module_to_file(self, mod_name: str) -> str | None:
         """Resolve a dotted module name to a file path via the module index."""
@@ -223,7 +201,9 @@ class FileContext:
             next_refs: list[str] = []
             for class_ref in current:
                 # class_ref is "path::Service" or "path::Outer.Inner"
-                class_qualified = class_ref.split("::", 1)[-1] if "::" in class_ref else class_ref
+                class_qualified = (
+                    class_ref.split("::", 1)[-1] if "::" in class_ref else class_ref
+                )
                 attr_type = self.resolve_class_attribute(class_qualified, attr)
                 if attr_type:
                     next_refs.append(attr_type)
@@ -251,8 +231,6 @@ def extract_graph_from_file(
     *,
     excluded_modules: frozenset[str] | None = None,
     module_index: ModuleIndex | None = None,
-    package_index: PackageIndex | None = None,
-    content_provider: dict[str, str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     """Parse a source file and extract all graph nodes and edges.
 
@@ -261,7 +239,6 @@ def extract_graph_from_file(
         content: Source code contents.
         excluded_modules: Pre-computed module filter.
         module_index: Maps dotted module names to file paths.
-        package_index: Maps package directory prefixes to file lists.
 
     Returns:
         Tuple of (nodes, edges). Returns ``([], [])`` if the language
@@ -278,13 +255,8 @@ def extract_graph_from_file(
         ctx,
         excluded_modules=excluded_modules,
         module_index=module_index or {},
-        package_index=package_index or {},
-        content_provider=content_provider,
     )
-    try:
-        return parser.extract()
-    except Exception:
-        return [], []
+    return parser.extract()
 
 
 class GraphTreeSitterParser(
@@ -308,8 +280,6 @@ class GraphTreeSitterParser(
         *,
         excluded_modules: frozenset[str],
         module_index: ModuleIndex | None = None,
-        package_index: PackageIndex | None = None,
-        content_provider: dict[str, str] | None = None,
     ) -> None:
         """Initialize the parser with file context and module filter."""
         super().__init__(context)
@@ -318,12 +288,7 @@ class GraphTreeSitterParser(
         self._nodes: list[GraphNode] = []
         self._edges: list[GraphEdge] = []
         self._module_index = module_index or {}
-        self._package_index = package_index or {}
-        self._content_provider = content_provider or {}
-        self._file_ctx = FileContext(
-            module_index=self._module_index,
-            package_index=self._package_index,
-        )
+        self._file_ctx = FileContext(module_index=self._module_index)
 
     def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
         """Walk the syntax tree and return all graph nodes and edges."""

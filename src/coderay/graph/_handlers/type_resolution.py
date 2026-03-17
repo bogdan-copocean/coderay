@@ -16,7 +16,8 @@ TSNode = Any
 
 
 class TypeResolutionMixin:
-    """Resolves type annotations for factory, param, property, and context manager injection."""
+    """Resolves type annotations for factory, param, property, and context manager."""
+
 
     def _resolve_type_text(self, type_text: str | None) -> str | None:
         """Resolve a type annotation string to a qualified class reference.
@@ -52,6 +53,8 @@ class TypeResolutionMixin:
         result: list[str] = []
         for part in parts:
             if not part or not part[0].isupper():
+                continue
+            if part in ("None", "NoneType"):
                 continue
             resolved = self._file_ctx.resolve(part)
             result.append(resolved or f"{self.file_path}::{part}")

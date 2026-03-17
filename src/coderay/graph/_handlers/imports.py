@@ -8,12 +8,9 @@ module names from imported names (no positional field for "after import").
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge
-
-if TYPE_CHECKING:
-    from tree_sitter import Tree
 from coderay.graph._utils import resolve_relative_import
 
 TSNode = Any
@@ -33,7 +30,7 @@ class ImportHandlerMixin:
         module: list[str] = []  # e.g. ["pathlib"] or ["collections"]
         imported: list[tuple[str, str]] = []  # (original, local) e.g. ("Path", "Path")
 
-        # Walk AST children; prev_sibling tells us context (after "from", "import", etc.)
+        # Walk AST children; prev_sibling tells us context
         for child in node.children:
             prev = child.prev_sibling
             prev_type = prev.type if prev else None
@@ -47,8 +44,7 @@ class ImportHandlerMixin:
                     continue
                 # Child after "import" or "," is an imported name
                 if child.type == "wildcard_import":
-                    # from X import * — resolve via __all__ or public names
-                    imported.extend(self._resolve_wildcard_exports(module))
+                    # from X import * — not resolved (known gap)
                     continue
                 self._collect_import_name(child, imported)
 
@@ -146,84 +142,6 @@ class ImportHandlerMixin:
                 local = alias or text.split(".")[0]
                 module.append(text)
                 imported.append((text, local))
-
-    def _resolve_wildcard_exports(
-        self, module: list[str]
-    ) -> list[tuple[str, str]]:
-        """Resolve names from ``from X import *`` via __all__ or public names."""
-        if not module:
-            return []
-        mod_name = module[0]
-        file_path = self._module_index.get(mod_name)
-        if not file_path:
-            return []
-        content = self._content_provider.get(file_path)
-        if not content:
-            return []
-        # Try to parse and find __all__ or public names
-        try:
-            from tree_sitter import Language, Parser
-
-            from coderay.parsing.languages import get_language_for_file
-
-            lang_cfg = get_language_for_file(file_path)
-            if not lang_cfg or lang_cfg.name != "python":
-                return []
-            lang = Language(lang_cfg.language_fn())
-            parser = Parser(lang)
-            tree = parser.parse(content.encode())
-            return self._extract_names_from_module(tree, content, mod_name)
-        except Exception:
-            return []
-
-    def _extract_names_from_module(
-        self, tree: Tree, content: str, mod_name: str
-    ) -> list[tuple[str, str]]:
-        """Extract __all__ or public names from a module's AST."""
-        root = tree.root_node
-        if not root:
-            return []
-
-        # Check for __all__
-        for child in root.named_children:
-            if child.type != "expression_statement":
-                continue
-            stmt = child.named_children[0] if child.named_children else None
-            if not stmt or stmt.type != "assignment":
-                continue
-            lhs = stmt.child_by_field_name("left") or (
-                stmt.named_children[0] if stmt.named_children else None
-            )
-            rhs = stmt.child_by_field_name("right") or (
-                stmt.named_children[-1] if len(stmt.named_children) >= 2 else None
-            )
-            if not lhs or not rhs:
-                continue
-            if content[lhs.start_byte : lhs.end_byte] != "__all__":
-                continue
-            if rhs.type in ("list", "tuple", "expression_list"):
-                names = []
-                for c in rhs.named_children:
-                    if c.type == "string":
-                        s = content[c.start_byte : c.end_byte].strip('"\'')
-                        if s and not s.startswith("_"):
-                            names.append((s, s))
-                    elif c.type == "identifier":
-                        n = content[c.start_byte : c.end_byte]
-                        if n and n != "_":
-                            names.append((n, n))
-                return names
-
-        # Fallback: top-level def/class names
-        result: list[tuple[str, str]] = []
-        for child in root.named_children:
-            if child.type in ("function_definition", "class_definition"):
-                name_node = child.child_by_field_name("name")
-                if name_node:
-                    name = content[name_node.start_byte : name_node.end_byte]
-                    if name and not name.startswith("_"):
-                        result.append((name, name))
-        return result
 
     def _parse_aliased_import(
         self, node: TSNode

@@ -1,7 +1,7 @@
 """Tests for ImportHandlerMixin: IMPORTS edges and FileContext registration.
 
-Covers: bare imports, from-imports, aliased imports, wildcard imports,
-relative imports, excluded modules.
+Covers: bare imports, from-imports, aliased imports, relative imports,
+excluded modules.
 """
 
 from coderay.core.models import EdgeKind
@@ -156,28 +156,3 @@ class TestExcludedModuleImports:
         assert "flask::Flask" in _import_targets(edges)
 
 
-# ---------------------------------------------------------------------------
-# Wildcard imports: from X import *
-# ---------------------------------------------------------------------------
-
-
-class TestWildcardImports:
-    """_resolve_wildcard_exports: from X import * via __all__ or public names."""
-
-    def test_wildcard_import_registers_all_names(self):
-        from pathlib import Path
-
-        module_path = str(Path(__file__).parent.parent / "wildcard_module.py")
-        module_content = Path(module_path).read_text()
-        code = "from tests.graph.wildcard_module import *\njoin('a', 'b')\n"
-        module_index = {"tests.graph.wildcard_module": module_path}
-        content_provider = {module_path: module_content}
-        _, edges = extract_graph_from_file(
-            "test.py",
-            code,
-            module_index=module_index,
-            content_provider=content_provider,
-        )
-        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-        targets = {e.target for e in calls}
-        assert any("join" in t for t in targets), f"Expected join in targets: {targets}"

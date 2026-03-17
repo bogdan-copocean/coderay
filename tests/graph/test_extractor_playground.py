@@ -92,6 +92,15 @@ class TestKnownGaps:
         targets = {e.target for e in calls}
         assert "a" not in targets
 
+    @pytest.mark.xfail(reason="TODO: wildcard imports not resolved")
+    def test_wildcard_import_not_resolved(self):
+        """from X import * does not register names; calls remain unresolved."""
+        code = "from collections import *\ndefaultdict(int)\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert "collections::defaultdict" in targets
+
 
 # ---------------------------------------------------------------------------
 # Manual inspection helper

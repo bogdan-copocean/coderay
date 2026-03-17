@@ -18,7 +18,7 @@ Builds and queries a directed code relationship graph.
 
 Handler-specific tests live in `tests/graph/handlers/`, one file per mixin:
 
-- `test_imports.py` — ImportHandlerMixin: bare/from/aliased/wildcard imports, relative paths
+- `test_imports.py` — ImportHandlerMixin: bare/from/aliased imports, relative paths
 - `test_definitions.py` — DefinitionHandlerMixin: DEFINES, INHERITS, @property, typed params
 - `test_calls.py` — CallHandlerMixin: resolution (self, super, chains), filtering, decorators
 - `test_assignments.py` — AssignmentHandlerMixin: aliases, injection, with-statement, unpacking
@@ -31,8 +31,8 @@ Handler-specific tests live in `tests/graph/handlers/`, one file per mixin:
 
 - **Static analysis only** — dynamic dispatch (`getattr`, `exec`, `eval`,
   metaclasses) is not tracked.
-- **Wildcard imports** — `from X import *` requires the target module to be
-  indexed and uses `__all__` or public names when available.
+- **Wildcard imports** — `from X import *` is not resolved. Names imported
+  via wildcard are not registered; calls to them remain unresolved.
 - **Higher-order callbacks** — calls through parameters (e.g. `map(fn, items)`)
   or untyped callable params (e.g. `def process(fn): fn()`) are not traced
   across function boundaries.

@@ -145,6 +145,10 @@ def get_file_skeleton(
 
     p = Path(file_path)
     if not p.is_file():
+        # Resolve relative paths against workspace root (parent of index dir)
+        workspace_root = _resolve_index_dir().parent
+        p = workspace_root / file_path
+    if not p.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
     content = p.read_text(encoding="utf-8", errors="replace")
     return extract_skeleton(p, content, include_imports=include_imports)

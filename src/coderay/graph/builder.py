@@ -8,8 +8,8 @@ from coderay.core.config import get_config
 from coderay.core.models import EdgeKind
 from coderay.graph.code_graph import CodeGraph
 from coderay.graph.extractor import (
-    build_module_and_package_indexes,
     build_module_filter,
+    build_module_index,
     extract_graph_from_file,
 )
 
@@ -33,8 +33,7 @@ def build_graph(
     """
     excluded = build_module_filter()
     all_paths = [fp for fp, _ in file_paths_and_contents]
-    module_index, package_index = build_module_and_package_indexes(all_paths)
-    content_provider = dict(file_paths_and_contents)
+    module_index = build_module_index(all_paths)
 
     graph = CodeGraph()
     for file_path, content in file_paths_and_contents:
@@ -44,8 +43,6 @@ def build_graph(
                 content,
                 excluded_modules=excluded,
                 module_index=module_index,
-                package_index=package_index,
-                content_provider=content_provider,
             )
             graph.add_nodes_and_edges(nodes, edges)
         except Exception as exc:
@@ -59,18 +56,6 @@ def build_graph(
         pruned,
     )
     return graph
-
-
-def _remove_orphan_phantoms(graph: CodeGraph) -> None:
-    """Remove phantom nodes (no data) that have no remaining edges."""
-    g = graph._g
-    orphans = [
-        n
-        for n in list(g.nodes)
-        if g.nodes[n].get("data") is None and g.degree(n) == 0
-    ]
-    for n in orphans:
-        g.remove_node(n)
 
 
 def _prune_phantom_calls(graph: CodeGraph) -> int:
@@ -94,7 +79,7 @@ def _prune_phantom_calls(graph: CodeGraph) -> int:
     for u, v in to_remove:
         graph.remove_edge(u, v)
 
-    _remove_orphan_phantoms(graph)
+    graph.remove_orphan_phantoms()
 
     if to_remove:
         logger.info("Pruned %d phantom CALLS edges", len(to_remove))
@@ -196,10 +181,7 @@ def build_and_save_graph(
         changed_set = set(paths_to_parse)
         all_paths = [p for p in all_paths if p not in changed_set]
         all_paths.extend(fp for fp, _ in files_with_content)
-        module_index, package_index = build_module_and_package_indexes(
-            all_paths
-        )
-        content_provider = dict(files_with_content)
+        module_index = build_module_index(all_paths)
         for fp, content in files_with_content:
             try:
                 nodes, edges = extract_graph_from_file(
@@ -207,8 +189,6 @@ def build_and_save_graph(
                     content,
                     excluded_modules=excluded,
                     module_index=module_index,
-                    package_index=package_index,
-                    content_provider=content_provider,
                 )
                 existing_graph.add_nodes_and_edges(nodes, edges)
             except Exception as exc:
