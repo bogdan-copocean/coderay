@@ -9,6 +9,7 @@ import click
 from dotenv import load_dotenv
 
 from coderay.core.lock import acquire_indexer_lock
+from coderay.core.timing import timed_phase
 from coderay.pipeline.indexer import Indexer
 from coderay.retrieval.search import Retrieval
 from coderay.state.machine import StateMachine
@@ -75,20 +76,20 @@ def build(ctx: click.Context, full: bool, repo: Path) -> None:
     index_dir = Path(config.index.path)
     index_dir.mkdir(parents=True, exist_ok=True)
     indexer = Indexer(repo)
-    t0 = time.time()
     try:
-        with acquire_indexer_lock(index_dir):
-            if full:
-                click.echo(_color("Building full index...", CYAN))
-                result = indexer.build_full()
-            else:
-                if not indexer.index_exists():
+        with timed_phase("build", log=False) as tp:
+            with acquire_indexer_lock(index_dir):
+                if full:
                     click.echo(_color("Building full index...", CYAN))
+                    result = indexer.build_full()
                 else:
-                    click.echo(_color("Updating index (incremental)...", CYAN))
-                result = indexer.ensure_index()
-            click.echo(_color(f"{result} in {time.time() - t0:.2f}s", GREEN))
+                    if not indexer.index_exists():
+                        click.echo(_color("Building full index...", CYAN))
+                    else:
+                        click.echo(_color("Updating index (incremental)...", CYAN))
+                    result = indexer.ensure_index()
             indexer.maintain()
+        click.echo(_color(f"{result} in {tp.elapsed:.2f}s", GREEN))
     except Exception as e:
         indexer.error(str(e))
         click.echo(_color(f"Error: {e}", RED))
@@ -123,16 +124,15 @@ def search_cmd(
 
     retrieval = Retrieval()
     click.echo(_color(f"Searching: {query_text!r}", CYAN))
-    t0 = time.perf_counter()
 
-    results = retrieval.search(
-        query=query_text,
-        current_state=current_state,
-        top_k=top_k,
-        path_prefix=path_prefix,
-    )
-    elapsed = time.perf_counter() - t0
-    click.echo(_color(f"Query took {elapsed:.2f}s", BOLD))
+    with timed_phase("search", log=False) as tp:
+        results = retrieval.search(
+            query=query_text,
+            current_state=current_state,
+            top_k=top_k,
+            path_prefix=path_prefix,
+        )
+    click.echo(_color(f"Query took {tp.elapsed:.2f}s", BOLD))
 
     if not results:
         click.echo(_color("No results.", YELLOW))
@@ -378,14 +378,14 @@ def watch(
         logging.getLogger("coderay.pipeline.watcher").setLevel(logging.WARNING)
 
     indexer = Indexer(repo)
-    t0 = time.time()
     try:
-        with acquire_indexer_lock(index_dir):
-            if not indexer.index_exists():
-                click.echo(_color("No index found. Building full index...", CYAN))
-            result = indexer.ensure_index()
-        click.echo(_color(f"{result} in {time.time() - t0:.2f}s", GREEN))
-        indexer.maintain()
+        with timed_phase("watch_startup", log=False) as tp:
+            with acquire_indexer_lock(index_dir):
+                if not indexer.index_exists():
+                    click.echo(_color("No index found. Building full index...", CYAN))
+                result = indexer.ensure_index()
+            indexer.maintain()
+        click.echo(_color(f"{result} in {tp.elapsed:.2f}s", GREEN))
     except Exception as e:
         indexer.error(str(e))
         click.echo(_color(f"Error: {e}", RED))
