@@ -14,6 +14,19 @@ Builds and queries a directed code relationship graph.
 3. `builder.py` orchestrates extraction and persistence (graph.json).
    Supports incremental updates by removing changed files before re-extraction.
 
+## Tests
+
+Handler-specific tests live in `tests/graph/handlers/`, one file per mixin:
+
+- `test_imports.py` — ImportHandlerMixin: bare/from/aliased/wildcard imports, relative paths
+- `test_definitions.py` — DefinitionHandlerMixin: DEFINES, INHERITS, @property, typed params
+- `test_calls.py` — CallHandlerMixin: resolution (self, super, chains), filtering, decorators
+- `test_assignments.py` — AssignmentHandlerMixin: aliases, injection, with-statement, unpacking
+- `test_type_resolution.py` — TypeResolutionMixin: union, Self, factory/param/property types
+
+`test_extractor.py` covers FileContext, build_module_filter, and minimal integration.
+`test_extractor_playground.py` runs full graph_sample smoke tests and known-gap xfails.
+
 ## Known limitations
 
 - **Static analysis only** — dynamic dispatch (`getattr`, `exec`, `eval`,
