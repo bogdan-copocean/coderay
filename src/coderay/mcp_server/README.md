@@ -1,10 +1,10 @@
 # mcp_server
 
-FastMCP server exposing four tools to AI coding assistants:
+FastMCP server exposing three tools and one resource to AI coding assistants:
 
 - `semantic_search` — meaning-based code search
 - `get_file_skeleton` — file API surface (signatures, no bodies)
 - `get_impact_radius` — blast radius of a change via graph BFS
-- `index_status` — index health check
+- `index_status` — index health check (resource)
 
-Entry point: `coderay-mcp` (stdio transport; `--sse` for development).
+Entry point: `coderay-mcp` (stdio transport).
