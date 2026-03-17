@@ -99,3 +99,20 @@ class TestExtractSkeleton:
         """Verify skeleton extraction for the eclectic tree_sitter_playground module."""
         skeleton = extract_skeleton(*tree_sitter_playground_source)
         assert skeleton == expected_tree_sitter_playground_skeleton
+
+    def test_include_imports_true_by_default(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)
+        assert "import os" in skeleton
+        assert "from pathlib import Path" in skeleton
+
+    def test_include_imports_false_omits_imports(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, include_imports=False)
+        assert "import os" not in skeleton
+        assert "from pathlib import Path" not in skeleton
+
+    def test_include_imports_false_keeps_signatures(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, include_imports=False)
+        assert "class UserService:" in skeleton
+        assert "def create_user" in skeleton
+        assert "def helper_function" in skeleton
+        assert "MY_CONST = 42" in skeleton
