@@ -1,6 +1,6 @@
 # cli
 
-Click-based CLI exposing all index operations: build, update, search, watch,
+Click-based CLI exposing all index operations: build, search, watch,
 graph, skeleton, list, status, maintain.
 
 Entry point: `coderay` (registered via pyproject.toml).
