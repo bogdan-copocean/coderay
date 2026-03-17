@@ -9,7 +9,6 @@ import networkx as nx
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
 from coderay.parsing.languages import (
     get_init_filenames,
-    get_resolution_suffixes,
     get_supported_extensions,
 )
 
@@ -32,7 +31,6 @@ def _file_path_to_module_names(file_path: str) -> list[str]:
     """Derive possible module names from a file path."""
     _ensure_registry_cache()
 
-    # Strip file extension using the registry
     cleaned = file_path
     for ext in sorted(_KNOWN_EXTENSIONS, key=len, reverse=True):
         if cleaned.endswith(ext):
@@ -41,11 +39,9 @@ def _file_path_to_module_names(file_path: str) -> list[str]:
 
     parts = cleaned.replace("\\", "/").split("/")
 
-    # Strip common layout prefixes
     if parts and parts[0] == "src":
         parts = parts[1:]
 
-    # Strip init-style filenames (Python __init__, JS/TS index)
     if parts and parts[-1] in _KNOWN_INIT_FILENAMES:
         parts = parts[:-1]
 
@@ -69,21 +65,16 @@ class CodeGraph:
     def __init__(self) -> None:
         self._g: nx.DiGraph = nx.DiGraph()
 
-        # short name -> {full node IDs} — enables resolving bare names like
-        # "foo" to "src/utils.py::foo". Multiple IDs when the name is ambiguous
-        # (e.g. two files both define a function called "helper").
+        # short name -> {full node IDs}
         self._symbol_index: dict[str, set[str]] = defaultdict(set)
 
-        # qualified_name -> {full node IDs} — enables resolving dotted names
-        # like "ClassName.method" to "src/a.py::ClassName.method".
+        # qualified_name -> {full node IDs}
         self._qualified_index: dict[str, set[str]] = defaultdict(set)
 
-        # dotted module name -> node ID — maps Python-style import paths
-        # (e.g. "core.models") to the MODULE node they refer to.
+        # dotted module name -> node ID
         self._module_index: dict[str, str] = {}
 
-        # file path -> {node IDs} — all nodes belonging to a file, for O(k)
-        # file removal instead of scanning the entire graph.
+        # file path -> {node IDs}
         self._file_index: dict[str, set[str]] = defaultdict(set)
 
     def _index_node(self, node: GraphNode) -> None:
@@ -93,8 +84,6 @@ class CodeGraph:
             self._qualified_index[node.qualified_name].add(node.id)
         self._file_index[node.file_path].add(node.id)
         if node.kind == NodeKind.MODULE:
-            # Register all suffix variants so that "import models" and
-            # "import core.models" both resolve to the same MODULE node.
             for mod_name in _file_path_to_module_names(node.file_path):
                 if mod_name not in self._module_index:
                     self._module_index[mod_name] = node.id
@@ -145,17 +134,49 @@ class CodeGraph:
             node: GraphNode | None = self._g.nodes[nid].get("data")
             if node:
                 self._unindex_node(node)
-            # NetworkX also removes all edges touching this node
             self._g.remove_node(nid)
         return len(to_remove)
 
-    def resolve_symbol(self, name: str, caller_file: str | None = None) -> str | None:
-        """Resolve a short, qualified, or dotted name to a fully-qualified node ID.
+    def remove_edge(self, source: str, target: str) -> None:
+        """Remove a single directed edge if it exists."""
+        if self._g.has_edge(source, target):
+            self._g.remove_edge(source, target)
+
+    def remove_orphan_phantoms(self) -> None:
+        """Remove phantom nodes (no data) that have no remaining edges."""
+        orphans = [
+            n
+            for n in list(self._g.nodes)
+            if self._g.nodes[n].get("data") is None and self._g.degree(n) == 0
+        ]
+        for n in orphans:
+            self._g.remove_node(n)
+
+    def iter_edges(self):
+        """Yield (source, target, data) for every edge in the graph."""
+        return self._g.edges(data=True)
+
+    def has_symbol_candidates(self, name: str) -> bool:
+        """Return True if *name* has any resolution candidates."""
+        return bool(
+            self._symbol_index.get(name)
+            or self._qualified_index.get(name)
+        )
+
+    def all_file_paths(self) -> set[str]:
+        """Return the set of all file paths currently in the graph."""
+        return set(self._file_index.keys())
+
+    def resolve_symbol(self, name: str) -> str | None:
+        """Resolve a short or qualified name to a fully-qualified node ID.
 
         Lookup order:
             1. Exact node ID match (fast path).
             2. Bare name via ``_symbol_index`` (unique match only).
-            3. Qualified name via ``_qualified_index`` (e.g. "ClassName.method").
+            3. Qualified name via ``_qualified_index``.
+
+        Args:
+            name: Bare name, qualified name, or full node ID.
 
         Returns:
             Full node ID, or None if the name cannot be uniquely resolved.
@@ -173,104 +194,8 @@ class CodeGraph:
 
         return None
 
-    def resolve_edges(self) -> int:
-        """Rewire phantom edge targets to real node IDs.
-
-        Returns:
-            Number of edges successfully resolved.
-        """
-        resolvable = {EdgeKind.CALLS, EdgeKind.INHERITS, EdgeKind.IMPORTS}
-        to_remove: list[tuple[str, str]] = []
-        to_add: list[tuple[str, str, dict]] = []
-
-        for u, v, data in self._g.edges(data=True):
-            kind = data.get("kind")
-            if kind not in resolvable:
-                continue
-            # Target is already a real node — nothing to resolve
-            if v in self._g and self._g.nodes[v].get("data") is not None:
-                continue
-
-            # Extract the caller's file path from its node ID
-            # ("src/a.py::MyClass.method" -> "src/a.py")
-            caller_file = u.split("::")[0] if "::" in u else u
-            resolved = self.resolve_symbol(v, caller_file=caller_file)
-            if not resolved and kind == EdgeKind.IMPORTS:
-                resolved = self._module_index.get(v)
-            if not resolved and kind == EdgeKind.IMPORTS:
-                resolved = self._resolve_path_target(v)
-            if resolved and resolved != v:
-                to_remove.append((u, v))
-                to_add.append((u, resolved, dict(data)))
-
-        # Apply changes in a second pass (safe to mutate now)
-        for u, v in to_remove:
-            if self._g.has_edge(u, v):
-                self._g.remove_edge(u, v)
-        for u, v, data in to_add:
-            self._g.add_edge(u, v, **data)
-
-        if to_add:
-            logger.info("Resolved %d edges via symbol/module index", len(to_add))
-        return len(to_add)
-
-    def prune_phantom_edges(self) -> int:
-        """Remove CALLS edges whose target is a phantom with no resolution candidates.
-
-        These are typically stdlib/third-party methods (``append``, ``get``,
-        ``join``, etc.) that will never resolve to a project node.  Removing
-        them reduces noise and improves ``get_impact_radius`` traversal.
-
-        Returns:
-            Number of edges pruned.
-        """
-        to_remove: list[tuple[str, str]] = []
-        for u, v, data in self._g.edges(data=True):
-            if data.get("kind") != EdgeKind.CALLS:
-                continue
-            node_data = self._g.nodes.get(v, {})
-            if node_data and node_data.get("data") is not None:
-                continue
-            if (
-                not self._symbol_index.get(v)
-                and not self._qualified_index.get(v)
-            ):
-                to_remove.append((u, v))
-
-        for u, v in to_remove:
-            if self._g.has_edge(u, v):
-                self._g.remove_edge(u, v)
-
-        # Clean up orphan phantom nodes (no remaining edges)
-        phantom_nodes = [
-            n for n in list(self._g.nodes)
-            if self._g.nodes[n].get("data") is None
-            and self._g.degree(n) == 0
-        ]
-        for n in phantom_nodes:
-            self._g.remove_node(n)
-
-        if to_remove:
-            logger.info("Pruned %d phantom CALLS edges", len(to_remove))
-        return len(to_remove)
-
-    def _resolve_path_target(self, target: str) -> str | None:
-        """Try to match a path-style target to an existing MODULE node."""
-        if "/" not in target:
-            return None
-        for suffix in get_resolution_suffixes():
-            candidate = target + suffix
-            node_data = self._g.nodes.get(candidate, {})
-            if node_data and node_data.get("data") is not None:
-                return candidate
-        cleaned = target
-        if cleaned.startswith("src/"):
-            cleaned = cleaned[4:]
-        dotted = cleaned.replace("/", ".")
-        return self._module_index.get(dotted)
-
     def get_node(self, node_id: str) -> GraphNode | None:
-        """Look up a node by its full ID. Returns None for phantoms or missing nodes."""
+        """Look up a node by its full ID."""
         data = self._g.nodes.get(node_id)
         if data:
             return data.get("data")
@@ -284,14 +209,17 @@ class CodeGraph:
         {EdgeKind.CALLS, EdgeKind.IMPORTS, EdgeKind.INHERITS}
     )
 
-    def get_impact_radius(
-        self, symbol: str, depth: int = 2
-    ) -> ImpactResult:
+    def get_impact_radius(self, symbol: str, depth: int = 2) -> ImpactResult:
         """Find all nodes that could be affected if ``symbol`` changes.
 
         Traverses predecessors via CALLS, IMPORTS, and INHERITS edges
         only.  DEFINES edges (containment) are excluded because a
         module defining a symbol is not "affected" by changes to it.
+
+        Also picks up callers that target a bare name matching the
+        resolved node's ``name`` or ``qualified_name`` — these are
+        unresolved DI-style calls (e.g. ``self.dep.process()``)
+        that couldn't be resolved at extraction time.
 
         Args:
             symbol: Fully qualified node ID or resolvable name.
@@ -307,6 +235,16 @@ class CodeGraph:
             for pred in self._g.predecessors(resolved)
             if self._is_impact_edge(pred, resolved)
         )
+
+        # Also find callers via unresolved bare-name edges
+        bare_targets = self._bare_name_targets(resolved)
+        for bare in bare_targets:
+            if bare in self._g:
+                for pred in self._g.predecessors(bare):
+                    edge_data = self._g.edges[pred, bare]
+                    if edge_data.get("kind") in self._IMPACT_EDGE_KINDS:
+                        queue.append((pred, 1))
+
         while queue:
             nid, hop = queue.popleft()
             if nid in visited:
@@ -314,18 +252,29 @@ class CodeGraph:
             visited.add(nid)
             if hop < depth and nid in self._g:
                 for pred in self._g.predecessors(nid):
-                    if (
-                        pred not in visited
-                        and self._is_impact_edge(pred, nid)
-                    ):
+                    if pred not in visited and self._is_impact_edge(pred, nid):
                         queue.append((pred, hop + 1))
 
         nodes = [
-            self.get_node(nid)
-            for nid in visited
-            if self.get_node(nid) is not None
+            self.get_node(nid) for nid in visited if self.get_node(nid) is not None
         ]
         return ImpactResult(resolved_node=resolved, nodes=nodes)
+
+    def _bare_name_targets(self, node_id: str) -> list[str]:
+        """Return bare-name phantom nodes that match the given real node.
+
+        When DI-style calls produce unresolved bare edges (e.g. target
+        ``process``), those phantom nodes share the real node's
+        ``name`` or ``qualified_name``.
+        """
+        node = self.get_node(node_id)
+        if node is None:
+            return []
+        targets = []
+        for candidate in (node.name, node.qualified_name):
+            if candidate != node_id and candidate in self._g:
+                targets.append(candidate)
+        return targets
 
     def _is_impact_edge(self, source: str, target: str) -> bool:
         """Check whether the edge is a dependency (not containment)."""
@@ -334,9 +283,7 @@ class CodeGraph:
 
     def _not_found_result(self, symbol: str) -> ImpactResult:
         """Build an ImpactResult with diagnostic hints for a missing node."""
-        file_part = (
-            symbol.split("::")[0] if "::" in symbol else None
-        )
+        file_part = symbol.split("::")[0] if "::" in symbol else None
         available = (
             sorted(self._file_index.get(file_part, set()))
             if file_part
@@ -344,12 +291,8 @@ class CodeGraph:
         )
         hint = f"Node '{symbol}' not in the graph."
         if available:
-            hint += (
-                f" Available nodes in {file_part}: {available}"
-            )
-        return ImpactResult(
-            resolved_node=None, nodes=[], hint=hint
-        )
+            hint += f" Available nodes in {file_part}: {available}"
+        return ImpactResult(resolved_node=None, nodes=[], hint=hint)
 
     @property
     def node_count(self) -> int:
@@ -363,11 +306,6 @@ class CodeGraph:
 
     # ------------------------------------------------------------------
     # Serialisation
-    #
-    # The graph is persisted as JSON (graph.json). Only real nodes are
-    # serialised — phantom nodes are recreated implicitly when edges
-    # referencing them are re-added. Secondary indexes are rebuilt by
-    # ``add_node`` during ``from_dict``.
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:

@@ -4,7 +4,6 @@ from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.extractor import (
     _PYTHON_BUILTINS,
     FileContext,
-    GraphTreeSitterParser,
     _resolve_relative_import,
     build_module_filter,
     extract_graph_from_file,

@@ -6,6 +6,7 @@ import logging
 from coderay.core.config import get_config
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
+from coderay.parsing.languages import get_init_filenames, get_supported_extensions
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,90 @@ _DEFAULT_EXCLUDED_MODULES: frozenset[str] = frozenset(
     }
 )
 
+ModuleIndex = dict[str, str]
+PackageIndex = dict[str, list[str]]
+
+
+def _is_init_file(file_path: str) -> bool:
+    """Return True if *file_path* is a package init file (e.g. ``__init__.py``)."""
+    name = file_path.rsplit("/", 1)[-1] if "/" in file_path else file_path
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return stem in get_init_filenames()
+
+
+def _find_symbol_in_package(
+    symbol: str,
+    init_file: str,
+    package_index: PackageIndex,
+) -> str | None:
+    """Search package sub-modules for *symbol* when init file doesn't define it.
+
+    Python packages often re-export symbols from sub-modules via their
+    ``__init__.py``.  When the symbol is not directly in the init file,
+    scan all files sharing the package directory prefix for a plausible
+    match.  Returns ``file_path::symbol`` or None.
+    """
+    pkg_dir = init_file.rsplit("/", 1)[0] + "/" if "/" in init_file else ""
+    for pkg_file in package_index.get(pkg_dir, []):
+        if pkg_file == init_file:
+            continue
+        candidate = f"{pkg_file}::{symbol}"
+        return candidate
+    return None
+
+
+def build_module_and_package_indexes(
+    file_paths: list[str],
+) -> tuple[ModuleIndex, PackageIndex]:
+    """Build module and package indexes from a list of file paths.
+
+    The module index maps dotted module names to file paths.
+    The package index maps package directory prefixes to their files.
+    """
+    extensions = get_supported_extensions()
+    init_filenames = get_init_filenames()
+
+    module_index: ModuleIndex = {}
+    package_index: PackageIndex = {}
+
+    for fp in file_paths:
+        cleaned = fp
+        for ext in sorted(extensions, key=len, reverse=True):
+            if cleaned.endswith(ext):
+                cleaned = cleaned[: -len(ext)]
+                break
+
+        parts = cleaned.replace("\\", "/").split("/")
+
+        # Strip common layout prefix
+        no_src_parts = parts[1:] if parts and parts[0] == "src" else parts
+
+        # Check if this is an init file
+        is_init = parts[-1] in init_filenames if parts else False
+
+        if is_init:
+            base_parts = no_src_parts[:-1]
+        else:
+            base_parts = no_src_parts
+
+        if not base_parts:
+            continue
+
+        # Register all suffix variants
+        for i in range(len(base_parts)):
+            dotted = ".".join(base_parts[i:])
+            if dotted not in module_index:
+                module_index[dotted] = fp
+
+        # Build package index
+        dir_path = fp.rsplit("/", 1)[0] + "/" if "/" in fp else ""
+        if dir_path:
+            if dir_path not in package_index:
+                package_index[dir_path] = []
+            package_index[dir_path].append(fp)
+
+    return module_index, package_index
+
 
 class FileContext:
     """Tracks name bindings within a single file during graph extraction.
@@ -33,14 +118,72 @@ class FileContext:
     (last-write-wins), which mirrors Python's runtime semantics.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        module_index: ModuleIndex | None = None,
+        package_index: PackageIndex | None = None,
+    ) -> None:
         self._symbols: dict[str, str] = {}
         self._instances: dict[str, str] = {}
         self._classes: set[str] = set()
+        self._module_index = module_index or {}
+        self._package_index = package_index or {}
+
+    def _resolve_module_to_file(self, mod_name: str) -> str | None:
+        """Resolve a dotted module name to a file path via the module index."""
+        return self._module_index.get(mod_name)
+
+    def _resolve_qualified_import(
+        self, mod_name: str, symbol: str
+    ) -> str:
+        """Resolve ``from mod_name import symbol`` to a file-path-based target.
+
+        Falls back to ``mod_name::symbol`` when the module is not in the
+        index (external/third-party).
+
+        Handles three cases:
+        1. ``mod_name`` is a known module → ``file_path::symbol``
+        2. ``mod_name.symbol`` is itself a module (sub-module import
+           like ``from lib import formatter``) → the sub-module file path
+        3. ``mod_name`` resolves to an ``__init__`` and symbol is in a
+           sub-module → ``sub_module_file::symbol``
+        """
+        # Case 2: the imported name is itself a sub-module
+        submod = f"{mod_name}.{symbol}"
+        submod_file = self._resolve_module_to_file(submod)
+        if submod_file:
+            return submod_file
+
+        # Case 1: mod_name resolves directly
+        file_path = self._resolve_module_to_file(mod_name)
+        if not file_path:
+            return f"{mod_name}::{symbol}"
+
+        # Case 3: package __init__ re-exports
+        if _is_init_file(file_path):
+            found = _find_symbol_in_package(
+                symbol, file_path, self._package_index
+            )
+            if found:
+                return found
+
+        return f"{file_path}::{symbol}"
 
     def register_import(self, local_name: str, qualified_name: str) -> None:
-        """Register an imported symbol binding."""
-        self._symbols[local_name] = qualified_name
+        """Register an imported symbol binding.
+
+        When a module index is available, resolves module-dotted names
+        (``mod.path::Symbol``) to file-path-based targets
+        (``src/mod/path.py::Symbol``) immediately.
+        """
+        if "::" in qualified_name:
+            mod_part, sym_part = qualified_name.split("::", 1)
+            resolved = self._resolve_qualified_import(mod_part, sym_part)
+            self._symbols[local_name] = resolved
+        else:
+            # Bare module import — resolve to file path if possible
+            file_path = self._resolve_module_to_file(qualified_name)
+            self._symbols[local_name] = file_path if file_path else qualified_name
 
     def register_definition(
         self, local_name: str, node_id: str, *, is_class: bool = False
@@ -125,6 +268,8 @@ def extract_graph_from_file(
     content: str,
     *,
     excluded_modules: frozenset[str] | None = None,
+    module_index: ModuleIndex | None = None,
+    package_index: PackageIndex | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     """Parse a source file and extract all graph nodes and edges.
 
@@ -133,6 +278,8 @@ def extract_graph_from_file(
         content: Source code contents.
         excluded_modules: Pre-computed module filter.  When ``None``,
             ``build_module_filter()`` is called (hits the global config).
+        module_index: Maps dotted module names to file paths.
+        package_index: Maps package directory prefixes to file lists.
 
     Returns:
         Tuple of (nodes, edges). Returns ``([], [])`` if the language
@@ -145,7 +292,12 @@ def extract_graph_from_file(
     if excluded_modules is None:
         excluded_modules = build_module_filter()
 
-    parser = GraphTreeSitterParser(ctx, excluded_modules=excluded_modules)
+    parser = GraphTreeSitterParser(
+        ctx,
+        excluded_modules=excluded_modules,
+        module_index=module_index,
+        package_index=package_index,
+    )
     try:
         return parser.extract()
     except Exception:
@@ -160,6 +312,8 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         context: ParserContext,
         *,
         excluded_modules: frozenset[str],
+        module_index: ModuleIndex | None = None,
+        package_index: PackageIndex | None = None,
     ) -> None:
         """Initialize the parser with file context and module filter."""
         super().__init__(context)
@@ -167,7 +321,12 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         self._module_id: str = context.file_path
         self._nodes: list[GraphNode] = []
         self._edges: list[GraphEdge] = []
-        self._file_ctx = FileContext()
+        self._module_index = module_index or {}
+        self._package_index = package_index or {}
+        self._file_ctx = FileContext(
+            module_index=self._module_index,
+            package_index=self._package_index,
+        )
 
     def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
         """Walk the syntax tree and return all graph nodes and edges."""
@@ -279,10 +438,13 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
                 # Skip IMPORTS edge for excluded modules
                 if is_excluded:
                     continue
+                # Use the resolved target from FileContext (file-path-based)
+                resolved_target = self._file_ctx.resolve(local)
+                edge_target = resolved_target if resolved_target else qualified
                 self._edges.append(
                     GraphEdge(
                         source=self._module_id,
-                        target=qualified,
+                        target=edge_target,
                         kind=EdgeKind.IMPORTS,
                     )
                 )
@@ -293,16 +455,22 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
                 self._file_ctx.register_import(local, mod_text)
                 if mod_text in self._excluded_modules:
                     continue
+                resolved_target = self._file_ctx.resolve(local)
+                edge_target = resolved_target if resolved_target else mod_text
                 self._edges.append(
                     GraphEdge(
                         source=self._module_id,
-                        target=mod_text,
+                        target=edge_target,
                         kind=EdgeKind.IMPORTS,
                     )
                 )
 
     def _resolve_import_text(self, child) -> str | None:
-        """Resolve the text of an import module node, handling relative paths."""
+        """Resolve the text of an import module node, handling relative paths.
+
+        For relative imports, converts the relative path to a slash-separated
+        form first, then tries the module index to get an actual file path.
+        """
         text = self.node_text(child).strip()
         if text and text[0] == ".":
             return _resolve_relative_import(self._module_id, text)
@@ -600,12 +768,16 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
         if method_resolved:
             return method_resolved
 
-        # obj.attr() → resolve obj prefix, keep full tail (a.b.c → resolved_a.b.c)
+        # obj.attr() → resolve obj prefix, keep full tail
+        # When obj resolves to a file path (module import), use :: separator;
+        # otherwise use dot (e.g. module_alias::Class.method).
         # TODO: resolve intermediate segments via type inference for deeper
         #  chains (e.g. knowing what type a.b returns to resolve a.b.c)
         obj_resolved = self._file_ctx.resolve(obj_name)
         if obj_resolved:
             tail = ".".join(parts[1:])
+            if obj_resolved.endswith((".py", ".js", ".ts", ".go")):
+                return f"{obj_resolved}::{tail}"
             return f"{obj_resolved}.{tail}"
 
         return method_name

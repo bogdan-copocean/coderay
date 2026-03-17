@@ -13,7 +13,7 @@ import sys
 from abc import ABC, abstractmethod
 from collections import defaultdict as dd
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # --- Top-level definitions --------------------------------------------
 
@@ -55,7 +55,7 @@ class GuideDog(Dog, ABC):
 class HttpClient:
     """Standalone class used for composition tests."""
 
-    def get(self, url: str) -> Optional[str]:
+    def get(self, url: str) -> str | None:
         return f"GET {url}"
 
     def post(self, url: str, data: Any) -> str:

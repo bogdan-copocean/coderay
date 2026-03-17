@@ -5,8 +5,13 @@ import logging
 from pathlib import Path
 
 from coderay.core.config import get_config
+from coderay.core.models import EdgeKind
 from coderay.graph.code_graph import CodeGraph
-from coderay.graph.extractor import build_module_filter, extract_graph_from_file
+from coderay.graph.extractor import (
+    build_module_and_package_indexes,
+    build_module_filter,
+    extract_graph_from_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,29 +24,67 @@ def build_graph(
 ) -> CodeGraph:
     """Extract a CodeGraph from the given files.
 
+    Builds module and package indexes from the file list, then extracts
+    each file with pre-resolved edge targets.  CALLS edges whose targets
+    are bare names not in the graph are pruned inline.
+
     Returns:
         Built CodeGraph with resolved edges.
     """
     excluded = build_module_filter()
+    all_paths = [fp for fp, _ in file_paths_and_contents]
+    module_index, package_index = build_module_and_package_indexes(all_paths)
+
     graph = CodeGraph()
     for file_path, content in file_paths_and_contents:
         try:
             nodes, edges = extract_graph_from_file(
-                file_path, content, excluded_modules=excluded
+                file_path,
+                content,
+                excluded_modules=excluded,
+                module_index=module_index,
+                package_index=package_index,
             )
             graph.add_nodes_and_edges(nodes, edges)
         except Exception as exc:
             logger.warning("Graph extraction failed for %s: %s", file_path, exc)
-    resolved = graph.resolve_edges()
-    pruned = graph.prune_phantom_edges()
+
+    pruned = _prune_phantom_calls(graph)
     logger.info(
-        "Graph built: %d nodes, %d edges (%d resolved, %d phantoms pruned)",
+        "Graph built: %d nodes, %d edges (%d phantoms pruned)",
         graph.node_count,
         graph.edge_count,
-        resolved,
         pruned,
     )
     return graph
+
+
+def _prune_phantom_calls(graph: CodeGraph) -> int:
+    """Remove CALLS edges to unresolvable phantom targets.
+
+    These are typically stdlib/third-party methods (``append``, ``get``,
+    ``join``, etc.) that will never resolve to a project node.
+
+    Returns:
+        Number of edges pruned.
+    """
+    to_remove = []
+    for u, v, data in graph.iter_edges():
+        if data.get("kind") != EdgeKind.CALLS:
+            continue
+        if graph.get_node(v) is not None:
+            continue
+        if not graph.has_symbol_candidates(v):
+            to_remove.append((u, v))
+
+    for u, v in to_remove:
+        graph.remove_edge(u, v)
+
+    graph.remove_orphan_phantoms()
+
+    if to_remove:
+        logger.info("Pruned %d phantom CALLS edges", len(to_remove))
+    return len(to_remove)
 
 
 def save_graph(graph: CodeGraph, index_dir: str | Path) -> Path:
@@ -131,18 +174,32 @@ def build_and_save_graph(
 
     if incremental:
         excluded = build_module_filter()
+        # For incremental builds, we need indexes from ALL known files
+        all_paths = list(existing_graph.all_file_paths())
         for fp in paths_to_parse:
             existing_graph.remove_file(fp)
+        # Add back the changed paths for the index
+        changed_set = set(paths_to_parse)
+        all_paths = [p for p in all_paths if p not in changed_set]
+        all_paths.extend(fp for fp, _ in files_with_content)
+        module_index, package_index = build_module_and_package_indexes(
+            all_paths
+        )
         for fp, content in files_with_content:
             try:
                 nodes, edges = extract_graph_from_file(
-                    fp, content, excluded_modules=excluded
+                    fp,
+                    content,
+                    excluded_modules=excluded,
+                    module_index=module_index,
+                    package_index=package_index,
                 )
                 existing_graph.add_nodes_and_edges(nodes, edges)
             except Exception as exc:
-                logger.warning("Graph extraction failed for %s: %s", fp, exc)
-        existing_graph.resolve_edges()
-        existing_graph.prune_phantom_edges()
+                logger.warning(
+                    "Graph extraction failed for %s: %s", fp, exc
+                )
+        _prune_phantom_calls(existing_graph)
         graph = existing_graph
         logger.info(
             "Graph incremental update: re-parsed %d files",
