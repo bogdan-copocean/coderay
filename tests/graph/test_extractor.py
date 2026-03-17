@@ -189,13 +189,13 @@ class TestGraphExtraction:
         code = (
             "class Handler:\n"
             "    def handle(self):\n"
-            "        result = self.survey_service.get_count_by_survey_id(sid)\n"
+            "        result = self.user_service.get_count_by_user_id(uid)\n"
             "        return result\n"
         )
         nodes, edges = extract_graph_from_file("api/views.py", code)
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
-        assert "get_count_by_survey_id" in targets, (
+        assert "get_count_by_user_id" in targets, (
             f"DI-style call not captured. Got: {targets}"
         )
 
