@@ -1,6 +1,6 @@
 """Tests for indexer.graph.code_graph."""
 
-from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
 from coderay.graph.code_graph import CodeGraph
 
 
@@ -41,10 +41,96 @@ class TestCodeGraph:
             g.add_node(_make_node(name))
         g.add_edge(_make_edge("a", "b", EdgeKind.CALLS))
         g.add_edge(_make_edge("b", "c", EdgeKind.CALLS))
-        impact = g.get_impact_radius("c", depth=2)
-        ids = {n.id for n in impact}
+        result = g.get_impact_radius("c", depth=2)
+        assert isinstance(result, ImpactResult)
+        ids = {n.id for n in result.nodes}
         assert "b" in ids
         assert "a" in ids
+        assert result.resolved_node == "c"
+        assert result.hint is None
+
+    def test_impact_radius_excludes_defines(self):
+        """DEFINES edges (containment) must not appear in impact results."""
+        g = CodeGraph()
+        module = _make_node("mod.py", NodeKind.MODULE, "mod.py")
+        cls = _make_node("mod.py::Cls", NodeKind.CLASS, "Cls")
+        method = _make_node("mod.py::Cls.run", NodeKind.FUNCTION, "run")
+        caller = _make_node("other.py::main", NodeKind.FUNCTION, "main")
+
+        for n in [module, cls, method, caller]:
+            g.add_node(n)
+        g.add_edge(_make_edge("mod.py", "mod.py::Cls", EdgeKind.DEFINES))
+        g.add_edge(_make_edge("mod.py::Cls", "mod.py::Cls.run", EdgeKind.DEFINES))
+        g.add_edge(_make_edge("other.py::main", "mod.py::Cls.run", EdgeKind.CALLS))
+
+        result = g.get_impact_radius("mod.py::Cls.run", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "other.py::main" in ids
+        assert "mod.py" not in ids, "module (via DEFINES) must be excluded"
+        assert "mod.py::Cls" not in ids, "class (via DEFINES) must be excluded"
+
+    def test_impact_radius_follows_imports(self):
+        """IMPORTS edges should be followed in reverse traversal."""
+        g = CodeGraph()
+        g.add_node(_make_node("a.py"))
+        g.add_node(_make_node("b.py"))
+        g.add_edge(_make_edge("a.py", "b.py", EdgeKind.IMPORTS))
+
+        result = g.get_impact_radius("b.py", depth=1)
+        ids = {n.id for n in result.nodes}
+        assert "a.py" in ids
+
+    def test_impact_radius_follows_inherits(self):
+        """INHERITS edges should be followed in reverse traversal."""
+        g = CodeGraph()
+        base = _make_node("a.py::Base", NodeKind.CLASS, "Base")
+        child = _make_node("b.py::Child", NodeKind.CLASS, "Child")
+        g.add_node(base)
+        g.add_node(child)
+        g.add_edge(_make_edge("b.py::Child", "a.py::Base", EdgeKind.INHERITS))
+
+        result = g.get_impact_radius("a.py::Base", depth=1)
+        ids = {n.id for n in result.nodes}
+        assert "b.py::Child" in ids
+
+    def test_impact_radius_not_found_returns_hint(self):
+        """Querying a non-existent node returns diagnostics, not silent empty."""
+        g = CodeGraph()
+        g.add_node(_make_node("a.py::foo", NodeKind.FUNCTION, "foo"))
+
+        result = g.get_impact_radius("a.py::does_not_exist")
+        assert result.resolved_node is None
+        assert result.nodes == []
+        assert result.hint is not None
+        assert "not in the graph" in result.hint
+
+    def test_impact_radius_not_found_lists_available_nodes(self):
+        """Hint includes available nodes in the same file when applicable."""
+        g = CodeGraph()
+        mod = GraphNode(
+            id="svc.py", kind=NodeKind.MODULE, file_path="svc.py",
+            start_line=1, end_line=10, name="svc.py", qualified_name="svc.py",
+        )
+        fn = GraphNode(
+            id="svc.py::run", kind=NodeKind.FUNCTION, file_path="svc.py",
+            start_line=2, end_line=5, name="run", qualified_name="run",
+        )
+        g.add_node(mod)
+        g.add_node(fn)
+
+        result = g.get_impact_radius("svc.py::missing")
+        assert result.hint is not None
+        assert "svc.py::run" in result.hint
+
+    def test_impact_radius_no_callers(self):
+        """Node exists but has no callers — empty results, no hint."""
+        g = CodeGraph()
+        g.add_node(_make_node("a.py::lonely", NodeKind.FUNCTION, "lonely"))
+
+        result = g.get_impact_radius("a.py::lonely")
+        assert result.resolved_node == "a.py::lonely"
+        assert result.nodes == []
+        assert result.hint is None
 
     def test_to_dict_and_from_dict(self):
         g = CodeGraph()

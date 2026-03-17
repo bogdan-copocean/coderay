@@ -2,7 +2,7 @@
 
 import pytest
 
-from coderay.core.models import Chunk, EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.core.models import Chunk, EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
 
 
 class TestChunk:
@@ -80,3 +80,36 @@ class TestGraphEdge:
     def test_fields(self):
         e = GraphEdge(source="a.py", target="os", kind=EdgeKind.IMPORTS)
         assert e.kind == EdgeKind.IMPORTS
+
+
+class TestImpactResult:
+    def _node(self) -> GraphNode:
+        return GraphNode(
+            id="a.py::foo", kind=NodeKind.FUNCTION, file_path="a.py",
+            start_line=1, end_line=5, name="foo", qualified_name="foo",
+        )
+
+    def test_to_dict_with_results(self):
+        n = self._node()
+        r = ImpactResult(resolved_node="a.py::foo", nodes=[n])
+        d = r.to_dict()
+        assert d["resolved_node"] == "a.py::foo"
+        assert len(d["results"]) == 1
+        assert "hint" not in d
+
+    def test_to_dict_with_hint(self):
+        r = ImpactResult(resolved_node=None, nodes=[], hint="Node not found.")
+        d = r.to_dict()
+        assert d["resolved_node"] is None
+        assert d["results"] == []
+        assert d["hint"] == "Node not found."
+
+    def test_to_dict_no_hint_when_none(self):
+        r = ImpactResult(resolved_node="x", nodes=[])
+        d = r.to_dict()
+        assert "hint" not in d
+
+    def test_frozen(self):
+        r = ImpactResult(resolved_node="x", nodes=[])
+        with pytest.raises(AttributeError):
+            r.resolved_node = "y"  # type: ignore[misc]

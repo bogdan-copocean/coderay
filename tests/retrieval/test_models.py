@@ -5,13 +5,14 @@ import pytest
 from coderay.retrieval.models import DEFAULT_MAX_CONTENT_LINES, SearchResult
 
 
-def _make_row(content: str = "line\n" * 10) -> dict:
+def _make_row(content: str = "line\n" * 10, score: float = 0.85) -> dict:
     return {
         "path": "src/app.py",
         "start_line": 1,
         "end_line": 10,
         "symbol": "foo",
         "content": content,
+        "score": score,
     }
 
 
@@ -27,7 +28,19 @@ class TestSearchResultFromRaw:
         assert result.end_line == 10
         assert result.symbol == "foo"
         assert result.content == "hello"
+        assert result.score == 0.85
         assert result.truncated is False
+
+    def test_score_from_row(self):
+        row = _make_row(content="x", score=0.92)
+        result = SearchResult.from_raw(row)
+        assert result.score == 0.92
+
+    def test_score_defaults_to_zero_when_missing(self):
+        row = _make_row(content="x")
+        del row["score"]
+        result = SearchResult.from_raw(row)
+        assert result.score == 0.0
 
     def test_no_truncation_when_under_limit(self):
         content = "\n".join(f"line {i}" for i in range(30))
@@ -104,8 +117,14 @@ class TestSearchResultToDict:
             "end_line",
             "symbol",
             "content",
+            "score",
         }
         assert set(d.keys()) == expected
+
+    def test_score_in_dict(self):
+        result = SearchResult.from_raw(_make_row(content="x", score=0.77))
+        d = result.to_dict()
+        assert d["score"] == 0.77
 
     def test_truncated_flag_included_when_true(self):
         lines = [f"line {i}" for i in range(100)]

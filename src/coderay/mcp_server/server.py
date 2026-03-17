@@ -132,6 +132,13 @@ def get_file_skeleton(
         str,
         Field(description="Absolute or relative path to the file"),
     ],
+    include_imports: Annotated[
+        bool,
+        Field(
+            description="Include import statements in the skeleton. "
+            "Set to false to reduce noise when you only need signatures.",
+        ),
+    ] = True,
 ) -> str:
     """Get the API surface of a file (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
@@ -140,7 +147,7 @@ def get_file_skeleton(
     if not p.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
     content = p.read_text(encoding="utf-8", errors="replace")
-    return extract_skeleton(p, content)
+    return extract_skeleton(p, content, include_imports=include_imports)
 
 
 @mcp.tool(
@@ -176,10 +183,7 @@ def get_impact_radius(
             "No graph found. Ask the user to run 'coderay build' "
             "in their terminal, then retry."
         )
-    impact = graph.get_impact_radius(node_id, depth=max_depth)
-    return {
-        "results": [n.to_dict() for n in impact],
-    }
+    return graph.get_impact_radius(node_id, depth=max_depth).to_dict()
 
 
 @mcp.resource(

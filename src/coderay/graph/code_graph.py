@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any
 
 import networkx as nx
 
-from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
 from coderay.parsing.languages import (
     get_init_filenames,
     get_resolution_suffixes,
@@ -280,29 +280,76 @@ class CodeGraph:
     # Public query methods
     # ------------------------------------------------------------------
 
-    def get_impact_radius(self, symbol: str, depth: int = 2) -> list[GraphNode]:
+    _IMPACT_EDGE_KINDS = frozenset(
+        {EdgeKind.CALLS, EdgeKind.IMPORTS, EdgeKind.INHERITS}
+    )
+
+    def get_impact_radius(
+        self, symbol: str, depth: int = 2
+    ) -> ImpactResult:
         """Find all nodes that could be affected if ``symbol`` changes.
 
+        Traverses predecessors via CALLS, IMPORTS, and INHERITS edges
+        only.  DEFINES edges (containment) are excluded because a
+        module defining a symbol is not "affected" by changes to it.
+
         Args:
-            depth: Number of reverse-BFS hops. Higher values may return
-                very large sets.
+            symbol: Fully qualified node ID or resolvable name.
+            depth: Number of reverse-BFS hops.
         """
         resolved = self.resolve_symbol(symbol) or symbol
         if resolved not in self._g:
-            return []
+            return self._not_found_result(symbol)
+
         visited: set[str] = set()
-        frontier = {resolved}
-        for _ in range(depth):
-            next_frontier: set[str] = set()
-            for nid in frontier:
-                if nid not in self._g:
-                    continue
+        queue: deque[tuple[str, int]] = deque(
+            (pred, 1)
+            for pred in self._g.predecessors(resolved)
+            if self._is_impact_edge(pred, resolved)
+        )
+        while queue:
+            nid, hop = queue.popleft()
+            if nid in visited:
+                continue
+            visited.add(nid)
+            if hop < depth and nid in self._g:
                 for pred in self._g.predecessors(nid):
-                    if pred not in visited:
-                        visited.add(pred)
-                        next_frontier.add(pred)
-            frontier = next_frontier
-        return [self.get_node(nid) for nid in visited if self.get_node(nid) is not None]
+                    if (
+                        pred not in visited
+                        and self._is_impact_edge(pred, nid)
+                    ):
+                        queue.append((pred, hop + 1))
+
+        nodes = [
+            self.get_node(nid)
+            for nid in visited
+            if self.get_node(nid) is not None
+        ]
+        return ImpactResult(resolved_node=resolved, nodes=nodes)
+
+    def _is_impact_edge(self, source: str, target: str) -> bool:
+        """Check whether the edge is a dependency (not containment)."""
+        kind = self._g.edges[source, target].get("kind")
+        return kind in self._IMPACT_EDGE_KINDS
+
+    def _not_found_result(self, symbol: str) -> ImpactResult:
+        """Build an ImpactResult with diagnostic hints for a missing node."""
+        file_part = (
+            symbol.split("::")[0] if "::" in symbol else None
+        )
+        available = (
+            sorted(self._file_index.get(file_part, set()))
+            if file_part
+            else []
+        )
+        hint = f"Node '{symbol}' not in the graph."
+        if available:
+            hint += (
+                f" Available nodes in {file_part}: {available}"
+            )
+        return ImpactResult(
+            resolved_node=None, nodes=[], hint=hint
+        )
 
     @property
     def node_count(self) -> int:

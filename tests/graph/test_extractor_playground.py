@@ -160,12 +160,46 @@ class TestDefinitions:
         assert "Dog.bark" in qualified
         assert "Service.fetch" in qualified
 
-    def test_defines_edges_link_module_to_definitions(self, nodes, edges):
-        defines_targets = _edge_targets(edges, EdgeKind.DEFINES)
+    def test_defines_edges_link_module_to_top_level(self, nodes, edges):
+        """Module DEFINES edges point to top-level classes and functions only."""
         pg = str(SAMPLE_PATH)
-        assert any(f"{pg}::Animal" in t for t in defines_targets)
-        assert any(f"{pg}::Dog" in t for t in defines_targets)
-        assert any("my_decorator" in t for t in defines_targets)
+        module_defines = [e for e in edges if e.kind == EdgeKind.DEFINES and e.source == pg]
+        targets = {e.target for e in module_defines}
+        assert any(f"{pg}::Animal" in t for t in targets)
+        assert any(f"{pg}::Dog" in t for t in targets)
+        assert any("my_decorator" in t for t in targets)
+
+    def test_defines_edges_hierarchical_for_methods(self, edges):
+        """Methods are defined by their class, not the module."""
+        pg = str(SAMPLE_PATH)
+        class_defines = [
+            e for e in edges
+            if e.kind == EdgeKind.DEFINES and e.source == f"{pg}::Animal"
+        ]
+        targets = {e.target for e in class_defines}
+        assert f"{pg}::Animal.speak" in targets
+        assert f"{pg}::Animal.move" in targets
+        assert f"{pg}::Animal._walk" in targets
+
+    def test_defines_edges_hierarchical_for_nested_class(self, edges):
+        """Nested class is defined by the outer class, not the module."""
+        pg = str(SAMPLE_PATH)
+        outer_defines = [
+            e for e in edges
+            if e.kind == EdgeKind.DEFINES and e.source == f"{pg}::Outer"
+        ]
+        targets = {e.target for e in outer_defines}
+        assert f"{pg}::Outer.Inner" in targets
+
+    def test_defines_edges_hierarchical_for_nested_class_method(self, edges):
+        """Inner class method is defined by Inner, not Outer or the module."""
+        pg = str(SAMPLE_PATH)
+        inner_defines = [
+            e for e in edges
+            if e.kind == EdgeKind.DEFINES and e.source == f"{pg}::Outer.Inner"
+        ]
+        targets = {e.target for e in inner_defines}
+        assert f"{pg}::Outer.Inner.inner_method" in targets
 
     def test_inner_class_qualified_name(self, nodes):
         qualified = _qualified_names(nodes, NodeKind.CLASS)

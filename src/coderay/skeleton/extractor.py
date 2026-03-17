@@ -13,13 +13,22 @@ ELLIPSIS = "..."
 def extract_skeleton(
     path: str | Path,
     content: str,
+    *,
+    include_imports: bool = True,
 ) -> str:
-    """Extract the skeleton of a source file (signatures, no bodies)."""
+    """Extract the skeleton of a source file (signatures, no bodies).
+
+    Args:
+        path: Source file path (used for language detection).
+        content: Full file content.
+        include_imports: When False, import statements are omitted from
+            the output to reduce noise.
+    """
     ctx = parse_file(path, content)
     if ctx is None:
         return content
 
-    parser = SkeletonTreeSitterParser(ctx)
+    parser = SkeletonTreeSitterParser(ctx, include_imports=include_imports)
     try:
         lines = parser.collect_lines()
     except Exception:  # pragma: no cover - defensive fallback
@@ -30,6 +39,10 @@ def extract_skeleton(
 
 class SkeletonTreeSitterParser(BaseTreeSitterParser):
     """Tree-sitter based skeleton extractor for source files."""
+
+    def __init__(self, context, *, include_imports: bool = True) -> None:
+        super().__init__(context)
+        self._include_imports = include_imports
 
     def collect_lines(self) -> list[str]:
         """Return the skeleton of a file as a list of lines."""
@@ -111,7 +124,9 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             return
 
         if ntype in lang_cfg.import_types:
-            lines.append(indent + self.node_text(node).strip())
+            if self._include_imports:
+                lines.append(indent + self.node_text(node).strip())
+            return
 
         if ntype in lang_cfg.decorator_scope_types:
             for child in node.named_children:

@@ -380,12 +380,11 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
                 qualified_name=qualified,
             )
         )
+        definer = self._module_id
+        if scope_stack:
+            definer = f"{self.file_path}::{'.'.join(scope_stack)}"
         self._edges.append(
-            GraphEdge(
-                source=self._module_id,
-                target=node_id,
-                kind=EdgeKind.DEFINES,
-            )
+            GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
         )
 
         # Register in FileContext so calls resolve to the full node_id.
@@ -422,12 +421,11 @@ class GraphTreeSitterParser(BaseTreeSitterParser):
                 qualified_name=qualified,
             )
         )
+        definer = self._module_id
+        if scope_stack:
+            definer = f"{self.file_path}::{'.'.join(scope_stack)}"
         self._edges.append(
-            GraphEdge(
-                source=self._module_id,
-                target=node_id,
-                kind=EdgeKind.DEFINES,
-            )
+            GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
         )
 
         # Extract base classes from the superclass list and resolve them
