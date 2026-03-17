@@ -19,6 +19,7 @@ from watchdog.events import (
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 
+from coderay.core.timing import timed_phase
 from coderay.parsing.languages import get_supported_extensions
 from coderay.vcs.git import load_gitignore
 
@@ -258,19 +259,17 @@ class FileWatcher:
         from coderay.core.lock import acquire_indexer_lock
         from coderay.pipeline.indexer import Indexer
 
-        t0 = time.time()
-
         try:
-            with acquire_indexer_lock(self._index_dir, timeout=30):
-                indexer = Indexer(self._repo_root)
-                result = indexer.update_incremental()
-            elapsed = time.time() - t0
+            with timed_phase("update", log=False) as tp:
+                with acquire_indexer_lock(self._index_dir, timeout=30):
+                    indexer = Indexer(self._repo_root)
+                    result = indexer.update_incremental()
             self._update_count += 1
             logger.info(
                 "Update #%d: %s (%.2fs) [%d changed, %d removed]",
                 self._update_count,
                 result,
-                elapsed,
+                tp.elapsed,
                 len(changed),
                 len(removed),
             )

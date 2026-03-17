@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-import time
 from pathlib import Path
 from typing import Any
 
 from coderay.core.config import Config, get_config
+from coderay.core.timing import timed_phase
 from coderay.embedding.base import Embedder, load_embedder_from_config
 from coderay.graph.builder import load_graph
 from coderay.retrieval.boosting import StructuralBooster
@@ -65,20 +65,18 @@ class Retrieval:
 
         store = self._get_store()
 
-        t0 = time.perf_counter()
-        query_vectors = self._embedder.embed([query])
-        logger.info("Query embed took %.3fs", time.perf_counter() - t0)
+        with timed_phase("embed"):
+            query_vectors = self._embedder.embed([query])
 
         if not query_vectors:
             return []
-        t1 = time.perf_counter()
-        results = store.search(
-            query_embedding=query_vectors[0],
-            top_k=top_k,
-            path_prefix=path_prefix,
-            query_text=query,
-        )
-        logger.info("Vector search took %.3fs", time.perf_counter() - t1)
+        with timed_phase("vector_search"):
+            results = store.search(
+                query_embedding=query_vectors[0],
+                top_k=top_k,
+                path_prefix=path_prefix,
+                query_text=query,
+            )
 
         return self._booster.boost(results)
 

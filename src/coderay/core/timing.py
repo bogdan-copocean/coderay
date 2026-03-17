@@ -29,17 +29,23 @@ def timed(phase: str) -> Callable[[F], F]:
     return decorator
 
 
-class timed_phase:
-    """Context manager that logs block execution time at INFO level."""
+class TimedPhase:
+    """Context manager that measures block execution time and optionally logs it."""
 
-    def __init__(self, phase: str) -> None:
+    def __init__(self, phase: str, *, log: bool = True) -> None:
         self.phase = phase
+        self.log = log
         self.t0: float = 0.0
+        self.elapsed: float = 0.0
 
-    def __enter__(self) -> timed_phase:
+    def __enter__(self) -> TimedPhase:
         self.t0 = time.perf_counter()
         return self
 
     def __exit__(self, *args: object) -> None:
-        elapsed = time.perf_counter() - self.t0
-        logger.info("%s: %.3fs", self.phase, elapsed)
+        self.elapsed = time.perf_counter() - self.t0
+        if self.log:
+            logger.info("%s: %.3fs", self.phase, self.elapsed)
+
+
+timed_phase = TimedPhase  # Convenience alias for context manager usage
