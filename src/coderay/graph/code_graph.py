@@ -7,56 +7,9 @@ from typing import Any
 import networkx as nx
 
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
-from coderay.parsing.languages import (
-    get_init_filenames,
-    get_supported_extensions,
-)
+from coderay.graph.identifiers import file_path_to_module_names
 
 logger = logging.getLogger(__name__)
-
-
-_KNOWN_EXTENSIONS: frozenset[str] = frozenset()
-_KNOWN_INIT_FILENAMES: frozenset[str] = frozenset()
-
-
-def _ensure_registry_cache() -> None:
-    """Lazily populate the cached extension and init filename sets."""
-    global _KNOWN_EXTENSIONS, _KNOWN_INIT_FILENAMES  # noqa: PLW0603
-    if not _KNOWN_EXTENSIONS:
-        _KNOWN_EXTENSIONS = frozenset(get_supported_extensions())
-        _KNOWN_INIT_FILENAMES = frozenset(get_init_filenames())
-
-
-def _file_path_to_module_names(file_path: str) -> list[str]:
-    """Derive possible module names from a file path."""
-    _ensure_registry_cache()
-
-    cleaned = file_path
-    for ext in sorted(_KNOWN_EXTENSIONS, key=len, reverse=True):
-        if cleaned.endswith(ext):
-            cleaned = cleaned[: -len(ext)]
-            break
-
-    parts = cleaned.replace("\\", "/").split("/")
-
-    if parts and parts[0] == "src":
-        parts = parts[1:]
-
-    if parts and parts[-1] in _KNOWN_INIT_FILENAMES:
-        parts = parts[:-1]
-
-    if not parts:
-        return []
-
-    names: list[str] = []
-    for i in range(len(parts)):
-        suffix = parts[i:]
-        dotted = ".".join(suffix)
-        names.append(dotted)
-        slashed = "/".join(suffix)
-        if slashed != dotted:
-            names.append(slashed)
-    return names
 
 
 class CodeGraph:
@@ -84,7 +37,7 @@ class CodeGraph:
             self._qualified_index[node.qualified_name].add(node.id)
         self._file_index[node.file_path].add(node.id)
         if node.kind == NodeKind.MODULE:
-            for mod_name in _file_path_to_module_names(node.file_path):
+            for mod_name in file_path_to_module_names(node.file_path):
                 if mod_name not in self._module_index:
                     self._module_index[mod_name] = node.id
 
@@ -101,7 +54,7 @@ class CodeGraph:
         if file_entries is not None:
             file_entries.discard(node.id)
         if node.kind == NodeKind.MODULE:
-            for mod_name in _file_path_to_module_names(node.file_path):
+            for mod_name in file_path_to_module_names(node.file_path):
                 if self._module_index.get(mod_name) == node.id:
                     del self._module_index[mod_name]
 

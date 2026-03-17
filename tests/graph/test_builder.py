@@ -135,3 +135,25 @@ class TestCrossFileResolution:
         )
         ids = {n.id for n in result.nodes}
         assert "src/api/handler.py::handle" in ids
+
+    def test_impact_radius_includes_decorator_callers(self):
+        """Changing a decorator should show decorated callers in impact radius."""
+        decorator = "def my_decorator(fn):\n    return fn\n"
+        consumer = (
+            "from pkg.decorators import my_decorator\n\n"
+            "@my_decorator\n"
+            "def foo():\n"
+            "    pass\n"
+        )
+        graph = build_graph(
+            ".",
+            [
+                ("src/pkg/decorators.py", decorator),
+                ("src/app/main.py", consumer),
+            ],
+        )
+        result = graph.get_impact_radius(
+            "src/pkg/decorators.py::my_decorator", depth=2
+        )
+        ids = {n.id for n in result.nodes}
+        assert "src/app/main.py" in ids

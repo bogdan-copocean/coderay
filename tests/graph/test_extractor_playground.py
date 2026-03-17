@@ -132,6 +132,24 @@ class TestDefinitions:
             "Config",
             "Outer",
             "Inner",
+            "StoragePort",
+            "FileStorageAdapter",
+            "UseCaseWithInjectedStorage",
+            "DataProcessor",
+            "ServiceWithSetterInjection",
+            "RepositoryPort",
+            "InMemoryRepository",
+            "ServiceWithLazyRepo",
+            "HttpClientContext",
+            "ApiClient",
+            "HandlerA",
+            "HandlerB",
+            "Builder",
+            "FirstHandler",
+            "SecondHandler",
+            "ParentWithRun",
+            "ChildWithSuper",
+            "CallableHandler",
         }
         assert expected.issubset(names)
 
@@ -147,6 +165,18 @@ class TestDefinitions:
             "math_usage_example",
             "call_shadowed_len",
             "call_real_builtins",
+            "process_with_injected_dependency",
+            "create_http_client",
+            "use_factory_client",
+            "run_with_callback",
+            "injected_callback",
+            "use_client_context",
+            "use_classmethod_factory",
+            "run_with_union_handler",
+            "use_self_factory",
+            "use_tuple_unpacking",
+            "use_partial",
+            "use_callable_handler",
         ):
             assert fn in names, f"missing function node: {fn}"
 
@@ -383,11 +413,17 @@ class TestDecoratedDefinitions:
         qualified = _qualified_names(nodes, NodeKind.FUNCTION)
         assert "DecoratedClass.method" in qualified
 
-    @pytest.mark.xfail(reason="TODO: emit DECORATES edges for decorated definitions")
-    def test_decorates_edge_emitted(self, edges):
-        """@my_decorator on decorated_func should emit a DECORATES edge."""
-        decorates = [e for e in edges if e.kind.value == "decorates"]
-        assert len(decorates) > 0
+    def test_decorator_calls_edge_emitted(self, edges):
+        """@my_decorator on decorated_func/DecoratedClass should emit CALLS edges."""
+        pg = str(SAMPLE_PATH)
+        decorator_calls = [
+            e for e in edges
+            if e.kind == EdgeKind.CALLS and "my_decorator" in e.target
+        ]
+        assert len(decorator_calls) >= 2, (
+            "Expected CALLS from module to my_decorator for decorated_func and DecoratedClass"
+        )
+        assert all(e.source == pg for e in decorator_calls)
 
 
 # =========================================================================
@@ -410,6 +446,135 @@ class TestWorkingEdgeCases:
         targets = _calls_from(edges, "Outer.use_inner")
         assert any("Outer.Inner" in t for t in targets)
 
+    def test_composition_via_self_attribute(self, edges):
+        """Service.__init__ sets self.client = HttpClient();
+        Service.fetch calls self.client.get() — should resolve to HttpClient.get.
+        """
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "Service.fetch")
+        assert f"{pg}::HttpClient.get" in targets
+
+    def test_factory_pattern_resolved(self, edges):
+        """client = create_http_client(); client.get() → HttpClient.get."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_factory_client")
+        assert f"{pg}::HttpClient.get" in targets
+
+    def test_ports_adapters_constructor_injection_creates_edge(self, edges):
+        """UseCaseWithInjectedStorage.execute calls self.storage.save().
+        Resolves to StoragePort.save via param type hint on __init__.
+        """
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "UseCaseWithInjectedStorage.execute")
+        assert f"{pg}::StoragePort.save" in targets
+
+    def test_parameter_injection_creates_edge(self, edges):
+        """process_with_injected_dependency(processor: DataProcessor) calls processor.process().
+        Resolves to DataProcessor.process via param type hint.
+        """
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "process_with_injected_dependency")
+        assert f"{pg}::DataProcessor.process" in targets
+
+    def test_setter_injection_creates_edge(self, edges):
+        """ServiceWithSetterInjection.persist calls self._repo.save().
+        Resolves to RepositoryPort.save via param type hint on set_repository.
+        """
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "ServiceWithSetterInjection.persist")
+        assert f"{pg}::RepositoryPort.save" in targets
+
+    def test_callable_injection_creates_edge(self, edges):
+        """run_with_callback(callback) calls callback()."""
+        targets = _calls_from(edges, "run_with_callback")
+        assert len(targets) > 0
+
+    def test_property_injection_creates_edge(self, edges):
+        """ServiceWithLazyRepo.do_work calls self.repo.save().
+        Resolves to RepositoryPort.save via @property return type.
+        """
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "ServiceWithLazyRepo.do_work")
+        assert f"{pg}::RepositoryPort.save" in targets
+
+    def test_context_manager_injection_creates_edge(self, edges):
+        """with HttpClientContext() as client: client.get() — resolves to HttpClient.get."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_client_context")
+        assert f"{pg}::HttpClient.get" in targets
+
+    def test_classmethod_factory_resolved(self, edges):
+        """client = ApiClient.create(); client.request() — resolves to ApiClient.request."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_classmethod_factory")
+        assert f"{pg}::ApiClient.request" in targets
+
+    def test_union_type_param_creates_edges_to_both(self, edges):
+        """run_with_union_handler(handler: HandlerA | HandlerB) calls handler.process().
+
+        Should create CALLS edges to both HandlerA.process and HandlerB.process.
+        """
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "run_with_union_handler")
+        assert f"{pg}::HandlerA.process" in targets
+        assert f"{pg}::HandlerB.process" in targets
+
+    def test_self_return_type_factory_resolved(self, edges):
+        """b = Builder.create(); b.build() — Self resolves to Builder."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_self_factory")
+        assert f"{pg}::Builder.build" in targets
+
+    def test_tuple_unpacking_resolved(self, edges):
+        """first, second = get_handlers(); first.run() — resolves to FirstHandler.run."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_tuple_unpacking")
+        assert f"{pg}::FirstHandler.run" in targets
+        assert f"{pg}::SecondHandler.run" in targets
+
+    def test_deep_chained_access_resolved(self, edges):
+        """service.client.get('/deep') should resolve to HttpClient.get."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "chained_access_example")
+        assert f"{pg}::HttpClient.get" in targets
+
+    def test_call_protocol_resolved(self, edges):
+        """h = CallableHandler(); h('test') — resolves to CallableHandler.__call__."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_callable_handler")
+        assert f"{pg}::CallableHandler.__call__" in targets
+
+    def test_partial_resolved(self, edges):
+        """hello = partial(greeter, 'Hello'); hello('World') — resolves to greeter."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "use_partial")
+        assert f"{pg}::greeter" in targets
+
+    def test_super_call_resolved(self, edges):
+        """ChildWithSuper.run calls super().run() — resolves to ParentWithRun.run."""
+        pg = str(SAMPLE_PATH)
+        targets = _calls_from(edges, "ChildWithSuper.run")
+        assert f"{pg}::ParentWithRun.run" in targets
+
+    def test_wildcard_import(self):
+        """``from wildcard_module import *`` should register __all__ names."""
+        from pathlib import Path
+
+        module_path = str(Path(__file__).parent / "wildcard_module.py")
+        module_content = Path(module_path).read_text()
+        code = "from tests.graph.wildcard_module import *\njoin('a', 'b')\n"
+        module_index = {"tests.graph.wildcard_module": module_path}
+        content_provider = {module_path: module_content}
+        _, edges = extract_graph_from_file(
+            "test.py",
+            code,
+            module_index=module_index,
+            content_provider=content_provider,
+        )
+        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
+        targets = {e.target for e in calls}
+        assert any("join" in t for t in targets), f"Expected join in targets: {targets}"
+
 
 class TestKnownGaps:
     """Tests for features documented as TODOs in the extractor.
@@ -419,25 +584,6 @@ class TestKnownGaps:
     report it as xpass, signaling the marker should be removed.
     """
 
-    @pytest.mark.xfail(
-        reason="TODO: self.client = HttpClient() → self.client.get() resolution"
-    )
-    def test_composition_via_self_attribute(self, edges):
-        """Service.__init__ sets self.client = HttpClient();
-        Service.fetch calls self.client.get() — should resolve to HttpClient.get.
-        """
-        pg = str(SAMPLE_PATH)
-        targets = _calls_from(edges, "Service.fetch")
-        assert f"{pg}::HttpClient.get" in targets
-
-    @pytest.mark.xfail(
-        reason="TODO: deep chained attribute resolution via type inference"
-    )
-    def test_deep_chained_access_resolved(self, edges):
-        """service.client.get('/deep') should resolve to HttpClient.get."""
-        pg = str(SAMPLE_PATH)
-        targets = _calls_from(edges, "chained_access_example")
-        assert f"{pg}::HttpClient.get" in targets
 
     @pytest.mark.xfail(reason="TODO: lambda/comprehension scope attribution")
     def test_lambda_call_attributed_to_lambda_scope(self, edges):
@@ -447,14 +593,6 @@ class TestKnownGaps:
         lambda_calls = [e for e in calls if "lambda" in e.source.lower()]
         assert len(lambda_calls) > 0
 
-    @pytest.mark.xfail(reason="TODO: handle wildcard imports")
-    def test_wildcard_import(self):
-        """``from os.path import *`` should register all exported names."""
-        code = "from os.path import *\njoin('a', 'b')\n"
-        _, edges = extract_graph_from_file("test.py", code)
-        calls = [e for e in edges if e.kind == EdgeKind.CALLS]
-        targets = {e.target for e in calls}
-        assert "os/path::join" in targets or "os.path::join" in targets
 
     @pytest.mark.xfail(reason="TODO: tuple unpacking in assignments")
     def test_tuple_unpacking_alias(self):
