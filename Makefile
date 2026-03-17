@@ -5,7 +5,7 @@
 INDEX_DIR ?= .index
 REPO ?= .
 
-.PHONY: install build build-full update search list status maintain skeleton graph \
+.PHONY: install build build-full search list status maintain skeleton graph \
         test test-cov lint format clean mcp
 
 # ─── Setup ───────────────────────────────────────────────────────────
@@ -20,9 +20,6 @@ build:
 
 build-full:
 	coderay --index-dir $(INDEX_DIR) build --full --repo $(REPO)
-
-update:
-	coderay --index-dir $(INDEX_DIR) update --repo $(REPO)
 
 maintain:
 	coderay --index-dir $(INDEX_DIR) maintain --repo $(REPO)

@@ -83,8 +83,7 @@ Replace `/path/to/your/.venv/bin/coderay-mcp` with the output of `which coderay-
 | Command | Description |
 |---|---|
 | `coderay watch --repo . [--debounce N]` | **Recommended.** Watch for file changes, re-index automatically |
-| `coderay build [--full] --repo .` | One-off build (incremental or full rebuild). Index goes stale while you work |
-| `coderay update --repo .` | Incremental update (changed files only) |
+| `coderay build [--full] --repo .` | Build or incremental update. Use `--full` for full rebuild |
 | `coderay search "query" [--top-k N]` | Semantic search |
 | `coderay list [--by-file]` | List indexed chunks |
 | `coderay status` | Index state, branch, commit, chunk count |
@@ -121,7 +120,10 @@ semantic_search:
 
 watcher:
   debounce: 2
-  branch_switch_threshold: 50
   exclude_patterns:  # besides .gitignore
     - "*.log"
+
+graph:
+  exclude_modules: []   # module names to exclude from CALLS/IMPORTS edges
+  include_modules: []  # force-include (override excludes)
 ```

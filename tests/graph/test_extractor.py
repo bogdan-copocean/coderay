@@ -352,12 +352,10 @@ class TestBuildModuleFilter:
         assert "myproject" not in filt
 
     def test_exclude_modules_adds_entries(self):
-        from types import SimpleNamespace
-
-        from coderay.core.config import _reset_config_for_testing
+        from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
 
         _reset_config_for_testing(
-            SimpleNamespace(graph={"exclude_modules": ["numpy", "pandas"]})
+            Config(graph=GraphConfig(exclude_modules=["numpy", "pandas"]))
         )
         try:
             filt = build_module_filter()
@@ -368,12 +366,10 @@ class TestBuildModuleFilter:
         assert "builtins" in filt
 
     def test_include_modules_overrides_default(self):
-        from types import SimpleNamespace
-
-        from coderay.core.config import _reset_config_for_testing
+        from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
 
         _reset_config_for_testing(
-            SimpleNamespace(graph={"include_modules": ["typing"]})
+            Config(graph=GraphConfig(include_modules=["typing"]))
         )
         try:
             filt = build_module_filter()
@@ -383,16 +379,14 @@ class TestBuildModuleFilter:
         assert "builtins" in filt
 
     def test_both_exclude_and_include(self):
-        from types import SimpleNamespace
-
-        from coderay.core.config import _reset_config_for_testing
+        from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
 
         _reset_config_for_testing(
-            SimpleNamespace(
-                graph={
-                    "exclude_modules": ["requests"],
-                    "include_modules": ["typing"],
-                }
+            Config(
+                graph=GraphConfig(
+                    exclude_modules=["requests"],
+                    include_modules=["typing"],
+                )
             )
         )
         try:

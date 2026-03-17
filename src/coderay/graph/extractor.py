@@ -86,11 +86,8 @@ def build_module_filter() -> frozenset[str]:
         from CALLS and IMPORTS edges.
     """
     config = get_config()
-    graph_cfg = getattr(config, "graph", None) or {}
-    if not isinstance(graph_cfg, dict):
-        graph_cfg = {}
-    extra_excludes = set(graph_cfg.get("exclude_modules") or [])
-    force_includes = set(graph_cfg.get("include_modules") or [])
+    extra_excludes = set(config.graph.exclude_modules or [])
+    force_includes = set(config.graph.include_modules or [])
     return frozenset((_DEFAULT_EXCLUDED_MODULES | extra_excludes) - force_includes)
 
 
