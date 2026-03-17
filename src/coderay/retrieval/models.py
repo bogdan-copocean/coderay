@@ -14,6 +14,7 @@ class SearchResult:
     end_line: int
     symbol: str
     content: str
+    score: float = 0.0
     truncated: bool = False
 
     @classmethod
@@ -46,6 +47,7 @@ class SearchResult:
             end_line=row["end_line"],
             symbol=row["symbol"],
             content=content,
+            score=float(row.get("score", 0.0)),
             truncated=truncated,
         )
 
@@ -57,6 +59,7 @@ class SearchResult:
             "end_line": self.end_line,
             "symbol": self.symbol,
             "content": self.content,
+            "score": self.score,
         }
         if self.truncated:
             d["truncated"] = True
