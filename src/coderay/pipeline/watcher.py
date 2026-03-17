@@ -35,7 +35,7 @@ class _DebouncedHandler:
         gitignore_spec: pathspec.PathSpec,
         supported_extensions: set[str],
         debounce_seconds: float,
-        branch_switch_threshold: int,
+        full_sync_threshold: int,
         extra_exclude: list[str],
         on_batch: Callable[[set[str], set[str]], None],
     ) -> None:
@@ -45,7 +45,7 @@ class _DebouncedHandler:
         self._gitignore = gitignore_spec
         self._extensions = supported_extensions
         self._debounce = debounce_seconds
-        self._threshold = branch_switch_threshold
+        self._threshold = full_sync_threshold
         self._on_batch = on_batch
 
         extra_spec = pathspec.PathSpec.from_lines("gitignore", extra_exclude)
@@ -163,7 +163,7 @@ class _DebouncedHandler:
         total = len(changed) + len(removed)
         if total >= self._threshold:
             logger.info(
-                "Branch switch detected (%d files); delegating to full sync",
+                "Bulk change (%d files); delegating to full incremental sync",
                 total,
             )
 
@@ -195,7 +195,7 @@ class FileWatcher:
 
         watch_cfg = self._config.watcher
         self._debounce = float(watch_cfg.debounce)
-        self._threshold = int(watch_cfg.branch_switch_threshold)
+        self._threshold = int(watch_cfg.full_sync_threshold)
         self._extra_exclude = list(watch_cfg.exclude_patterns or [])
 
         self._observer: Observer | PollingObserver | None = None
@@ -219,7 +219,7 @@ class FileWatcher:
             gitignore_spec=gitignore_spec,
             supported_extensions=extensions,
             debounce_seconds=self._debounce,
-            branch_switch_threshold=self._threshold,
+            full_sync_threshold=self._threshold,
             extra_exclude=self._extra_exclude,
             on_batch=batch_fn,
         )

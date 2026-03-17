@@ -85,7 +85,21 @@ class SemanticSearchConfig:
 class WatcherConfig:
     debounce: Annotated[int, "in seconds"] = 2
     exclude_patterns: Annotated[str, "besides .gitignore"] | None = None
-    branch_switch_threshold: int = 50
+    full_sync_threshold: Annotated[
+        int, "when N+ files change in one batch, run full incremental sync"
+    ] = 50
+
+
+@dataclass(frozen=True)
+class GraphConfig:
+    """Module filtering for the code graph (CALLS, IMPORTS edges)."""
+
+    exclude_modules: Annotated[
+        list[str], "module names/prefixes to exclude from graph edges"
+    ] = field(default_factory=list)
+    include_modules: Annotated[
+        list[str], "module names to force-include (override excludes)"
+    ] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -94,6 +108,7 @@ class Config:
     index: IndexConfig = field(default_factory=IndexConfig)
     semantic_search: SemanticSearchConfig = field(default_factory=SemanticSearchConfig)
     watcher: WatcherConfig = field(default_factory=WatcherConfig)
+    graph: GraphConfig = field(default_factory=GraphConfig)
 
 
 def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
@@ -204,6 +219,7 @@ def _load_config_impl() -> Config:
             default_data.get("semantic_search", {}) or {}
         ),
         watcher=WatcherConfig(**default_data.get("watcher", {})),
+        graph=GraphConfig(**default_data.get("graph", {})),
     )
 
 
@@ -288,4 +304,5 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
         index=IndexConfig(**merged.get("index", {})),
         semantic_search=_parse_semantic_search(merged.get("semantic_search", {}) or {}),
         watcher=WatcherConfig(**merged.get("watcher", {})),
+        graph=GraphConfig(**merged.get("graph", {})),
     )
