@@ -45,6 +45,7 @@ def _setup_logging(verbose: bool = False) -> None:
 
 
 @click.group()
+@click.version_option(package_name="coderay", prog_name="coderay")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Verbose logging")
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
@@ -77,56 +78,15 @@ def build(ctx: click.Context, full: bool, repo: Path) -> None:
     t0 = time.time()
     try:
         with acquire_indexer_lock(index_dir):
-            if full or not indexer.index_exists():
+            if full:
                 click.echo(_color("Building full index...", CYAN))
                 result = indexer.build_full()
-                click.echo(
-                    _color(
-                        f"{result} in {time.time() - t0:.2f}s",
-                        GREEN,
-                    )
-                )
             else:
-                click.echo(_color("Updating index (incremental)...", CYAN))
-                result = indexer.update_incremental()
-                click.echo(
-                    _color(
-                        f"{result} in {time.time() - t0:.2f}s",
-                        GREEN,
-                    )
-                )
-            indexer.maintain()
-    except Exception as e:
-        indexer.error(str(e))
-        click.echo(_color(f"Error: {e}", RED))
-        raise
-
-
-@cli.command()
-@click.option(
-    "--repo",
-    default=".",
-    type=click.Path(exists=True, path_type=Path),
-    help="Repo root",
-)
-@click.pass_context
-def update(ctx: click.Context, repo: Path) -> None:
-    """Incremental update (only changed files). Uses file lock."""
-    from coderay.core.config import get_config
-
-    config = get_config()
-    index_dir = Path(config.index.path)
-    indexer = Indexer(repo)
-    t0 = time.time()
-
-    if not indexer.index_exists():
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
-
-    try:
-        with acquire_indexer_lock(index_dir):
-            click.echo(_color("Updating index...", CYAN))
-            result = indexer.update_incremental()
+                if not indexer.index_exists():
+                    click.echo(_color("Building full index...", CYAN))
+                else:
+                    click.echo(_color("Updating index (incremental)...", CYAN))
+                result = indexer.ensure_index()
             click.echo(_color(f"{result} in {time.time() - t0:.2f}s", GREEN))
             indexer.maintain()
     except Exception as e:
@@ -367,7 +327,7 @@ def graph_cmd(
     if not edges:
         click.echo(
             _color(
-                "No graph data. Run 'coderay build' or 'coderay update' to build it.",
+                "No graph data. Run 'coderay build' to build it.",
                 YELLOW,
             )
         )
@@ -412,20 +372,26 @@ def watch(
 
     config = get_config()
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(
-            _color(
-                "No index found. Run 'coderay build' first.",
-                YELLOW,
-            )
-        )
-        ctx.exit(1)
+    index_dir.mkdir(parents=True, exist_ok=True)
 
     if quiet:
         logging.getLogger("coderay.pipeline.watcher").setLevel(logging.WARNING)
 
-    watcher = FileWatcher(repo, index_dir)
+    indexer = Indexer(repo)
+    t0 = time.time()
+    try:
+        with acquire_indexer_lock(index_dir):
+            if not indexer.index_exists():
+                click.echo(_color("No index found. Building full index...", CYAN))
+            result = indexer.ensure_index()
+        click.echo(_color(f"{result} in {time.time() - t0:.2f}s", GREEN))
+        indexer.maintain()
+    except Exception as e:
+        indexer.error(str(e))
+        click.echo(_color(f"Error: {e}", RED))
+        raise
 
+    watcher = FileWatcher(repo, index_dir)
     click.echo(
         _color(
             f"Watching {repo.resolve()} "
@@ -433,9 +399,6 @@ def watch(
             CYAN,
         )
     )
-    index_dir.mkdir(parents=True, exist_ok=True)
-    indexer = Indexer(repo)
-    indexer.update_incremental()
 
     watcher.start()
     try:
