@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from coderay.core.models import ImpactResult
 from coderay.mcp_server.errors import IndexNotBuiltError
 from coderay.mcp_server.server import mcp
 
@@ -104,8 +105,11 @@ class TestGetImpactRadius:
         from coderay.mcp_server.server import get_impact_radius
 
         g = MagicMock()
-        g.get_impact_radius.return_value = []
+        g.get_impact_radius.return_value = ImpactResult(
+            resolved_node="node", nodes=[]
+        )
         mock_load.return_value = g
         result = get_impact_radius("node")
         assert isinstance(result, dict)
         assert "results" in result
+        assert result["resolved_node"] == "node"

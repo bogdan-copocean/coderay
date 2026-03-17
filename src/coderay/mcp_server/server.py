@@ -176,10 +176,7 @@ def get_impact_radius(
             "No graph found. Ask the user to run 'coderay build' "
             "in their terminal, then retry."
         )
-    impact = graph.get_impact_radius(node_id, depth=max_depth)
-    return {
-        "results": [n.to_dict() for n in impact],
-    }
+    return graph.get_impact_radius(node_id, depth=max_depth).to_dict()
 
 
 @mcp.resource(

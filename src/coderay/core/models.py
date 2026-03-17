@@ -68,3 +68,22 @@ class GraphEdge:
     source: str
     target: str
     kind: EdgeKind
+
+
+@dataclass(frozen=True)
+class ImpactResult:
+    """Result of an impact-radius query with resolution diagnostics."""
+
+    resolved_node: str | None
+    nodes: list[GraphNode]
+    hint: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize to a JSON-compatible dict."""
+        d: dict = {
+            "resolved_node": self.resolved_node,
+            "results": [n.to_dict() for n in self.nodes],
+        }
+        if self.hint:
+            d["hint"] = self.hint
+        return d
