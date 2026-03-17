@@ -85,9 +85,6 @@ class SemanticSearchConfig:
 class WatcherConfig:
     debounce: Annotated[int, "in seconds"] = 2
     exclude_patterns: Annotated[str, "besides .gitignore"] | None = None
-    full_sync_threshold: Annotated[
-        int, "when N+ files change in one batch, run full incremental sync"
-    ] = 50
 
 
 @dataclass(frozen=True)

@@ -70,7 +70,6 @@ def handler(
         gitignore_spec=empty_spec,
         supported_extensions=python_extensions,
         debounce_seconds=0.1,
-        full_sync_threshold=50,
         extra_exclude=[],
         on_batch=lambda c, r: batch_log.append((set(c), set(r))),
     )
@@ -132,7 +131,6 @@ class TestHandlerFiltering:
             gitignore_spec=spec,
             supported_extensions=python_extensions,
             debounce_seconds=0.1,
-            full_sync_threshold=50,
             extra_exclude=[],
             on_batch=lambda c, r: batch_log.append((c, r)),
         )
@@ -153,7 +151,6 @@ class TestHandlerFiltering:
             gitignore_spec=empty_spec,
             supported_extensions=python_extensions,
             debounce_seconds=0.1,
-            full_sync_threshold=50,
             extra_exclude=["tmp_*.py"],
             on_batch=lambda c, r: batch_log.append((c, r)),
         )
@@ -175,7 +172,6 @@ class TestHandlerFiltering:
             gitignore_spec=spec,
             supported_extensions=python_extensions,
             debounce_seconds=0.1,
-            full_sync_threshold=50,
             extra_exclude=[],
             on_batch=lambda c, r: batch_log.append((c, r)),
         )
@@ -301,11 +297,11 @@ class TestHandlerDebounce:
         assert len(batch_log) == 0
 
 
-# ── _DebouncedHandler branch-switch detection ────────────────────────
+# ── _DebouncedHandler batching ───────────────────────────────────────
 
 
-class TestBranchSwitchDetection:
-    def test_logs_bulk_change_when_threshold_exceeded(
+class TestDebouncedHandlerBatching:
+    def test_batch_accumulates_multiple_events(
         self,
         repo: Path,
         index_dir: Path,
@@ -319,7 +315,6 @@ class TestBranchSwitchDetection:
             gitignore_spec=empty_spec,
             supported_extensions=python_extensions,
             debounce_seconds=0.1,
-            full_sync_threshold=3,
             extra_exclude=[],
             on_batch=lambda c, r: batch_log.append((set(c), set(r))),
         )

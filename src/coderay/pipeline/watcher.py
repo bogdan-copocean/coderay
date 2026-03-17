@@ -35,7 +35,6 @@ class _DebouncedHandler:
         gitignore_spec: pathspec.PathSpec,
         supported_extensions: set[str],
         debounce_seconds: float,
-        full_sync_threshold: int,
         extra_exclude: list[str],
         on_batch: Callable[[set[str], set[str]], None],
     ) -> None:
@@ -45,7 +44,6 @@ class _DebouncedHandler:
         self._gitignore = gitignore_spec
         self._extensions = supported_extensions
         self._debounce = debounce_seconds
-        self._threshold = full_sync_threshold
         self._on_batch = on_batch
 
         extra_spec = pathspec.PathSpec.from_lines("gitignore", extra_exclude)
@@ -160,13 +158,6 @@ class _DebouncedHandler:
         if not changed and not removed:
             return
 
-        total = len(changed) + len(removed)
-        if total >= self._threshold:
-            logger.info(
-                "Bulk change (%d files); delegating to full incremental sync",
-                total,
-            )
-
         try:
             self._on_batch(changed, removed)
         except Exception:
@@ -195,7 +186,6 @@ class FileWatcher:
 
         watch_cfg = self._config.watcher
         self._debounce = float(watch_cfg.debounce)
-        self._threshold = int(watch_cfg.full_sync_threshold)
         self._extra_exclude = list(watch_cfg.exclude_patterns or [])
 
         self._observer: Observer | PollingObserver | None = None
@@ -219,7 +209,6 @@ class FileWatcher:
             gitignore_spec=gitignore_spec,
             supported_extensions=extensions,
             debounce_seconds=self._debounce,
-            full_sync_threshold=self._threshold,
             extra_exclude=self._extra_exclude,
             on_batch=batch_fn,
         )
@@ -265,23 +254,16 @@ class FileWatcher:
             self._observer.join(timeout=timeout)
 
     def _default_batch(self, changed: set[str], removed: set[str]) -> None:
-        """Default callback: acquire lock and run Indexer.update_paths."""
+        """Default callback: acquire lock and run Indexer.update_incremental."""
         from coderay.core.lock import acquire_indexer_lock
         from coderay.pipeline.indexer import Indexer
 
-        total = len(changed) + len(removed)
         t0 = time.time()
 
         try:
             with acquire_indexer_lock(self._index_dir, timeout=30):
                 indexer = Indexer(self._repo_root)
-                if total >= self._threshold:
-                    result = indexer.update_incremental()
-                else:
-                    result = indexer.update_paths(
-                        changed=sorted(changed),
-                        removed=sorted(removed),
-                    )
+                result = indexer.update_incremental()
             elapsed = time.time() - t0
             self._update_count += 1
             logger.info(

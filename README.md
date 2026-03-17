@@ -120,7 +120,6 @@ semantic_search:
 
 watcher:
   debounce: 2
-  full_sync_threshold: 50  # when N+ files change in one batch, run full incremental
   exclude_patterns:  # besides .gitignore
     - "*.log"
 
