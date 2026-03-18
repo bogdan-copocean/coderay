@@ -125,12 +125,16 @@ class Store:
         return self._cached_table
 
     def _ensure_fts_index(self, table) -> None:
-        """Create or replace the Tantivy FTS index on the content column."""
+        """Create or replace the FTS index on the content column.
+
+        Uses native lance-index FTS (LanceDB default). If creation fails,
+        hybrid degrades to vector-only.
+        """
         try:
             table.create_fts_index(
                 "content",
                 replace=True,
-                use_tantivy=True,
+                use_tantivy=False,
             )
         except Exception as exc:
             logger.warning(
@@ -197,16 +201,12 @@ class Store:
                 use_hybrid = False
 
         if rows is None:
-            rows = self._vector_search(
-                table, query_embedding, top_k, path_prefix
-            )
+            rows = self._vector_search(table, query_embedding, top_k, path_prefix)
 
         if use_hybrid:
             self._hybrid_failures = 0
 
-        score_mode = (
-            _ScoreField.RELEVANCE if use_hybrid else _ScoreField.DISTANCE
-        )
+        score_mode = _ScoreField.RELEVANCE if use_hybrid else _ScoreField.DISTANCE
         search_mode = "hybrid" if use_hybrid else "vector"
 
         results = []

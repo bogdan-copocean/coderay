@@ -328,8 +328,7 @@ class CodeGraph:
                 f"Supplement with grep for the method name."
             )
         return (
-            "No callers found. This module is not imported by any "
-            "other indexed file."
+            "No callers found. This module is not imported by any other indexed file."
         )
 
     @property

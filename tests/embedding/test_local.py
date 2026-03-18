@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from coderay.embedding.base import EmbedTask
-from coderay.embedding.local import LocalEmbedder, MAX_CHARS, _TASK_PREFIXES
+from coderay.embedding.local import _TASK_PREFIXES, MAX_CHARS, LocalEmbedder
 
 
 class TestLocalEmbedder:

@@ -169,6 +169,5 @@ class Retrieval:
                 tiers[i] = "low"
 
         return [
-            replace(r, relevance=tier)
-            for r, tier in zip(results, tiers, strict=True)
+            replace(r, relevance=tier) for r, tier in zip(results, tiers, strict=True)
         ]
