@@ -77,11 +77,12 @@ class BaseTreeSitterParser:
         # Unwrap decorated definitions (e.g. @decorator … def func)
         if node.type == "decorated_definition":
             inner = node.child_by_field_name("definition")
-            return self.identifier_from_node(inner, parent) if inner else ""
+            return self.identifier_from_node(inner) if inner else ""
 
         # Arrow function: const foo = () => {} — name from variable_declarator
-        if node.type == "arrow_function" and parent and parent.type == "variable_declarator":
-            name_node = parent.child_by_field_name("name")
+        p = parent if parent is not None else getattr(node, "parent", None)
+        if node.type == "arrow_function" and p and p.type == "variable_declarator":
+            name_node = p.child_by_field_name("name")
             if name_node and name_node.type == "identifier":
                 return self.node_text(name_node)
 
