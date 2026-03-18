@@ -1,4 +1,4 @@
-"""Tests for deduplication and low-confidence marking in Retrieval."""
+"""Tests for deduplication and relevance tier assignment in Retrieval."""
 
 from coderay.retrieval.models import SearchResult
 from coderay.retrieval.search import Retrieval
@@ -85,47 +85,62 @@ class TestDeduplicateByContainment:
         r1 = _r("a.py", 5, 15, score=0.9)
         r2 = _r("b.py", 1, 50, score=0.7)
         r3 = _r("a.py", 1, 50, score=0.5)
-        # r3 contains r1 → r3 is dropped
         result = Retrieval._deduplicate_by_containment([r1, r2, r3])
         assert len(result) == 2
         assert result[0] is r1
         assert result[1] is r2
 
 
-class TestMarkLowConfidence:
-    """Tests for Retrieval._mark_low_confidence()."""
+class TestAssignRelevance:
+    """Tests for Retrieval._assign_relevance() tiered scoring."""
 
     def test_empty_list(self):
-        assert Retrieval._mark_low_confidence([]) == []
+        assert Retrieval._assign_relevance([]) == []
 
-    def test_single_result_not_flagged(self):
+    def test_single_result_stays_high(self):
         results = [_r("a.py", 1, 10, score=0.5)]
-        marked = Retrieval._mark_low_confidence(results)
-        assert marked[0].low_confidence is False
+        marked = Retrieval._assign_relevance(results)
+        assert marked[0].relevance == "high"
 
-    def test_gradual_decay_no_flags(self):
-        """Scores decaying gradually should not trigger flags."""
+    def test_gradual_decay_all_high(self):
+        """Scores decaying gradually should remain high."""
         results = [
             _r("a.py", 1, 10, score=0.9),
             _r("a.py", 11, 20, score=0.7),
             _r("a.py", 21, 30, score=0.55),
         ]
-        marked = Retrieval._mark_low_confidence(results)
-        assert all(r.low_confidence is False for r in marked)
+        marked = Retrieval._assign_relevance(results)
+        assert all(r.relevance == "high" for r in marked)
 
-    def test_sharp_drop_flags_tail(self):
-        """A >50% drop between consecutive results flags the rest."""
+    def test_single_sharp_drop_marks_medium(self):
+        """A >50% drop between consecutive results marks the rest as medium."""
         results = [
             _r("a.py", 1, 10, score=0.9),
             _r("a.py", 11, 20, score=0.85),
             _r("a.py", 21, 30, score=0.3),
             _r("a.py", 31, 40, score=0.2),
         ]
-        marked = Retrieval._mark_low_confidence(results)
-        assert marked[0].low_confidence is False
-        assert marked[1].low_confidence is False
-        assert marked[2].low_confidence is True
-        assert marked[3].low_confidence is True
+        marked = Retrieval._assign_relevance(results)
+        assert marked[0].relevance == "high"
+        assert marked[1].relevance == "high"
+        assert marked[2].relevance == "medium"
+        assert marked[3].relevance == "medium"
+
+    def test_two_drops_give_high_medium_low(self):
+        """Two significant drops produce all three tiers."""
+        results = [
+            _r("a.py", 1, 10, score=0.9),
+            _r("a.py", 11, 20, score=0.85),
+            _r("a.py", 21, 30, score=0.3),
+            _r("a.py", 31, 40, score=0.25),
+            _r("a.py", 41, 50, score=0.05),
+        ]
+        marked = Retrieval._assign_relevance(results)
+        assert marked[0].relevance == "high"
+        assert marked[1].relevance == "high"
+        assert marked[2].relevance == "medium"
+        assert marked[3].relevance == "medium"
+        assert marked[4].relevance == "low"
 
     def test_rrf_scores_sharp_drop(self):
         """Works with small RRF scores that have a proportional gap."""
@@ -135,11 +150,11 @@ class TestMarkLowConfidence:
             _r("a.py", 21, 30, score=0.027),
             _r("a.py", 31, 40, score=0.005),
         ]
-        marked = Retrieval._mark_low_confidence(results)
-        assert marked[0].low_confidence is False
-        assert marked[1].low_confidence is False
-        assert marked[2].low_confidence is False
-        assert marked[3].low_confidence is True
+        marked = Retrieval._assign_relevance(results)
+        assert marked[0].relevance == "high"
+        assert marked[1].relevance == "high"
+        assert marked[2].relevance == "high"
+        assert marked[3].relevance == "medium"
 
     def test_zero_score_predecessor_skipped(self):
         """A zero-score predecessor should not cause division errors."""
@@ -148,5 +163,15 @@ class TestMarkLowConfidence:
             _r("a.py", 11, 20, score=0.0),
             _r("a.py", 21, 30, score=0.0),
         ]
-        marked = Retrieval._mark_low_confidence(results)
+        marked = Retrieval._assign_relevance(results)
         assert len(marked) == 3
+
+    def test_all_equal_scores_remain_high(self):
+        """When all scores are equal, everything is high."""
+        results = [
+            _r("a.py", 1, 10, score=0.5),
+            _r("a.py", 11, 20, score=0.5),
+            _r("a.py", 21, 30, score=0.5),
+        ]
+        marked = Retrieval._assign_relevance(results)
+        assert all(r.relevance == "high" for r in marked)

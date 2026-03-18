@@ -9,7 +9,11 @@ from coderay.retrieval.models import (
 )
 
 
-def _make_row(content: str = "line\n" * 10, score: float = 0.85) -> dict:
+def _make_row(
+    content: str = "line\n" * 10,
+    score: float = 0.85,
+    search_mode: str = "vector",
+) -> dict:
     return {
         "path": "src/app.py",
         "start_line": 1,
@@ -17,6 +21,7 @@ def _make_row(content: str = "line\n" * 10, score: float = 0.85) -> dict:
         "symbol": "foo",
         "content": content,
         "score": score,
+        "search_mode": search_mode,
     }
 
 
@@ -45,6 +50,17 @@ class TestSearchResultFromRaw:
         del row["score"]
         result = SearchResult.from_raw(row)
         assert result.score == 0.0
+
+    def test_search_mode_from_row(self):
+        row = _make_row(content="x", search_mode="hybrid")
+        result = SearchResult.from_raw(row)
+        assert result.search_mode == "hybrid"
+
+    def test_search_mode_defaults_to_vector(self):
+        row = _make_row(content="x")
+        del row["search_mode"]
+        result = SearchResult.from_raw(row)
+        assert result.search_mode == "vector"
 
     def test_no_truncation_when_under_limit(self):
         content = "\n".join(f"line {i}" for i in range(30))
@@ -122,6 +138,8 @@ class TestSearchResultToDict:
             "symbol",
             "content",
             "score",
+            "relevance",
+            "search_mode",
         }
         assert set(d.keys()) == expected
 
@@ -152,12 +170,12 @@ class TestSearchResultToDict:
         with pytest.raises(AttributeError):
             result.content = "mutated"  # type: ignore[misc]
 
-    def test_low_confidence_absent_by_default(self):
+    def test_relevance_defaults_to_high(self):
         result = SearchResult.from_raw(_make_row(score=0.5))
         d = result.to_dict()
-        assert "low_confidence" not in d
+        assert d["relevance"] == "high"
 
-    def test_low_confidence_included_when_true(self):
+    def test_relevance_in_dict(self):
         result = SearchResult(
             path="a.py",
             start_line=1,
@@ -165,10 +183,17 @@ class TestSearchResultToDict:
             symbol="foo",
             content="x",
             score=0.1,
-            low_confidence=True,
+            relevance="low",
         )
         d = result.to_dict()
-        assert d["low_confidence"] is True
+        assert d["relevance"] == "low"
+
+    def test_search_mode_in_dict(self):
+        result = SearchResult.from_raw(
+            _make_row(content="x", search_mode="hybrid")
+        )
+        d = result.to_dict()
+        assert d["search_mode"] == "hybrid"
 
 
 class TestContains:
