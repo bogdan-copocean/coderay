@@ -37,13 +37,6 @@ def index_exists(index_dir: str | Path) -> bool:
 def _extract_score(row: dict[str, Any], mode: _ScoreField) -> float:
     """Extract a higher-is-better score from a LanceDB result row.
 
-    Deterministic extraction based on the search mode rather than
-    guessing which field LanceDB happened to return.
-
-    Args:
-        row: Mutable dict; recognised score keys are popped.
-        mode: Which score field to expect.
-
     Raises:
         ScoreExtractionError: If the expected field is missing.
     """
@@ -103,13 +96,8 @@ class Store:
     ) -> list[dict[str, Any]]:
         """Convert chunks + embeddings to row dicts for LanceDB.
 
-        Args:
-            chunks: Parsed code chunks.
-            embeddings: Matching embedding vectors.
-
         Raises:
-            EmbeddingDimensionError: If any vector's length differs from
-                the configured store dimensions.
+            EmbeddingDimensionError: On vector/store dimension mismatch.
         """
         rows = []
         for chunk, emb in zip(chunks, embeddings, strict=False):
@@ -158,10 +146,6 @@ class Store:
     ) -> None:
         """Insert chunks and their embeddings.
 
-        Args:
-            chunks: Code chunks to store.
-            embeddings: Embedding vectors (must match chunks length).
-
         Raises:
             EmbeddingDimensionError: On dimension mismatch.
             ValueError: When chunks and embeddings lengths differ.
@@ -197,18 +181,7 @@ class Store:
         path_prefix: str | None = None,
         query_text: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Nearest-neighbor search with optional hybrid scoring.
-
-        Args:
-            query_embedding: Dense vector for the query.
-            top_k: Maximum results to return.
-            path_prefix: Restrict to paths under this directory.
-            query_text: When provided, enables hybrid (vector + BM25) search.
-
-        Returns:
-            Result dicts with a ``score`` key (higher is better) and a
-            ``search_mode`` key (``"hybrid"`` or ``"vector"``).
-        """
+        """Run nearest-neighbor search with optional hybrid (vector + BM25) scoring."""
         if not self._table_exists():
             return []
         table = self._get_table()
@@ -312,12 +285,7 @@ class Store:
         limit: int = 500,
         path_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List indexed chunks (no vectors).
-
-        Args:
-            limit: Maximum rows to return.
-            path_prefix: Restrict to paths under this directory.
-        """
+        """List indexed chunks (no vectors)."""
         if not self._table_exists():
             return []
         table = self._get_table()
@@ -342,11 +310,7 @@ class Store:
         return arrow.to_pylist()[:limit]
 
     def chunks_by_path(self) -> dict[str, int]:
-        """Return mapping of file path to chunk count.
-
-        Uses Lance columnar read + pandas for aggregation instead of
-        loading every row into Python dicts.
-        """
+        """Return mapping of file path to chunk count."""
         if not self._table_exists():
             return {}
         table = self._get_table()

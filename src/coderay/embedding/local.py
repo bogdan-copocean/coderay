@@ -54,7 +54,7 @@ class LocalEmbedder(Embedder):
 
     @property
     def dimensions(self) -> int:
-        """Vector dimension (e.g. 768 for nomic-embed-text-v1.5)."""
+        """Return the vector dimension."""
         return self._dimensions
 
     def _apply_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
@@ -73,13 +73,7 @@ class LocalEmbedder(Embedder):
         *,
         task: EmbedTask = EmbedTask.DOCUMENT,
     ) -> list[list[float]]:
-        """Embed texts using fastembed; returns one vector per text.
-
-        Args:
-            texts: Raw text strings to embed.
-            task: Whether these are documents or queries; controls
-                which instruction prefix (if any) is prepended.
-        """
+        """Embed texts via fastembed; one vector per input string."""
         if not texts:
             return []
         if self._model is None:

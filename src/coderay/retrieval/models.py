@@ -44,14 +44,7 @@ class SearchResult:
         *,
         max_lines: int | None = DEFAULT_MAX_CONTENT_LINES,
     ) -> SearchResult:
-        """Build from a raw dict returned by the storage layer.
-
-        Args:
-            row: Dict with keys path, start_line, end_line, symbol,
-                content, score, and search_mode.
-            max_lines: Truncate content beyond this many lines.
-                None disables truncation.
-        """
+        """Build from a raw storage-layer dict, optionally truncating content."""
         content: str = row.get("content", "")
         truncated = False
 
@@ -73,10 +66,7 @@ class SearchResult:
         )
 
     def contains(self, other: SearchResult) -> bool:
-        """Return True if this result's span fully encloses *other*.
-
-        Both results must be in the same file.
-        """
+        """Return True if this result's span fully encloses *other* in the same file."""
         return (
             self.path == other.path
             and self.start_line <= other.start_line

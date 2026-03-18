@@ -8,13 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmbedTask(Enum):
-    """Distinguishes document-time vs. query-time embedding.
-
-    Modern retrieval models produce better results when the text is
-    prefixed with a task hint (e.g. ``search_document:`` vs.
-    ``search_query:``).  Passing the correct task allows the embedder
-    to apply the right prefix automatically.
-    """
+    """Distinguish document-time vs. query-time embedding."""
 
     DOCUMENT = "document"
     QUERY = "query"
@@ -36,14 +30,7 @@ class Embedder(ABC):
         *,
         task: EmbedTask = EmbedTask.DOCUMENT,
     ) -> list[list[float]]:
-        """Embed a list of texts; returns one vector per text.
-
-        Args:
-            texts: Raw text strings to embed.
-            task: Whether these texts are documents being indexed or
-                queries being searched.  The embedder may prepend a
-                model-specific instruction prefix based on this value.
-        """
+        """Embed texts into vectors; one vector per input string."""
         ...
 
 

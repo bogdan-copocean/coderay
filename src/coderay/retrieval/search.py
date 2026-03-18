@@ -22,22 +22,10 @@ _SCORE_DROP_RATIO = 0.5
 
 
 class Retrieval:
-    """Semantic search over the code index.
-
-    Focused solely on search orchestration: embed the query, call the
-    store, apply boosting, deduplicate, and assign relevance tiers.
-    Index inspection (chunk listing, counts) lives on ``Store``;
-    graph loading lives in ``coderay.graph.builder``.
-    """
+    """Orchestrate semantic search: embed, query, boost, deduplicate, rank."""
 
     def __init__(self, embedder: Embedder | None = None) -> None:
-        """Initialize retrieval from the application config.
-
-        Args:
-            embedder: Optional override for the embedding model.
-                When *None*, a ``LocalEmbedder`` is lazily loaded from
-                config on first ``search()`` call.
-        """
+        """Initialize retrieval; loads embedder from config when *embedder* is None."""
         self._config = get_config()
         self.index_dir = Path(self._config.index.path)
         self._explicit_embedder = embedder
@@ -82,18 +70,7 @@ class Retrieval:
         path_prefix: str | None = None,
         include_tests: bool = True,
     ) -> list[SearchResult]:
-        """Semantic search over the index.
-
-        Args:
-            query: Natural language search query.
-            current_state: Current index metadata (must be complete).
-            top_k: Maximum results to return from the vector store.
-            path_prefix: Restrict results to paths under this directory.
-            include_tests: When False, test files are excluded from results.
-
-        Returns:
-            Ranked list of SearchResult DTOs, deduplicated and annotated
-            with a relevance tier (high / medium / low).
+        """Search the index and return ranked, deduplicated results with relevance tiers.
 
         Raises:
             IndexStaleError: If the index is incomplete or in-progress.
@@ -139,18 +116,7 @@ class Retrieval:
     def _deduplicate_by_containment(
         results: list[SearchResult],
     ) -> list[SearchResult]:
-        """Remove results whose line range fully contains a more specific result.
-
-        When a class and one of its methods both appear in the result set
-        (same file, parent line range fully encloses child), the outer
-        (less specific) result is dropped because it is redundant.
-
-        Args:
-            results: Ranked results (highest score first).
-
-        Returns:
-            Filtered list with outer duplicates removed, order preserved.
-        """
+        """Drop results whose line range fully encloses a more specific hit."""
         if len(results) <= 1:
             return results
 
@@ -178,19 +144,7 @@ class Retrieval:
     def _assign_relevance(
         results: list[SearchResult],
     ) -> list[SearchResult]:
-        """Assign tiered relevance (high / medium / low) to results.
-
-        Walks the ranked list and compares each result's score to its
-        predecessor.  The first significant consecutive drop (below
-        ``_SCORE_DROP_RATIO``) marks the high-to-medium boundary; the
-        second such drop marks medium-to-low.
-
-        This heuristic adapts to any score scale (RRF, cosine, hybrid)
-        because it measures relative consecutive drops.
-
-        Args:
-            results: Ranked results (highest score first).
-        """
+        """Assign tiered relevance (high/medium/low) based on consecutive score drops."""
         if len(results) <= 1:
             return results
 

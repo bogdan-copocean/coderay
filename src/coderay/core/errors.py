@@ -1,9 +1,4 @@
-"""Domain-specific error hierarchy for CodeRay.
-
-All public errors inherit from ``CodeRayError`` so callers can catch
-the base type for broad handling or individual subclasses for targeted
-recovery.
-"""
+"""Domain-specific error hierarchy for CodeRay."""
 
 from __future__ import annotations
 
@@ -21,11 +16,7 @@ class EmbeddingDimensionError(CodeRayError):
 
 
 class ScoreExtractionError(CodeRayError):
-    """Raised when a LanceDB result row lacks the expected score field.
-
-    This typically indicates a LanceDB version change that altered the
-    output column names for vector or hybrid search results.
-    """
+    """Raised when a LanceDB result row lacks the expected score field."""
 
 
 class SearchError(CodeRayError):
