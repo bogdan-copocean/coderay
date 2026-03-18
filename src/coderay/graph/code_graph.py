@@ -274,14 +274,20 @@ class CodeGraph:
         When DI-style calls produce unresolved bare edges (e.g. target
         ``process``), those phantom nodes share the real node's
         ``name`` or ``qualified_name``.
+
+        Only include ``node.name`` when it uniquely identifies this node.
+        Otherwise the bare phantom aggregates callers of many different
+        methods (e.g. ``get``, ``post``, ``delete``) and produces false positives.
         """
         node = self.get_node(node_id)
         if node is None:
             return []
         targets = []
-        for candidate in (node.name, node.qualified_name):
-            if candidate != node_id and candidate in self._g:
-                targets.append(candidate)
+        if node.qualified_name != node_id and node.qualified_name in self._g:
+            targets.append(node.qualified_name)
+        sym_candidates = self._symbol_index.get(node.name, set())
+        if len(sym_candidates) == 1 and node.name in self._g:
+            targets.append(node.name)
         return targets
 
     def _impact_seeds(self, node_id: str) -> list[str]:
