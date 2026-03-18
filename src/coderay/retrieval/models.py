@@ -18,14 +18,14 @@ _TEST_PATH_PATTERNS: tuple[str, ...] = (
 
 
 def is_test_path(path: str) -> bool:
-    """Return True if *path* looks like a test file."""
+    """Return True if path looks like a test file."""
     normalised = f"/{path}"
     return any(p in normalised for p in _TEST_PATH_PATTERNS)
 
 
 @dataclass(frozen=True)
 class SearchResult:
-    """A single search hit with optional content truncation."""
+    """Single search hit with optional content truncation."""
 
     path: str
     start_line: int
@@ -44,7 +44,7 @@ class SearchResult:
         *,
         max_lines: int | None = DEFAULT_MAX_CONTENT_LINES,
     ) -> SearchResult:
-        """Build from a raw storage-layer dict, optionally truncating content."""
+        """Build from raw storage dict; optionally truncate content."""
         content: str = row.get("content", "")
         truncated = False
 
@@ -66,7 +66,7 @@ class SearchResult:
         )
 
     def contains(self, other: SearchResult) -> bool:
-        """Return True if this result's span fully encloses *other* in the same file."""
+        """Return True if this span fully encloses other in same file."""
         return (
             self.path == other.path
             and self.start_line <= other.start_line
@@ -74,7 +74,7 @@ class SearchResult:
         )
 
     def to_dict(self) -> dict:
-        """Serialize to a JSON-compatible dict for the MCP response."""
+        """Serialize to JSON-compatible dict."""
         d: dict = {
             "path": self.path,
             "start_line": self.start_line,

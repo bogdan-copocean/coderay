@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_gitignore(repo_root: Path) -> pathspec.PathSpec:
-    """Parse .gitignore into a PathSpec matcher."""
+    """Parse .gitignore into PathSpec matcher."""
     gitignore = repo_root / ".gitignore"
     if not gitignore.is_file():
         return pathspec.PathSpec.from_lines("gitignore", [])
@@ -37,11 +37,11 @@ class Git:
     """Git operations for file discovery and change detection."""
 
     def __init__(self, repo_root: str | Path = ".") -> None:
-        """Initialize with the repository root."""
+        """Initialize with repository root."""
         self.repo_root = Path(repo_root)
 
     def run(self, *args: str) -> str:
-        """Run a git command and return stripped stdout."""
+        """Run git command; return stripped stdout."""
         result = subprocess.run(
             ["git", *args],
             cwd=self.repo_root,
@@ -56,14 +56,14 @@ class Git:
         return (result.stdout or "").strip()
 
     def get_head_commit(self) -> str | None:
-        """Return current HEAD commit hash, or None if unavailable."""
+        """Return HEAD commit hash; None if unavailable."""
         try:
             return self.run("rev-parse", "HEAD")
         except (RuntimeError, FileNotFoundError):
             return None
 
     def get_current_branch(self) -> str | None:
-        """Return current branch name, or None if detached HEAD."""
+        """Return current branch; None if detached."""
         try:
             name = self.run("rev-parse", "--abbrev-ref", "HEAD")
             if name and name != "HEAD":
@@ -73,7 +73,7 @@ class Git:
         return None
 
     def is_branch_switched(self, last_branch: str | None = None) -> bool:
-        """Return True if the current branch differs from *last_branch*."""
+        """Return True if current branch differs from last_branch."""
         current_branch = self.get_current_branch()
         return (
             current_branch is not None
@@ -84,7 +84,7 @@ class Git:
     def get_files_to_index(
         self, last_commit: str | None
     ) -> tuple[list[Path], list[str]]:
-        """Return (paths_to_add, paths_to_remove) since last indexed commit."""
+        """Return (paths_to_add, paths_to_remove) since last commit."""
         from coderay.parsing.languages import get_supported_extensions
 
         supported = get_supported_extensions()
@@ -153,14 +153,14 @@ class Git:
         return add_paths, remove_paths
 
     def discover_python_files(self) -> list[Path]:
-        """List all Python files. Alias for ``discover_files(extensions={'.py'})``."""
+        """List Python files; alias for discover_files(extensions={'.py'})."""
         return self.discover_files(extensions={".py"})
 
     def discover_files(
         self,
         extensions: set[str] | None = None,
     ) -> list[Path]:
-        """List all source files matching the given extensions."""
+        """List source files matching extensions."""
         if extensions is None:
             from coderay.parsing.languages import get_supported_extensions
 

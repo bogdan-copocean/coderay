@@ -1,12 +1,4 @@
-"""Type hint resolution for dependency injection patterns.
-
-Extracts type annotations from the AST and resolves them to qualified
-class references (file::ClassName). Used by:
-- Factory: x = create_client() → return type of create_client
-- Param injection: def f(processor: DataProcessor) → processor.process()
-- Property: @property def repo() -> Repo → self.repo.save()
-- Context manager: with cm() as x → cm.__enter__ return type
-"""
+"""Type hint resolution for factory, param, property, context manager."""
 
 from __future__ import annotations
 
@@ -16,25 +8,17 @@ TSNode = Any
 
 
 class TypeResolutionMixin:
-    """Resolves type annotations for factory, param, property, and context manager."""
+    """Resolve type annotations for factory, param, property, context manager."""
 
     def _resolve_type_text(self, type_text: str | None) -> str | None:
-        """Resolve a type annotation string to a qualified class reference.
-
-        Handles forward refs (strip quotes), FileContext lookup, and
-        fallback to file::Type for class-like names (PascalCase).
-        """
+        """Resolve type annotation to qualified class reference."""
         refs = self._resolve_type_texts(type_text)
         return refs[0] if refs else None
 
     def _resolve_type_texts(
         self, type_text: str | None, *, enclosing_func_node: TSNode | None = None
     ) -> list[str]:
-        """Resolve a type annotation to qualified class references.
-
-        Handles union types (A | B), forward refs, Self (resolves to enclosing
-        class), and multiple class refs.
-        """
+        """Resolve type annotation to qualified class refs (union, Self, forward refs)."""
         if not type_text:
             return []
         text = type_text.strip()
@@ -60,7 +44,7 @@ class TypeResolutionMixin:
         return result
 
     def _find_enclosing_class_from_node(self, node: TSNode) -> str | None:
-        """Find the innermost enclosing class qualified name from a node."""
+        """Find innermost enclosing class qualified name."""
         current = node.parent
         class_names: list[str] = []
         while current:
@@ -81,11 +65,7 @@ class TypeResolutionMixin:
     def _extract_type_from_typed_param(
         self, param_node: TSNode
     ) -> tuple[str, list[str]] | None:
-        """Extract (param_name, type_refs) from a typed_parameter AST node.
-
-        AST: typed_parameter has (name, :, type) e.g. "storage: StoragePort"
-        or "x: A | B". Returns list of refs for union types.
-        """
+        """Extract (param_name, type_refs) from typed_parameter node."""
         name_node = param_node.child_by_field_name("name") or (
             param_node.children[0] if param_node.children else None
         )
@@ -112,7 +92,7 @@ class TypeResolutionMixin:
         return (pname, type_refs) if type_refs else None
 
     def _get_function_return_type(self, callee_name: str) -> str | None:
-        """Resolve a function or method's return type from its type annotation."""
+        """Resolve function/method return type from annotation."""
         # "create_client" = top-level; "ApiClient.create" = classmethod
         if "." in callee_name:
             class_name, method_name = callee_name.split(".", 1)
@@ -122,7 +102,7 @@ class TypeResolutionMixin:
         return self._get_return_type_from_func_node(func_node) if func_node else None
 
     def _find_method_in_class(self, class_name: str, method_name: str) -> TSNode | None:
-        """Find a method definition inside a class in the current file."""
+        """Find method definition in class."""
         tree = self.get_tree()
         # Scan top-level nodes for the class
         for node in tree.root_node.children:
@@ -147,7 +127,7 @@ class TypeResolutionMixin:
         return None
 
     def _find_top_level_function(self, func_name: str) -> TSNode | None:
-        """Find a top-level function definition by name."""
+        """Find top-level function by name."""
         for node in self.get_tree().root_node.children:
             if node.type not in self._ctx.lang_cfg.function_scope_types:
                 continue
@@ -156,10 +136,7 @@ class TypeResolutionMixin:
         return None
 
     def _unwrap_decorated(self, stmt: TSNode) -> TSNode | None:
-        """Return the inner function_definition from a decorated_definition.
-
-        @staticmethod def from_env(): → we need the def node, not the decorator.
-        """
+        """Return inner function_definition from decorated_definition."""
         if stmt.type == "function_definition":
             return stmt
         if stmt.type == "decorated_definition":
@@ -169,7 +146,7 @@ class TypeResolutionMixin:
         return None
 
     def _get_return_type_from_func_node(self, func_node: TSNode) -> str | None:
-        """Extract return type from a function definition's type annotation."""
+        """Extract return type from function definition."""
         type_node = func_node.child_by_field_name(
             "return_type"
         ) or func_node.child_by_field_name("type")
@@ -181,11 +158,7 @@ class TypeResolutionMixin:
         return refs[0] if refs else None
 
     def _get_enclosing_function_node(self, node: TSNode) -> TSNode | None:
-        """Walk up the tree to find the enclosing function definition.
-
-        Used when we see "self.attr = param" to look up param's type hint
-        in the enclosing __init__ or setter.
-        """
+        """Walk up tree to find enclosing function definition."""
         current = node.parent
         while current:
             if current.type in self._ctx.lang_cfg.function_scope_types:
@@ -194,7 +167,7 @@ class TypeResolutionMixin:
         return None
 
     def _get_typed_parameters(self, func_node: TSNode) -> list[tuple[str, list[str]]]:
-        """Collect (param_name, type_refs) for all typed parameters."""
+        """Collect (param_name, type_refs) for typed parameters."""
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
@@ -209,7 +182,7 @@ class TypeResolutionMixin:
     def _get_parameter_type_hint(
         self, func_node: TSNode, param_name: str
     ) -> str | None:
-        """Get the type hint for a parameter (constructor/setter injection)."""
+        """Get parameter type hint (constructor/setter injection)."""
         params = func_node.child_by_field_name("parameters")
         if not params:
             return None
@@ -222,12 +195,7 @@ class TypeResolutionMixin:
         return None
 
     def _extract_tuple_type_args(self, type_node: TSNode) -> list[str]:
-        """Extract type arguments from tuple[X, Y, ...] via AST.
-
-        return_type yields a type node wrapping generic_type; generic_type has
-        identifier (tuple) and type_parameter (type nodes). Returns list of
-        qualified class refs for each element.
-        """
+        """Extract type args from tuple[X, Y, ...] via AST."""
         # Unwrap: return_type field points to type node, whose child is generic_type
         if type_node.type == "type" and type_node.named_children:
             type_node = type_node.named_children[0]

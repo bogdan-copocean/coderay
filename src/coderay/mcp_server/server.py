@@ -38,12 +38,12 @@ _state_machine_cache: dict[Path, Any] = {}
 
 
 def _resolve_index_dir() -> Path:
-    """Resolve the index directory to an absolute path."""
+    """Resolve index directory to absolute path."""
     return Path(get_config().index.path).resolve()
 
 
 def _get_retrieval():
-    """Return a cached Retrieval instance for the given index directory."""
+    """Return cached Retrieval instance."""
     idx = _resolve_index_dir()
     if idx not in _retrieval_cache:
         from coderay.retrieval.search import Retrieval
@@ -53,14 +53,14 @@ def _get_retrieval():
 
 
 def _load_graph():
-    """Load the code graph from disk, or return None if absent."""
+    """Load code graph from disk; None if absent."""
     from coderay.graph.builder import load_graph
 
     return load_graph(_resolve_index_dir())
 
 
 def _get_state_machine():
-    """Return a cached StateMachine instance."""
+    """Return cached StateMachine instance."""
     idx = _resolve_index_dir()
     if idx not in _state_machine_cache:
         from coderay.state.machine import StateMachine
@@ -70,7 +70,7 @@ def _get_state_machine():
 
 
 def _load_state():
-    """Load the current IndexMeta state, or None if no run has completed."""
+    """Load IndexMeta state; None if no run completed."""
     return _get_state_machine().current_state
 
 
@@ -111,7 +111,7 @@ def semantic_search(
         ),
     ] = True,
 ) -> dict:
-    """Search the semantic index."""
+    """Search semantic index."""
     retrieval = _get_retrieval()
     state = _load_state()
     if state is None:
@@ -158,7 +158,7 @@ def get_file_skeleton(
         ),
     ] = None,
 ) -> str:
-    """Get the API surface of a file (signatures, no bodies)."""
+    """Get file API surface (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
 
     workspace_root = _resolve_index_dir().parent.resolve()
@@ -202,7 +202,7 @@ def get_impact_radius(
         Field(description="How many caller/dependent levels to traverse"),
     ] = 2,
 ) -> dict:
-    """Analyze the blast radius of changing a function or module."""
+    """Analyze blast radius of changing function or module."""
     graph = _load_graph()
     if graph is None:
         raise IndexNotBuiltError(
@@ -218,7 +218,7 @@ def get_impact_radius(
     tags={"status"},
 )
 def index_status() -> dict:
-    """Check health and status of the semantic index."""
+    """Check index health and status."""
     state = _load_state()
     if state is None:
         raise IndexNotBuiltError()

@@ -12,10 +12,10 @@ MODULE_SYMBOL = "<module>"
 
 
 class ChunkingTreeSitterParser(BaseTreeSitterParser):
-    """Tree-sitter based chunker for source files."""
+    """Tree-sitter chunker."""
 
     def collect_chunks(self) -> list[Chunk]:
-        """Collect all chunks for the configured file and language."""
+        """Collect chunks for file and language."""
         tree = self.get_tree()
         root = tree.root_node
         chunks: list[Chunk] = []
@@ -61,7 +61,7 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         return chunks
 
     def _collect_preamble_lines(self, root) -> list[str]:
-        """Collect top-level lines that are NOT part of any chunk_type definition."""
+        """Collect top-level lines outside chunk definitions."""
         lines: list[str] = []
         for child in root.children:
             if child.type in self._ctx.lang_cfg.chunker.chunk_types:
@@ -73,7 +73,7 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
 
 
 def chunk_file(path: str | Path, content: str) -> list[Chunk]:
-    """Chunk a source file into semantic units (functions, classes, preamble)."""
+    """Chunk file into semantic units (functions, classes, preamble)."""
     ctx = parse_file(path, content)
     if ctx is None:
         logger.warning("No language config for %s", path)

@@ -1,10 +1,4 @@
-"""Graph extraction from source code via tree-sitter.
-
-Builds nodes (modules, classes, functions) and edges (DEFINES, INHERITS,
-CALLS, IMPORTS) by walking the AST. Supports dependency injection patterns
-(constructor, setter, parameter, property, factory, context manager) via
-type hint resolution.
-"""
+"""Extract code graph (nodes, edges) from source via tree-sitter."""
 
 from __future__ import annotations
 
@@ -67,13 +61,7 @@ def build_module_index(file_paths: list[str]) -> ModuleIndex:
 
 
 class FileContext:
-    """Tracks name bindings within a single file during graph extraction.
-
-    Provides unified name resolution for imports, definitions, instances,
-    aliases, and class attributes (e.g. @property return types). Every
-    registration overwrites the previous binding for the same local name
-    (last-write-wins), which mirrors Python's runtime semantics.
-    """
+    """Track name bindings for imports, definitions, instances, aliases."""
 
     def __init__(self, module_index: ModuleIndex | None = None) -> None:
         self._symbols: dict[str, str] = {}
@@ -84,11 +72,11 @@ class FileContext:
         self._module_index = module_index or {}
 
     def _resolve_module_to_file(self, mod_name: str) -> str | None:
-        """Resolve a dotted module name to a file path via the module index."""
+        """Resolve dotted module name to file path."""
         return self._module_index.get(mod_name)
 
     def _resolve_qualified_import(self, mod_name: str, symbol: str) -> str:
-        """Resolve ``from mod_name import symbol`` to a file-path-based target."""
+        """Resolve from-module import to file-path-based target."""
         submod = f"{mod_name}.{symbol}"
         submod_file = self._resolve_module_to_file(submod)
         if submod_file:
@@ -158,16 +146,12 @@ class FileContext:
         return self._instances.get(var_name)
 
     def resolve_method_call(self, obj_name: str, method_name: str) -> str | None:
-        """Resolve ``obj.method()`` when *obj* is a tracked instance.
-
-        Returns the first match for single-instance; for unions, use
-        resolve_method_calls to get all targets.
-        """
+        """Resolve obj.method() for tracked instance; first match for unions."""
         targets = self.resolve_method_calls(obj_name, method_name)
         return targets[0] if targets else None
 
     def resolve_method_calls(self, obj_name: str, method_name: str) -> list[str]:
-        """Resolve ``obj.method()`` to all possible targets (handles unions)."""
+        """Resolve obj.method() to all targets (handles unions)."""
         union_refs = self._instance_unions.get(obj_name)
         if union_refs:
             return [f"{ref}.{method_name}" for ref in union_refs]

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class CodeGraph:
-    """In-memory directed graph of code relationships."""
+    """Directed graph of code relationships."""
 
     def __init__(self) -> None:
         self._g: nx.DiGraph = nx.DiGraph()
@@ -31,7 +31,7 @@ class CodeGraph:
         self._file_index: dict[str, set[str]] = defaultdict(set)
 
     def _index_node(self, node: GraphNode) -> None:
-        """Register a node in all secondary indexes."""
+        """Register node in all indexes."""
         self._symbol_index[node.name].add(node.id)
         if node.qualified_name != node.name:
             self._qualified_index[node.qualified_name].add(node.id)
@@ -42,7 +42,7 @@ class CodeGraph:
                     self._module_index[mod_name] = node.id
 
     def _unindex_node(self, node: GraphNode) -> None:
-        """Remove a node from all secondary indexes."""
+        """Remove node from all indexes."""
         sym_entries = self._symbol_index.get(node.name)
         if sym_entries is not None:
             sym_entries.discard(node.id)
@@ -59,29 +59,25 @@ class CodeGraph:
                     del self._module_index[mod_name]
 
     def add_node(self, node: GraphNode) -> None:
-        """Insert a node into the graph and update all secondary indexes."""
+        """Add node and update indexes."""
         self._g.add_node(node.id, data=node)
         self._index_node(node)
 
     def add_edge(self, edge: GraphEdge) -> None:
-        """Insert a directed edge."""
+        """Add directed edge."""
         self._g.add_edge(edge.source, edge.target, kind=edge.kind)
 
     def add_nodes_and_edges(
         self, nodes: list[GraphNode], edges: list[GraphEdge]
     ) -> None:
-        """Bulk-insert nodes then edges (order matters — nodes first)."""
+        """Add nodes then edges."""
         for n in nodes:
             self.add_node(n)
         for e in edges:
             self.add_edge(e)
 
     def remove_file(self, file_path: str) -> int:
-        """Remove all nodes belonging to a file and clean up every index.
-
-        Returns:
-            Number of nodes removed.
-        """
+        """Remove all nodes for file; return count removed."""
         to_remove = self._file_index.pop(file_path, set())
         for nid in to_remove:
             node: GraphNode | None = self._g.nodes[nid].get("data")
@@ -91,12 +87,12 @@ class CodeGraph:
         return len(to_remove)
 
     def remove_edge(self, source: str, target: str) -> None:
-        """Remove a single directed edge if it exists."""
+        """Remove edge if present."""
         if self._g.has_edge(source, target):
             self._g.remove_edge(source, target)
 
     def remove_orphan_phantoms(self) -> None:
-        """Remove phantom nodes (no data) that have no remaining edges."""
+        """Remove phantom nodes with no edges."""
         orphans = [
             n
             for n in list(self._g.nodes)
@@ -106,31 +102,19 @@ class CodeGraph:
             self._g.remove_node(n)
 
     def iter_edges(self):
-        """Yield (source, target, data) for every edge in the graph."""
+        """Yield (source, target, data) for each edge."""
         return self._g.edges(data=True)
 
     def has_symbol_candidates(self, name: str) -> bool:
-        """Return True if *name* has any resolution candidates."""
+        """Return True if name has resolution candidates."""
         return bool(self._symbol_index.get(name) or self._qualified_index.get(name))
 
     def all_file_paths(self) -> set[str]:
-        """Return the set of all file paths currently in the graph."""
+        """Return all file paths in graph."""
         return set(self._file_index.keys())
 
     def resolve_symbol(self, name: str) -> str | None:
-        """Resolve a short or qualified name to a fully-qualified node ID.
-
-        Lookup order:
-            1. Exact node ID match (fast path).
-            2. Bare name via ``_symbol_index`` (unique match only).
-            3. Qualified name via ``_qualified_index``.
-
-        Args:
-            name: Bare name, qualified name, or full node ID.
-
-        Returns:
-            Full node ID, or None if the name cannot be uniquely resolved.
-        """
+        """Resolve name to node ID; None if not unique."""
         if name in self._g and self._g.nodes[name].get("data") is not None:
             return name
 
@@ -145,7 +129,7 @@ class CodeGraph:
         return None
 
     def get_node(self, node_id: str) -> GraphNode | None:
-        """Look up a node by its full ID."""
+        """Look up node by ID."""
         data = self._g.nodes.get(node_id)
         if data:
             return data.get("data")
@@ -160,14 +144,7 @@ class CodeGraph:
     )
 
     def _normalize_edge_kind(self, raw: Any) -> EdgeKind | None:
-        """Return EdgeKind or None if raw is not a valid kind.
-
-        Handles both EdgeKind enum and string (e.g. from JSON), so
-        graphs with string edge kinds still work correctly.
-
-        Returns:
-            EdgeKind if raw is valid, None otherwise.
-        """
+        """Return EdgeKind or None; accept enum or string."""
         if raw is None:
             return None
         if isinstance(raw, EdgeKind):
@@ -177,17 +154,7 @@ class CodeGraph:
         return None
 
     def _parent_class_name(self, parent_node_id: str) -> str:
-        """Extract the class name from a parent node ID.
-
-        Used when INHERITS target format differs from method node format
-        (e.g. path::ports.StoragePort vs path::StoragePort.save).
-
-        Args:
-            parent_node_id: Full node ID, e.g. path::Module.Outer.Inner.
-
-        Returns:
-            Last component after :: and ., e.g. Inner.
-        """
+        """Extract class name from parent node ID (last component after ::)."""
         qualifier = (
             parent_node_id.split("::", 1)[-1]
             if "::" in parent_node_id
@@ -196,25 +163,7 @@ class CodeGraph:
         return qualifier.split(".")[-1] if "." in qualifier else qualifier
 
     def get_impact_radius(self, symbol: str, depth: int = 2) -> ImpactResult:
-        """Find all nodes that could be affected if ``symbol`` changes.
-
-        Traverses predecessors via CALLS, IMPORTS, and INHERITS edges
-        only.  DEFINES edges (containment) are excluded because a
-        module defining a symbol is not "affected" by changes to it.
-
-        Also picks up callers that target a bare name matching the
-        resolved node's ``name`` or ``qualified_name`` — these are
-        unresolved DI-style calls (e.g. ``self.dep.process()``)
-        that couldn't be resolved at extraction time.
-
-        Interface-aware: when querying an implementation method, also
-        traverses from the parent interface's method so callers typed
-        against the interface are included.
-
-        Args:
-            symbol: Fully qualified node ID or resolvable name.
-            depth: Number of reverse-BFS hops.
-        """
+        """Find nodes affected if symbol changes (reverse BFS via CALLS/IMPORTS/INHERITS)."""
         resolution_warning: str | None = None
         resolved = self.resolve_symbol(symbol)
 
@@ -269,16 +218,7 @@ class CodeGraph:
         )
 
     def _bare_name_targets(self, node_id: str) -> list[str]:
-        """Return bare-name phantom nodes that match the given real node.
-
-        When DI-style calls produce unresolved bare edges (e.g. target
-        ``process``), those phantom nodes share the real node's
-        ``name`` or ``qualified_name``.
-
-        Only include ``node.name`` when it uniquely identifies this node.
-        Otherwise the bare phantom aggregates callers of many different
-        methods (e.g. ``get``, ``post``, ``delete``) and produces false positives.
-        """
+        """Return bare-name phantom nodes matching real node."""
         node = self.get_node(node_id)
         if node is None:
             return []
@@ -291,14 +231,7 @@ class CodeGraph:
         return targets
 
     def _impact_seeds(self, node_id: str) -> list[str]:
-        """Return node_id plus same method on parent classes (interface-aware).
-
-        When querying an implementation method, callers may call through
-        the interface (e.g. svc.save() where svc: StoragePort).
-        Those edges point to the
-        interface method. Including parent methods as seeds ensures
-        we find those callers.
-        """
+        """Return node_id plus same method on parent classes (interface-aware)."""
         seeds = [node_id]
         if "::" not in node_id:
             return seeds
@@ -326,7 +259,7 @@ class CodeGraph:
         return seeds
 
     def _is_impact_edge(self, source: str, target: str) -> bool:
-        """Check whether the edge is a dependency (not containment)."""
+        """Return True if edge is dependency (not containment)."""
         if not self._g.has_edge(source, target):
             return False
         kind = self._normalize_edge_kind(
@@ -335,7 +268,7 @@ class CodeGraph:
         return kind in self._IMPACT_EDGE_KINDS if kind else False
 
     def _not_found_result(self, symbol: str) -> ImpactResult:
-        """Build an ImpactResult with diagnostic hints for a missing node."""
+        """Build ImpactResult with hint for missing node."""
         file_part = symbol.split("::")[0] if "::" in symbol else None
         available = sorted(self._file_index.get(file_part, set())) if file_part else []
         hint = f"Node '{symbol}' not in the graph."
@@ -344,18 +277,7 @@ class CodeGraph:
         return ImpactResult(resolved_node=None, nodes=[], hint=hint)
 
     def _fuzzy_resolve(self, symbol: str) -> tuple[str | None, str | None]:
-        """Attempt fuzzy resolution when exact resolution fails.
-
-        Parses the symbol into file and qualifier components, then
-        searches the file's nodes for a match by method/function name.
-
-        Args:
-            symbol: The symbol that failed exact resolution.
-
-        Returns:
-            Tuple of (resolved_node_id, warning_message).  Both are
-            None when fuzzy resolution also fails.
-        """
+        """Fuzzy-resolve by method name when exact resolution fails."""
         if "::" not in symbol:
             return None, None
 
@@ -387,15 +309,7 @@ class CodeGraph:
         return None, None
 
     def _zero_callers_hint(self, node_id: str) -> str | None:
-        """Build a diagnostic hint when a node has zero callers.
-
-        Checks whether the node's parent module is imported by other
-        files to distinguish 'genuinely no callers' from 'resolution
-        likely failed'.
-
-        Args:
-            node_id: The resolved node ID with zero callers.
-        """
+        """Build hint when node has zero callers."""
         node = self.get_node(node_id)
         if node is None:
             return None
@@ -421,12 +335,12 @@ class CodeGraph:
 
     @property
     def node_count(self) -> int:
-        """Total nodes in the graph (including phantoms)."""
+        """Return node count (including phantoms)."""
         return self._g.number_of_nodes()
 
     @property
     def edge_count(self) -> int:
-        """Total edges in the graph."""
+        """Return edge count."""
         return self._g.number_of_edges()
 
     # ------------------------------------------------------------------
@@ -434,7 +348,7 @@ class CodeGraph:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialise the graph to a JSON-compatible dict."""
+        """Serialize graph to JSON-compatible dict."""
         nodes = []
         for _, data in self._g.nodes(data=True):
             gn: GraphNode | None = data.get("data") if data else None
@@ -459,7 +373,7 @@ class CodeGraph:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CodeGraph:
-        """Deserialise a graph from a dict produced by ``to_dict``."""
+        """Load graph from dict produced by to_dict."""
         graph = cls()
         for nd in data.get("nodes", []):
             graph.add_node(

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
-    """Raised when configuration is invalid or contains unknown keys."""
+    """Raised when config is invalid or has unknown keys."""
 
 
 DEFAULT_INDEX_DIR = ".index"
@@ -37,14 +37,14 @@ class IndexConfig:
 
 @dataclass(frozen=True)
 class BoostRule:
-    """Single path-based score rule (regex pattern + factor)."""
+    """Path-based score rule (regex + factor)."""
 
     pattern: str
     factor: float
 
 
 def _default_penalties() -> list[BoostRule]:
-    """Return default penalty rules for search result scoring."""
+    """Return default penalty rules."""
     return [
         BoostRule(pattern=r"(^|/)tests?/", factor=0.5),
         BoostRule(pattern=r"(^|/)test_[^/]+\.py$", factor=0.5),
@@ -53,7 +53,7 @@ def _default_penalties() -> list[BoostRule]:
 
 
 def _default_bonuses() -> list[BoostRule]:
-    """Return default bonus rules for search result scoring."""
+    """Return default bonus rules."""
     return [
         BoostRule(pattern=r"(^|/)src/", factor=1.1),
     ]
@@ -61,14 +61,14 @@ def _default_bonuses() -> list[BoostRule]:
 
 @dataclass(frozen=True)
 class BoostingConfig:
-    """Path-based score rules for search result boosting."""
+    """Path-based score rules."""
 
     penalties: list[BoostRule] = field(default_factory=_default_penalties)
     bonuses: list[BoostRule] = field(default_factory=_default_bonuses)
 
 
 def _default_boosting() -> BoostingConfig:
-    """Return default boosting config (penalties + bonuses)."""
+    """Return default boosting config."""
     return BoostingConfig(
         penalties=_default_penalties(),
         bonuses=_default_bonuses(),
@@ -89,7 +89,7 @@ class WatcherConfig:
 
 @dataclass(frozen=True)
 class GraphConfig:
-    """Module filtering for the code graph (CALLS, IMPORTS edges)."""
+    """Module filtering for graph (CALLS, IMPORTS edges)."""
 
     exclude_modules: Annotated[
         list[str], "module names/prefixes to exclude from graph edges"
@@ -109,7 +109,7 @@ class Config:
 
 
 def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
-    """Parse dict into BoostingConfig (penalties/bonuses -> list[BoostRule])."""
+    """Parse dict into BoostingConfig."""
     raw_penalties = data.get("penalties")
     raw_bonuses = data.get("bonuses")
     penalties = (
@@ -124,7 +124,7 @@ def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
 
 
 def _parse_semantic_search(data: dict[str, Any]) -> SemanticSearchConfig:
-    """Parse dict into SemanticSearchConfig (boosting + metric)."""
+    """Parse dict into SemanticSearchConfig."""
     boosting_data = data.get("boosting") or {}
     return SemanticSearchConfig(
         boosting=_parse_boosting(boosting_data),
@@ -133,11 +133,7 @@ def _parse_semantic_search(data: dict[str, Any]) -> SemanticSearchConfig:
 
 
 def _resolve_index_dir() -> Path:
-    """Resolve the index directory from environment or default.
-
-    Returns:
-        Resolved index directory path.
-    """
+    """Resolve index directory from env or default."""
     env = os.environ.get(ENV_INDEX_DIR)
     if env:
         return Path(env).expanduser().resolve()
@@ -145,14 +141,7 @@ def _resolve_index_dir() -> Path:
 
 
 def _resolve_config_path(index_dir: Path) -> Path:
-    """Resolve the config file path under the index directory.
-
-    Args:
-        index_dir: Index directory to search in.
-
-    Returns:
-        Resolved config file path.
-    """
+    """Resolve config file path under index directory."""
     name = os.environ.get(ENV_CONFIG_FILE, DEFAULT_CONFIG_FILENAME)
     return index_dir / name
 
@@ -161,17 +150,7 @@ _config_cache: Config | None = None
 
 
 def get_config() -> Config:
-    """Return the application config. Loaded once per process and cached.
-
-    Do not call Config() or load_config() directly; use this accessor so
-    configuration is consistent and not overridable at runtime.
-
-    Returns:
-        The single frozen Config instance for this process.
-
-    Raises:
-        ConfigError: If the config file contains unknown keys or is invalid.
-    """
+    """Return application config (cached per process)."""
     global _config_cache
     if _config_cache is None:
         _config_cache = _load_config_impl()
@@ -179,17 +158,13 @@ def get_config() -> Config:
 
 
 def _reset_config_for_testing(config: Config | None = None) -> None:
-    """Reset the config cache. For use in tests only.
-
-    If config is None, the next get_config() will reload from env/file.
-    If config is provided, the next get_config() will return it until reset again.
-    """
+    """Reset config cache; for tests only."""
     global _config_cache
     _config_cache = config
 
 
 def _load_config_impl() -> Config:
-    """Load configuration from env and optional config file. Internal only."""
+    """Load config from env and optional file; internal only."""
     index_dir = _resolve_index_dir()
 
     cfg_path = _resolve_config_path(index_dir)
@@ -221,18 +196,7 @@ def _load_config_impl() -> Config:
 
 
 def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
-    """Apply validated overrides to the default configuration.
-
-    Args:
-        overrides: Raw overrides loaded from the YAML config file.
-        index_dir: Resolved index directory to inject into the result.
-
-    Returns:
-        Config: New configuration instance with overrides applied.
-
-    Raises:
-        ConfigError: If overrides contain unknown top-level or nested keys.
-    """
+    """Apply validated overrides to default config."""
     base: dict[str, Any] = asdict(Config())
 
     def _merge_section(
@@ -240,7 +204,7 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
         override_val: Any,
         path: str,
     ) -> Any:
-        """Recursively merge one config section, validating unknown keys."""
+        """Merge config section; validate unknown keys."""
         if not isinstance(default_val, dict) or not isinstance(override_val, dict):
             return override_val
 
