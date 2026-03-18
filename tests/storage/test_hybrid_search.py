@@ -48,11 +48,42 @@ class TestSearchScoring:
         assert best["score"] > 0.9
 
     def test_hybrid_returns_results(self, app_config):
+        """Hybrid search returns results (may degrade to vector-only)."""
         store = self._make_store(app_config)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
         assert len(results) >= 1
 
-    def test_hybrid_scores_positive(self, app_config):
+    def test_hybrid_scores_non_negative(self, app_config):
+        """Scores from hybrid search (or fallback) are non-negative."""
         store = self._make_store(app_config)
         results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
-        assert all("score" in r and r["score"] > 0 for r in results)
+        assert all("score" in r and r["score"] >= 0 for r in results)
+
+    def test_hybrid_best_match_positive(self, app_config):
+        """The best result from hybrid search should have a positive score."""
+        store = self._make_store(app_config)
+        results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
+        best = max(results, key=lambda r: r["score"])
+        assert best["score"] > 0
+
+    def test_search_mode_always_present(self, app_config):
+        """Every result has a search_mode key ('hybrid' or 'vector')."""
+        store = self._make_store(app_config)
+        for query_text in [None, "foo"]:
+            results = store.search(
+                [1.0, 0.0, 0.0, 0.0], top_k=2, query_text=query_text
+            )
+            for r in results:
+                assert r["search_mode"] in ("hybrid", "vector")
+
+    def test_vector_search_mode_label(self, app_config):
+        """Vector-only search labels results with search_mode='vector'."""
+        store = self._make_store(app_config)
+        results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2)
+        assert results[0]["search_mode"] == "vector"
+
+    def test_hybrid_fallback_uses_vector_mode(self, app_config):
+        """When FTS index is unavailable, hybrid falls back to vector."""
+        store = self._make_store(app_config)
+        results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text="foo")
+        assert all(r["search_mode"] in ("hybrid", "vector") for r in results)

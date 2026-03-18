@@ -1,7 +1,8 @@
-"""Tests for indexer.storage.lancedb."""
+"""Tests for coderay.storage.lancedb."""
 
 import pytest
 
+from coderay.core.errors import EmbeddingDimensionError
 from coderay.core.models import Chunk
 from coderay.storage.lancedb import Store, index_exists
 
@@ -136,7 +137,7 @@ class TestStore:
                 content="x",
             )
         ]
-        with pytest.raises(ValueError, match="dimension"):
+        with pytest.raises(EmbeddingDimensionError, match="dimension"):
             store.insert_chunks(chunks, [[1.0, 2.0]])
 
     def test_empty_insert_noop(self, app_config):
@@ -157,6 +158,22 @@ class TestStore:
         ]
         with pytest.raises(ValueError, match="mismatch"):
             store.insert_chunks(chunks, [])
+
+    def test_search_mode_in_results(self, app_config):
+        """Vector-only search includes search_mode='vector' in results."""
+        store = Store()
+        chunks = [
+            Chunk(
+                path="a.py",
+                start_line=1,
+                end_line=3,
+                symbol="foo",
+                content="def foo(): pass",
+            )
+        ]
+        store.insert_chunks(chunks, [[1.0, 2.0, 3.0, 4.0]])
+        results = store.search([1.0, 2.0, 3.0, 4.0], top_k=5)
+        assert results[0]["search_mode"] == "vector"
 
 
 class TestIndexExists:

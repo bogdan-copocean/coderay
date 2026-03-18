@@ -1,23 +1,67 @@
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import lancedb
+from lancedb.rerankers import RRFReranker
 
 from coderay.core.config import get_config
+from coderay.core.errors import EmbeddingDimensionError, ScoreExtractionError
 from coderay.core.models import Chunk
 
 logger = logging.getLogger(__name__)
 
 TABLE_NAME = "chunks"
 
+_RERANKER = RRFReranker()
+
+_HYBRID_FAILURE_WARN_THRESHOLD = 3
+
+
+class _ScoreField(Enum):
+    """Known LanceDB score column names, keyed by search mode."""
+
+    RELEVANCE = "_relevance_score"
+    DISTANCE = "_distance"
+
 
 def index_exists(index_dir: str | Path) -> bool:
-    """True if a LanceDB index (chunks table) exists at index_dir."""
+    """True if a LanceDB index (chunks table) exists at *index_dir*."""
     path = Path(index_dir)
     return (path / f"{TABLE_NAME}.lance").is_dir()
+
+
+def _extract_score(row: dict[str, Any], mode: _ScoreField) -> float:
+    """Extract a higher-is-better score from a LanceDB result row.
+
+    Deterministic extraction based on the search mode rather than
+    guessing which field LanceDB happened to return.
+
+    Args:
+        row: Mutable dict; recognised score keys are popped.
+        mode: Which score field to expect.
+
+    Raises:
+        ScoreExtractionError: If the expected field is missing.
+    """
+    field = mode.value
+    if field not in row:
+        raise ScoreExtractionError(
+            f"Expected score field '{field}' not found in LanceDB row. "
+            f"Available keys: {sorted(row.keys())}. "
+            f"This likely indicates a LanceDB version incompatibility."
+        )
+    raw = float(row.pop(field))
+
+    for key in ("_relevance_score", "_distance", "distance", "score"):
+        row.pop(key, None)
+
+    if mode == _ScoreField.DISTANCE:
+        return 1.0 - raw
+    return raw
 
 
 class Store:
@@ -33,12 +77,16 @@ class Store:
         self._ensure_dir()
         self._db = lancedb.connect(str(self.db_path))
         self._table_known = False
+        self._cached_table = None
         self._fts_stale = True
+        self._hybrid_failures = 0
 
     def _ensure_dir(self) -> None:
+        """Create the database directory if it does not exist."""
         self.db_path.mkdir(parents=True, exist_ok=True)
 
     def _table_exists(self) -> bool:
+        """Return True when the chunks table is present."""
         if self._table_known:
             return True
         resp = self._db.list_tables()
@@ -53,10 +101,20 @@ class Store:
         chunks: list[Chunk],
         embeddings: list[list[float]],
     ) -> list[dict[str, Any]]:
+        """Convert chunks + embeddings to row dicts for LanceDB.
+
+        Args:
+            chunks: Parsed code chunks.
+            embeddings: Matching embedding vectors.
+
+        Raises:
+            EmbeddingDimensionError: If any vector's length differs from
+                the configured store dimensions.
+        """
         rows = []
         for chunk, emb in zip(chunks, embeddings, strict=False):
             if len(emb) != self.dimensions:
-                raise ValueError(
+                raise EmbeddingDimensionError(
                     f"Embedding dimension {len(emb)} "
                     f"!= store dimension {self.dimensions}"
                 )
@@ -74,14 +132,18 @@ class Store:
 
     def _get_table(self):
         """Return the chunks table, caching the reference after first open."""
-        if not hasattr(self, "_cached_table") or self._cached_table is None:
+        if self._cached_table is None:
             self._cached_table = self._db.open_table(TABLE_NAME)
         return self._cached_table
 
     def _ensure_fts_index(self, table) -> None:
-        """Create or replace the full-text search index on the content column."""
+        """Create or replace the Tantivy FTS index on the content column."""
         try:
-            table.create_fts_index("content", replace=True)
+            table.create_fts_index(
+                "content",
+                replace=True,
+                use_tantivy=True,
+            )
         except Exception as exc:
             logger.warning(
                 "FTS index creation failed; hybrid search may degrade to "
@@ -94,7 +156,16 @@ class Store:
         chunks: list[Chunk],
         embeddings: list[list[float]],
     ) -> None:
-        """Insert chunks and their embeddings. Lengths must match."""
+        """Insert chunks and their embeddings.
+
+        Args:
+            chunks: Code chunks to store.
+            embeddings: Embedding vectors (must match chunks length).
+
+        Raises:
+            EmbeddingDimensionError: On dimension mismatch.
+            ValueError: When chunks and embeddings lengths differ.
+        """
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings length mismatch")
         if not chunks:
@@ -143,74 +214,92 @@ class Store:
         table = self._get_table()
 
         use_hybrid = bool(query_text)
+        rows = None
+
         if use_hybrid:
-            if self._fts_stale:
-                self._ensure_fts_index(table)
-                self._fts_stale = False
-            try:
-                query = (
-                    table.search(query_type="hybrid")
-                    .vector(query_embedding)
-                    .distance_type(self.metric)
-                    .text(query_text)
-                )
-            except Exception:
-                logger.warning(
-                    "Hybrid search failed, falling back to vector-only. "
-                    "FTS index may be corrupted — rebuild with 'coderay build'.",
-                    exc_info=True,
-                )
-                query = table.search(query_embedding).distance_type(self.metric)
+            rows = self._try_hybrid_search(
+                table, query_embedding, query_text, top_k, path_prefix
+            )
+            if rows is None:
                 use_hybrid = False
-        else:
-            query = table.search(query_embedding).distance_type(self.metric)
 
-        if path_prefix:
-            prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
-            query = query.where(f"path LIKE '{prefix}%'")
+        if rows is None:
+            rows = self._vector_search(
+                table, query_embedding, top_k, path_prefix
+            )
 
-        query = query.limit(top_k)
-        rows = query.to_list()
+        if use_hybrid:
+            self._hybrid_failures = 0
 
+        score_mode = (
+            _ScoreField.RELEVANCE if use_hybrid else _ScoreField.DISTANCE
+        )
         search_mode = "hybrid" if use_hybrid else "vector"
+
         results = []
         for r in rows:
             row = dict(r)
-            row["score"] = round(float(self._extract_score(row)), 4)
+            row["score"] = round(float(_extract_score(row, score_mode)), 4)
             row["search_mode"] = search_mode
             row.pop("vector", None)
             results.append(row)
 
         return results
 
-    @staticmethod
-    def _extract_score(row: dict[str, Any]) -> float:
-        """Extract a higher-is-better score from a LanceDB result row.
+    def _try_hybrid_search(
+        self,
+        table,
+        query_embedding: list[float],
+        query_text: str,
+        top_k: int,
+        path_prefix: str | None,
+    ) -> list[dict] | None:
+        """Attempt hybrid search; return None on failure to trigger fallback."""
+        if self._fts_stale:
+            self._ensure_fts_index(table)
+            self._fts_stale = False
+        try:
+            query = (
+                table.search(query_type="hybrid")
+                .vector(query_embedding)
+                .text(query_text)
+                .rerank(reranker=_RERANKER)
+            )
+            if path_prefix:
+                prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
+                query = query.where(f"path LIKE '{prefix}%'")
+            return query.limit(top_k).to_list()
+        except Exception:
+            self._hybrid_failures += 1
+            if self._hybrid_failures >= _HYBRID_FAILURE_WARN_THRESHOLD:
+                logger.error(
+                    "Hybrid search has failed %d consecutive times. "
+                    "FTS index is likely corrupted — rebuild with "
+                    "'coderay build --full'.",
+                    self._hybrid_failures,
+                )
+            else:
+                logger.warning(
+                    "Hybrid search failed, falling back to vector-only. "
+                    "FTS index may be corrupted — rebuild with "
+                    "'coderay build'.",
+                    exc_info=True,
+                )
+            return None
 
-        Handles both hybrid (_relevance_score) and vector (_distance)
-        output formats.  Logs a warning if the row contains no
-        recognised score field.
-
-        Args:
-            row: Mutable dict; recognised score keys are popped.
-        """
-        if "_relevance_score" in row:
-            score = row.pop("_relevance_score")
-            row.pop("_distance", None)
-            return float(score)
-
-        if "_distance" in row:
-            return 1.0 - float(row.pop("_distance"))
-
-        if "distance" in row:
-            return float(row.pop("distance"))
-
-        logger.warning(
-            "No recognised score field in LanceDB row (keys: %s); "
-            "defaulting to 0.0. This may indicate a LanceDB version change.",
-            list(row.keys()),
-        )
-        return 0.0
+    def _vector_search(
+        self,
+        table,
+        query_embedding: list[float],
+        top_k: int,
+        path_prefix: str | None,
+    ) -> list[dict]:
+        """Execute vector-only search."""
+        query = table.search(query_embedding).distance_type(self.metric)
+        if path_prefix:
+            prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
+            query = query.where(f"path LIKE '{prefix}%'")
+        return query.limit(top_k).to_list()
 
     def chunk_count(self) -> int:
         """Total number of chunks in the store."""
@@ -223,43 +312,41 @@ class Store:
         limit: int = 500,
         path_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List indexed chunks (no vectors). For visualization / debugging."""
+        """List indexed chunks (no vectors).
+
+        Args:
+            limit: Maximum rows to return.
+            path_prefix: Restrict to paths under this directory.
+        """
         if not self._table_exists():
             return []
         table = self._get_table()
-        n = table.count_rows()
-        if n == 0:
+        if table.count_rows() == 0:
             return []
 
         col_names = ["path", "start_line", "end_line", "symbol"]
 
         if path_prefix:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
-            try:
-                arrow = (
-                    table.search()
-                    .where(f"path LIKE '{prefix}%'")
-                    .select(col_names)
-                    .limit(limit)
-                    .to_arrow()
-                )
-            except Exception:
-                arrow = table.head(min(n, limit * 2))
-                arrow = arrow.select(col_names)
-                rows = arrow.to_pylist()
-                pfix = path_prefix.rstrip("/") + "/"
-                return [r for r in rows if str(r.get("path", "")).startswith(pfix)][
-                    :limit
-                ]
+            arrow = (
+                table.search()
+                .where(f"path LIKE '{prefix}%'")
+                .select(col_names)
+                .limit(limit)
+                .to_arrow()
+            )
         else:
-            to_read = min(n, limit)
-            arrow = table.head(to_read)
-            arrow = arrow.select(col_names)
+            to_read = min(table.count_rows(), limit)
+            arrow = table.head(to_read).select(col_names)
 
         return arrow.to_pylist()[:limit]
 
     def chunks_by_path(self) -> dict[str, int]:
-        """Return mapping of file path -> chunk count for the whole index."""
+        """Return mapping of file path to chunk count.
+
+        Uses Lance columnar read + pandas for aggregation instead of
+        loading every row into Python dicts.
+        """
         if not self._table_exists():
             return {}
         table = self._get_table()
