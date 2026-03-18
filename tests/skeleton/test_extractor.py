@@ -2,26 +2,6 @@
 
 from coderay.skeleton.extractor import extract_skeleton
 
-
-class TestExtractSkeleton:
-    def test_returns_original_content_for_unsupported_language(self) -> None:
-        """Ensure non-supported files are passed through unchanged."""
-        content = "just some text"
-        result = extract_skeleton("notes.txt", content)
-        assert result == content
-
-    def test_simple_function_signature(self) -> None:
-        """Extract a single Python function signature with ellipsis."""
-        code = "def hello(name: str) -> str:\n    return f'hi {name}'\n"
-        result = extract_skeleton("example.py", code)
-        assert "def hello" in result
-        assert "..." in result
-
-
-"""Tests for file skeleton extraction."""
-
-from coderay.skeleton.extractor import extract_skeleton
-
 SAMPLE_PYTHON = '''
 import os
 from pathlib import Path
@@ -48,8 +28,21 @@ def helper_function(x: int) -> int:
 
 
 class TestExtractSkeleton:
-    def test_extracts_imports(self):
-        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)
+    def test_returns_original_content_for_unsupported_language(self) -> None:
+        """Ensure non-supported files are passed through unchanged."""
+        content = "just some text"
+        result = extract_skeleton("notes.txt", content)
+        assert result == content
+
+    def test_simple_function_signature(self) -> None:
+        """Extract a single Python function signature with ellipsis."""
+        code = "def hello(name: str) -> str:\n    return f'hi {name}'\n"
+        result = extract_skeleton("example.py", code)
+        assert "def hello" in result
+        assert "..." in result
+
+    def test_extracts_imports_when_requested(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, include_imports=True)
         assert "import os" in skeleton
         assert "from pathlib import Path" in skeleton
 
@@ -97,13 +90,14 @@ class TestExtractSkeleton:
         self, tree_sitter_playground_source, expected_tree_sitter_playground_skeleton
     ):
         """Verify skeleton extraction for the eclectic tree_sitter_playground module."""
-        skeleton = extract_skeleton(*tree_sitter_playground_source)
+        path, source = tree_sitter_playground_source
+        skeleton = extract_skeleton(path, source, include_imports=True)
         assert skeleton == expected_tree_sitter_playground_skeleton
 
-    def test_include_imports_true_by_default(self):
+    def test_include_imports_false_by_default(self):
         skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)
-        assert "import os" in skeleton
-        assert "from pathlib import Path" in skeleton
+        assert "import os" not in skeleton
+        assert "from pathlib import Path" not in skeleton
 
     def test_include_imports_false_omits_imports(self):
         skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, include_imports=False)
@@ -116,3 +110,29 @@ class TestExtractSkeleton:
         assert "def create_user" in skeleton
         assert "def helper_function" in skeleton
         assert "MY_CONST = 42" in skeleton
+
+    def test_symbol_filter_class(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="UserService")
+        assert "class UserService:" in skeleton
+        assert "def create_user" in skeleton
+        assert "def delete_user" in skeleton
+        assert "def helper_function" not in skeleton
+        assert "MY_CONST" not in skeleton
+
+    def test_symbol_filter_function(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="helper_function")
+        assert "def helper_function" in skeleton
+        assert "class UserService" not in skeleton
+
+    def test_symbol_filter_no_match(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="NonExistent")
+        assert "class UserService" not in skeleton
+        assert "def helper_function" not in skeleton
+        assert "MY_CONST" not in skeleton
+
+    def test_symbol_filter_omits_imports(self):
+        skeleton = extract_skeleton(
+            "test.py", SAMPLE_PYTHON, include_imports=True, symbol="UserService"
+        )
+        assert "import os" not in skeleton
+        assert "class UserService:" in skeleton

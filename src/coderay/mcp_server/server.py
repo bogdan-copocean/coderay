@@ -167,9 +167,18 @@ def get_file_skeleton(
         bool,
         Field(
             description="Include import statements in the skeleton. "
-            "Set to false to reduce noise when you only need signatures.",
+            "Defaults to false; pass true to include imports.",
         ),
-    ] = True,
+    ] = False,
+    symbol: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Filter to a specific class or top-level function by name, "
+                "e.g. 'MyClass' or 'parse_config'."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Get the API surface of a file (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
@@ -183,7 +192,9 @@ def get_file_skeleton(
     if not candidate.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
     content = candidate.read_text(encoding="utf-8", errors="replace")
-    return extract_skeleton(candidate, content, include_imports=include_imports)
+    return extract_skeleton(
+        candidate, content, include_imports=include_imports, symbol=symbol
+    )
 
 
 @mcp.tool(
