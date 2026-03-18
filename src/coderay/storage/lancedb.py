@@ -73,14 +73,21 @@ class Store:
         return rows
 
     def _get_table(self):
-        return self._db.open_table(TABLE_NAME)
+        """Return the chunks table, caching the reference after first open."""
+        if not hasattr(self, "_cached_table") or self._cached_table is None:
+            self._cached_table = self._db.open_table(TABLE_NAME)
+        return self._cached_table
 
     def _ensure_fts_index(self, table) -> None:
         """Create or replace the full-text search index on the content column."""
         try:
             table.create_fts_index("content", replace=True)
         except Exception as exc:
-            logger.debug("FTS index creation skipped: %s", exc)
+            logger.warning(
+                "FTS index creation failed; hybrid search may degrade to "
+                "vector-only: %s",
+                exc,
+            )
 
     def insert_chunks(
         self,
@@ -96,6 +103,7 @@ class Store:
         if not self._table_exists():
             self._db.create_table(TABLE_NAME, rows)
             self._table_known = True
+            self._cached_table = None
         else:
             self._get_table().add(rows)
         self._fts_stale = True
@@ -118,7 +126,18 @@ class Store:
         path_prefix: str | None = None,
         query_text: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Nearest-neighbor search with optional hybrid scoring."""
+        """Nearest-neighbor search with optional hybrid scoring.
+
+        Args:
+            query_embedding: Dense vector for the query.
+            top_k: Maximum results to return.
+            path_prefix: Restrict to paths under this directory.
+            query_text: When provided, enables hybrid (vector + BM25) search.
+
+        Returns:
+            Result dicts with a ``score`` key (higher is better) and a
+            ``search_mode`` key (``"hybrid"`` or ``"vector"``).
+        """
         if not self._table_exists():
             return []
         table = self._get_table()
@@ -136,6 +155,11 @@ class Store:
                     .text(query_text)
                 )
             except Exception:
+                logger.warning(
+                    "Hybrid search failed, falling back to vector-only. "
+                    "FTS index may be corrupted — rebuild with 'coderay build'.",
+                    exc_info=True,
+                )
                 query = table.search(query_embedding).distance_type(self.metric)
                 use_hybrid = False
         else:
@@ -148,21 +172,45 @@ class Store:
         query = query.limit(top_k)
         rows = query.to_list()
 
+        search_mode = "hybrid" if use_hybrid else "vector"
         results = []
         for r in rows:
             row = dict(r)
-            if "_relevance_score" in row:
-                score = row.pop("_relevance_score")
-                row.pop("_distance", None)
-            elif "_distance" in row:
-                score = 1.0 - row.pop("_distance")
-            else:
-                score = row.pop("distance", 0.0)
-            row["score"] = round(float(score), 4)
+            row["score"] = round(float(self._extract_score(row)), 4)
+            row["search_mode"] = search_mode
             row.pop("vector", None)
             results.append(row)
 
         return results
+
+    @staticmethod
+    def _extract_score(row: dict[str, Any]) -> float:
+        """Extract a higher-is-better score from a LanceDB result row.
+
+        Handles both hybrid (_relevance_score) and vector (_distance)
+        output formats.  Logs a warning if the row contains no
+        recognised score field.
+
+        Args:
+            row: Mutable dict; recognised score keys are popped.
+        """
+        if "_relevance_score" in row:
+            score = row.pop("_relevance_score")
+            row.pop("_distance", None)
+            return float(score)
+
+        if "_distance" in row:
+            return 1.0 - float(row.pop("_distance"))
+
+        if "distance" in row:
+            return float(row.pop("distance"))
+
+        logger.warning(
+            "No recognised score field in LanceDB row (keys: %s); "
+            "defaulting to 0.0. This may indicate a LanceDB version change.",
+            list(row.keys()),
+        )
+        return 0.0
 
     def chunk_count(self) -> int:
         """Total number of chunks in the store."""
@@ -259,4 +307,5 @@ class Store:
         if self._table_exists():
             self._db.drop_table(TABLE_NAME)
             self._table_known = False
+            self._cached_table = None
             self._fts_stale = True

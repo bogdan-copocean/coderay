@@ -2,7 +2,11 @@
 
 import pytest
 
-from coderay.retrieval.models import DEFAULT_MAX_CONTENT_LINES, SearchResult
+from coderay.retrieval.models import (
+    DEFAULT_MAX_CONTENT_LINES,
+    SearchResult,
+    is_test_path,
+)
 
 
 def _make_row(content: str = "line\n" * 10, score: float = 0.85) -> dict:
@@ -148,28 +152,68 @@ class TestSearchResultToDict:
         with pytest.raises(AttributeError):
             result.content = "mutated"  # type: ignore[misc]
 
-    def test_low_confidence_absent_without_top_score(self):
+    def test_low_confidence_absent_by_default(self):
         result = SearchResult.from_raw(_make_row(score=0.5))
         d = result.to_dict()
         assert "low_confidence" not in d
 
-    def test_low_confidence_false_when_above_threshold(self):
-        result = SearchResult.from_raw(_make_row(score=0.5))
-        d = result.to_dict(top_score=1.0)
-        assert d["low_confidence"] is False
-
-    def test_low_confidence_true_when_below_threshold(self):
-        result = SearchResult.from_raw(_make_row(score=0.1))
-        d = result.to_dict(top_score=1.0)
+    def test_low_confidence_included_when_true(self):
+        result = SearchResult(
+            path="a.py",
+            start_line=1,
+            end_line=10,
+            symbol="foo",
+            content="x",
+            score=0.1,
+            low_confidence=True,
+        )
+        d = result.to_dict()
         assert d["low_confidence"] is True
 
-    def test_low_confidence_at_exact_boundary(self):
-        result = SearchResult.from_raw(_make_row(score=0.3))
-        d = result.to_dict(top_score=1.0)
-        # Exactly at 30% boundary → not low confidence (< not <=)
-        assert d["low_confidence"] is False
 
-    def test_low_confidence_top_result_never_flagged(self):
-        result = SearchResult.from_raw(_make_row(score=0.8))
-        d = result.to_dict(top_score=0.8)
-        assert d["low_confidence"] is False
+class TestContains:
+    """Tests for SearchResult.contains()."""
+
+    def test_same_range(self):
+        a = SearchResult("a.py", 1, 10, "f", "", score=0.9)
+        b = SearchResult("a.py", 1, 10, "g", "", score=0.8)
+        assert a.contains(b) is True
+
+    def test_outer_contains_inner(self):
+        outer = SearchResult("a.py", 1, 50, "Cls", "", score=0.9)
+        inner = SearchResult("a.py", 10, 30, "Cls.method", "", score=0.8)
+        assert outer.contains(inner) is True
+        assert inner.contains(outer) is False
+
+    def test_different_files(self):
+        a = SearchResult("a.py", 1, 100, "f", "", score=0.9)
+        b = SearchResult("b.py", 10, 30, "g", "", score=0.8)
+        assert a.contains(b) is False
+
+    def test_partial_overlap(self):
+        a = SearchResult("a.py", 1, 20, "f", "", score=0.9)
+        b = SearchResult("a.py", 15, 35, "g", "", score=0.8)
+        assert a.contains(b) is False
+        assert b.contains(a) is False
+
+
+class TestIsTestPath:
+    """Tests for the is_test_path helper."""
+
+    def test_test_directory(self):
+        assert is_test_path("src/tests/test_foo.py") is True
+
+    def test_test_prefix(self):
+        assert is_test_path("test_foo.py") is True
+
+    def test_test_suffix(self):
+        assert is_test_path("foo_test.py") is True
+
+    def test_conftest(self):
+        assert is_test_path("tests/conftest.py") is True
+
+    def test_production_file(self):
+        assert is_test_path("src/coderay/retrieval/search.py") is False
+
+    def test_init_file(self):
+        assert is_test_path("src/coderay/__init__.py") is False

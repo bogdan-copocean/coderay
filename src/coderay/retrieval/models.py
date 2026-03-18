@@ -4,6 +4,21 @@ from dataclasses import dataclass
 
 DEFAULT_MAX_CONTENT_LINES: int = 60
 
+_TEST_PATH_PATTERNS: tuple[str, ...] = (
+    "/tests/",
+    "/test/",
+    "/test_",
+    "_test.py",
+    "/conftest.py",
+    "/conftest_",
+)
+
+
+def is_test_path(path: str) -> bool:
+    """Return True if *path* looks like a test file."""
+    normalised = f"/{path}"
+    return any(p in normalised for p in _TEST_PATH_PATTERNS)
+
 
 @dataclass(frozen=True)
 class SearchResult:
@@ -16,6 +31,7 @@ class SearchResult:
     content: str
     score: float = 0.0
     truncated: bool = False
+    low_confidence: bool = False
 
     @classmethod
     def from_raw(
@@ -51,14 +67,19 @@ class SearchResult:
             truncated=truncated,
         )
 
-    def to_dict(self, *, top_score: float | None = None) -> dict:
-        """Serialize to a JSON-compatible dict for the MCP response.
+    def contains(self, other: SearchResult) -> bool:
+        """Return True if this result's span fully encloses *other*.
 
-        Args:
-            top_score: When provided, a ``low_confidence`` flag is added
-                to the output.  Results scoring below 30 % of the top
-                score are flagged.
+        Both results must be in the same file.
         """
+        return (
+            self.path == other.path
+            and self.start_line <= other.start_line
+            and self.end_line >= other.end_line
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize to a JSON-compatible dict for the MCP response."""
         d: dict = {
             "path": self.path,
             "start_line": self.start_line,
@@ -69,7 +90,6 @@ class SearchResult:
         }
         if self.truncated:
             d["truncated"] = True
-        if top_score is not None:
-            threshold = top_score * 0.3
-            d["low_confidence"] = self.score < threshold
+        if self.low_confidence:
+            d["low_confidence"] = True
         return d
