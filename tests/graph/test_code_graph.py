@@ -769,3 +769,72 @@ class TestCodeGraph:
         result = ImpactResult(resolved_node="a.py::Foo.bar", nodes=[])
         d = result.to_dict()
         assert "resolution_warning" not in d
+
+    # ------------------------------------------------------------------
+    # Bare-name phantom deduplication (common method names)
+    # ------------------------------------------------------------------
+
+    def test_bare_name_targets_excluded_when_method_name_ambiguous(self):
+        """Querying a method with overloaded name (get, post) does not include bare phantom callers.
+
+        When multiple nodes share the same name (e.g. many classes have .get),
+        the bare phantom 'get' aggregates callers of all of them. Including it
+        would produce massive false positives. We only use bare name when unique.
+        """
+        g = CodeGraph()
+        resource_a = GraphNode(
+            id="api.py::ResourceA.get",
+            kind=NodeKind.FUNCTION,
+            file_path="api.py",
+            start_line=1,
+            end_line=5,
+            name="get",
+            qualified_name="ResourceA.get",
+        )
+        resource_b = GraphNode(
+            id="api.py::ResourceB.get",
+            kind=NodeKind.FUNCTION,
+            file_path="api.py",
+            start_line=10,
+            end_line=15,
+            name="get",
+            qualified_name="ResourceB.get",
+        )
+        unrelated_caller = _make_node(
+            "tests.py::test_s3_get", NodeKind.FUNCTION, "test_s3_get", file_path="tests.py"
+        )
+        g.add_node(resource_a)
+        g.add_node(resource_b)
+        g.add_node(unrelated_caller)
+        g.add_edge(_make_edge("tests.py::test_s3_get", "get", EdgeKind.CALLS))
+
+        result = g.get_impact_radius("api.py::ResourceA.get", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "tests.py::test_s3_get" not in ids
+
+    def test_bare_name_targets_included_when_method_name_unique(self):
+        """Querying a method with unique name includes callers of the bare phantom.
+
+        DI-style calls like processor.delete_user_async() create edges to the
+        bare name. When that name is unique, we correctly attribute those callers.
+        """
+        g = CodeGraph()
+        method = GraphNode(
+            id="svc.py::UserService.delete_user_async",
+            kind=NodeKind.FUNCTION,
+            file_path="svc.py",
+            start_line=1,
+            end_line=5,
+            name="delete_user_async",
+            qualified_name="UserService.delete_user_async",
+        )
+        caller = _make_node(
+            "views.py::handle_delete", NodeKind.FUNCTION, "handle_delete", file_path="views.py"
+        )
+        g.add_node(method)
+        g.add_node(caller)
+        g.add_edge(_make_edge("views.py::handle_delete", "delete_user_async", EdgeKind.CALLS))
+
+        result = g.get_impact_radius("svc.py::UserService.delete_user_async", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "views.py::handle_delete" in ids
