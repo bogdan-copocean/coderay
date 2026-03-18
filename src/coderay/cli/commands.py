@@ -139,15 +139,13 @@ def search_cmd(
         return
 
     for i, r in enumerate(results, 1):
-        path = r.get("path", "?")
-        start = r.get("start_line", 0)
-        end = r.get("end_line", 0)
-        symbol = r.get("symbol", "?")
-        preview = (r.get("content") or "")[:200].replace("\n", " ")
-        if len(r.get("content") or "") > 200:
+        preview = (r.content or "")[:200].replace("\n", " ")
+        if len(r.content or "") > 200:
             preview += "..."
         click.echo("")
-        click.echo(_color(f"  {i}. {path}:{start}-{end} ({symbol})", GREEN))
+        click.echo(
+            _color(f"  {i}. {r.path}:{r.start_line}-{r.end_line} ({r.symbol})", GREEN)
+        )
         click.echo(f"     {preview}")
 
 

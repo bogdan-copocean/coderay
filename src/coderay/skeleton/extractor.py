@@ -14,7 +14,8 @@ def extract_skeleton(
     path: str | Path,
     content: str,
     *,
-    include_imports: bool = True,
+    include_imports: bool = False,
+    symbol: str | None = None,
 ) -> str:
     """Extract the skeleton of a source file (signatures, no bodies).
 
@@ -23,12 +24,16 @@ def extract_skeleton(
         content: Full file content.
         include_imports: When False, import statements are omitted from
             the output to reduce noise.
+        symbol: When provided, only the skeleton of the matching
+            top-level class or function is returned.
     """
     ctx = parse_file(path, content)
     if ctx is None:
         return content
 
-    parser = SkeletonTreeSitterParser(ctx, include_imports=include_imports)
+    parser = SkeletonTreeSitterParser(
+        ctx, include_imports=include_imports, symbol=symbol
+    )
     try:
         lines = parser.collect_lines()
     except Exception:  # pragma: no cover - defensive fallback
@@ -40,9 +45,16 @@ def extract_skeleton(
 class SkeletonTreeSitterParser(BaseTreeSitterParser):
     """Tree-sitter based skeleton extractor for source files."""
 
-    def __init__(self, context, *, include_imports: bool = True) -> None:
+    def __init__(
+        self,
+        context,
+        *,
+        include_imports: bool = True,
+        symbol: str | None = None,
+    ) -> None:
         super().__init__(context)
         self._include_imports = include_imports
+        self._symbol = symbol
 
     def collect_lines(self) -> list[str]:
         """Return the skeleton of a file as a list of lines."""
@@ -96,6 +108,40 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         first_line = text.split("\n")[0]
         return first_line
 
+    def _node_name(self, node) -> str | None:
+        """Extract the declared name from a class or function node."""
+        name_node = node.child_by_field_name("name")
+        if name_node is not None:
+            return self.node_text(name_node).strip()
+        return None
+
+    def _matches_symbol(self, node, depth: int) -> bool:
+        """Return True if *node* matches the active symbol filter.
+
+        When no filter is set, everything matches.  At depth 0 the
+        node's name must equal the first component of the symbol
+        (e.g. ``MyClass`` from ``MyClass.method``).  Deeper nodes
+        always match so the full subtree is emitted.
+        """
+        if self._symbol is None:
+            return True
+        if depth > 0:
+            return True
+        name = self._node_name(node)
+        target = self._symbol.split(".")[0] if "." in self._symbol else self._symbol
+        return name == target
+
+    def _decorated_inner(self, node):
+        """Return the inner class/function node from a decorated definition."""
+        lang_cfg = self._ctx.lang_cfg
+        for child in node.named_children:
+            if child.type in (
+                *lang_cfg.function_scope_types,
+                *lang_cfg.class_scope_types,
+            ):
+                return child
+        return None
+
     def _dfs(self, node, lines: list[str], depth: int) -> None:
         indent = "    " * depth
         ntype = node.type
@@ -115,20 +161,26 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         if ntype not in interesting:
             skel_cfg = lang_cfg.skeleton
             if depth == 0 and ntype in skel_cfg.top_level_expr_types:
-                text = self.node_text(node).strip()
-
-                if text and (text.startswith(('"""', "'''", '"', "'")) or "=" in text):
-                    lines.append(text)
+                if self._symbol is None:
+                    text = self.node_text(node).strip()
+                    if text and (
+                        text.startswith(('"""', "'''", '"', "'")) or "=" in text
+                    ):
+                        lines.append(text)
             for child in node.children:
                 self._dfs(child, lines, depth)
             return
 
         if ntype in lang_cfg.import_types:
-            if self._include_imports:
+            if self._include_imports and self._symbol is None:
                 lines.append(indent + self.node_text(node).strip())
             return
 
         if ntype in lang_cfg.decorator_scope_types:
+            inner = self._decorated_inner(node)
+            if inner is not None and not self._matches_symbol(inner, depth):
+                self._seen.add(node.id)
+                return
             for child in node.named_children:
                 if child.type == "decorator":
                     lines.append(indent + self.node_text(child).strip())
@@ -144,6 +196,9 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             return
 
         if ntype in lang_cfg.function_scope_types:
+            if not self._matches_symbol(node, depth):
+                self._seen.add(node.id)
+                return
             lines.append(indent + self._get_signature_line(node))
             if docstr := self._get_docstring(node):
                 lines.append(indent + "    " + docstr)
@@ -152,6 +207,9 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             return
 
         if ntype in lang_cfg.class_scope_types:
+            if not self._matches_symbol(node, depth):
+                self._seen.add(node.id)
+                return
             lines.append(indent + self._get_signature_line(node))
             if docstr := self._get_docstring(node):
                 lines.append(indent + "    " + docstr)

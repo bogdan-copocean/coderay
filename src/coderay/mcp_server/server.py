@@ -10,7 +10,6 @@ from pydantic import Field
 
 from coderay.core.config import get_config
 from coderay.mcp_server.errors import IndexNotBuiltError
-from coderay.retrieval.models import SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +80,10 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 @mcp.tool(
     description=(
         "Search code by meaning. Returns chunks ranked by relevance, "
-        "each with path, line range, symbol, and content. "
-        "Best for 'how/where' questions; use grep for exact symbols."
+        "each with path, line range, symbol, score, and content. "
+        "Best for 'how/where' questions; use grep for exact symbols. "
+        "Results below a significant score drop are flagged with "
+        "low_confidence=true."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
@@ -101,6 +102,15 @@ def semantic_search(
             ),
         ),
     ] = None,
+    include_tests: Annotated[
+        bool,
+        Field(
+            description=(
+                "Include test files in results. Set to false to see "
+                "only production code."
+            ),
+        ),
+    ] = True,
 ) -> dict:
     """Search the semantic index."""
     retrieval = _get_retrieval()
@@ -108,13 +118,13 @@ def semantic_search(
     if state is None:
         raise IndexNotBuiltError()
 
-    raw_results = retrieval.search(
+    results = retrieval.search(
         query=query,
         current_state=state,
         top_k=top_k,
         path_prefix=path_prefix,
+        include_tests=include_tests,
     )
-    results = [SearchResult.from_raw(r) for r in raw_results]
     return {"results": [r.to_dict() for r in results]}
 
 
@@ -136,9 +146,18 @@ def get_file_skeleton(
         bool,
         Field(
             description="Include import statements in the skeleton. "
-            "Set to false to reduce noise when you only need signatures.",
+            "Defaults to false; pass true to include imports.",
         ),
-    ] = True,
+    ] = False,
+    symbol: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Filter to a specific class or top-level function by name, "
+                "e.g. 'MyClass' or 'parse_config'."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Get the API surface of a file (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
@@ -152,15 +171,18 @@ def get_file_skeleton(
     if not candidate.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
     content = candidate.read_text(encoding="utf-8", errors="replace")
-    return extract_skeleton(candidate, content, include_imports=include_imports)
+    return extract_skeleton(
+        candidate, content, include_imports=include_imports, symbol=symbol
+    )
 
 
 @mcp.tool(
     description=(
         "Reverse dependency traversal: lists callers and dependents "
-        "of a function or class from the code graph. Returns empty "
-        "results when node_id has no dependents. "
-        "Static analysis only; dynamic dispatch may be missed."
+        "of a function or class from the code graph. "
+        "Static analysis only — blind spots include DI containers "
+        "(e.g. inject.instance()), dynamic dispatch, and untyped "
+        "factory returns. Supplement with grep for these patterns."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"analysis"},
