@@ -9,7 +9,7 @@ from coderay.chunking.chunker import chunk_file
 from coderay.core.config import Config, get_config
 from coderay.core.timing import timed, timed_phase
 from coderay.core.utils import files_with_changed_content, hash_content, read_from_path
-from coderay.embedding.base import Embedder, load_embedder_from_config
+from coderay.embedding.base import Embedder, EmbedTask, load_embedder_from_config
 from coderay.graph.builder import build_and_save_graph
 from coderay.state.machine import IndexMeta, StateMachine
 from coderay.state.version import check_index_version, write_index_version
@@ -267,7 +267,7 @@ class Indexer:
 
         texts = [c.content for c in chunks]
         with timed_phase("embedding"):
-            embeddings = self._embedder.embed(texts)
+            embeddings = self._embedder.embed(texts, task=EmbedTask.DOCUMENT)
 
         with timed_phase("storing"):
             self._store.insert_chunks(chunks, embeddings)

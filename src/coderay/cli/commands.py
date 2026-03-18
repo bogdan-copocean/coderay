@@ -13,7 +13,7 @@ from coderay.core.timing import timed_phase
 from coderay.pipeline.indexer import Indexer
 from coderay.retrieval.search import Retrieval
 from coderay.state.machine import StateMachine
-from coderay.storage.lancedb import index_exists
+from coderay.storage.lancedb import Store, index_exists
 
 # Load .env so configuration and environment variables are available.
 load_dotenv()
@@ -180,22 +180,22 @@ def list_cmd(
 
     config = get_config()
     index_dir = Path(config.index.path)
-    retrieval = Retrieval()
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
 
-    total = retrieval.chunk_count()
+    store = Store()
+    total = store.chunk_count()
     click.echo(_color(f"Total chunks: {total}", CYAN))
 
     if by_file:
-        by_path = retrieval.chunks_by_path()
+        by_path = store.chunks_by_path()
         for path in sorted(by_path.keys()):
             count = by_path[path]
             click.echo(f"  {path}: {count}")
         return
 
-    chunks = retrieval.list_chunks(limit=chunk_limit, path_prefix=path_prefix)
+    chunks = store.list_chunks(limit=chunk_limit, path_prefix=path_prefix)
     for i, row in enumerate(chunks, 1):
         path = row.get("path", "?")
         start = row.get("start_line", 0)
@@ -314,14 +314,15 @@ def graph_cmd(
 ) -> None:
     """List call and import graph edges (who calls who, who imports what)."""
     from coderay.core.config import get_config
+    from coderay.graph.builder import load_graph
 
     config = get_config()
     index_dir = Path(config.index.path)
-    retrieval = Retrieval()
     if not index_exists(index_dir):
         click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
         ctx.exit(1)
-    edges = retrieval.load_graph()
+    graph = load_graph(index_dir)
+    edges = graph.to_dict().get("edges", []) if graph else []
     if not edges:
         click.echo(
             _color(
