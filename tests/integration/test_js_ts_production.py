@@ -85,9 +85,20 @@ class TestJsProductionFixtures:
         nodes, edges = extract_graph_from_file(str(path), content)
 
         class_nodes = [n for n in nodes if n.kind == NodeKind.CLASS]
-        func_nodes = [n for n in nodes if n.kind == NodeKind.FUNCTION]
-
         assert any("UserService" in n.name for n in class_nodes) or len(nodes) >= 1
+
+    def test_graph_user_service_inherits(self) -> None:
+        """UserService extends BaseService produces INHERITS edge."""
+        path = FIXTURES_DIR / "userService.js"
+        content = path.read_text()
+        nodes, edges = extract_graph_from_file(str(path), content)
+
+        inherits = [e for e in edges if e.kind == EdgeKind.INHERITS]
+        assert len(inherits) >= 1
+        us_node = next((n for n in nodes if "UserService" in n.name and n.kind == NodeKind.CLASS), None)
+        assert us_node is not None
+        us_inherits = [e for e in inherits if e.source == us_node.id]
+        assert len(us_inherits) >= 1
 
 
 @pytest.mark.skipif(

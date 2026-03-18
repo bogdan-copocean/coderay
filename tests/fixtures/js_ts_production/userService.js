@@ -4,10 +4,11 @@
 
 import { db } from '../db/client';
 import { logger } from '../utils/logger';
+import { BaseService } from './baseService';
 
 const DEFAULT_LIMIT = 100;
 
-export class UserService {
+export class UserService extends BaseService {
     constructor(repository) {
         this.repository = repository;
     }

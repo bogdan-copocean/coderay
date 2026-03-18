@@ -106,9 +106,14 @@ class DefinitionHandlerMixin:
             GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
         )
 
-        # Extract base classes: class Dog(Animal) or class GuideDog(Dog, ABC)
+        # Extract base classes: Python (argument_list, superclass), JS/TS (extends_clause, class_heritage)
         for child in node.children:
-            if child.type not in ("argument_list", "superclass", "extends_clause"):
+            if child.type not in (
+                "argument_list",
+                "superclass",
+                "extends_clause",
+                "class_heritage",
+            ):
                 continue
             for base_name in self._get_base_classes_from_arg_list(child):
                 resolved = self._resolve_base_class(base_name)
@@ -127,15 +132,24 @@ class DefinitionHandlerMixin:
             self._dfs(child, scope_stack=new_scope)
 
     def _get_base_classes_from_arg_list(self, arg_list_node: TSNode) -> list[str]:
-        """Extract base class names from arg list."""
+        """Extract base class names from arg list or extends_clause."""
         base_types = (
             "identifier",
             "dotted_name",
             "attribute",
             "type_identifier",
+            "member_expression",
         )
         result: list[str] = []
-        for arg in arg_list_node.named_children:
+        candidates = arg_list_node.named_children
+        if not candidates and arg_list_node.type in ("extends_clause", "class_heritage"):
+            value = arg_list_node.child_by_field_name("value") or next(
+                (c for c in arg_list_node.children if c.type == "identifier"),
+                None,
+            )
+            if value:
+                candidates = [value]
+        for arg in candidates:
             if arg.type in base_types:
                 name = self.node_text(arg)
                 if name:

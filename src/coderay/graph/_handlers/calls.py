@@ -168,22 +168,38 @@ class CallHandlerMixin:
         """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
+        class_types = (
+            self._ctx.lang_cfg.class_scope_types
+            + self._ctx.lang_cfg.graph.extra_class_scope_types
+        )
 
-        for node in tree.root_node.children:
-            if node.type not in self._ctx.lang_cfg.class_scope_types:
-                continue
-            name_node = node.child_by_field_name("name") or (
-                node.named_children[0] if node.named_children else None
-            )
-            if not name_node or self.node_text(name_node) != target_class:
-                continue
+        def find_class(node: TSNode) -> TSNode | None:
+            if node.type in class_types:
+                name_node = node.child_by_field_name("name") or (
+                    node.named_children[0] if node.named_children else None
+                )
+                if name_node and self.node_text(name_node) == target_class:
+                    return node
             for child in node.children:
-                if child.type not in ("argument_list", "superclass", "extends_clause"):
-                    continue
-                bases = self._get_base_classes_from_arg_list(child)
-                if bases:
-                    return bases[0]
-            break
+                found = find_class(child)
+                if found:
+                    return found
+            return None
+
+        class_node = find_class(tree.root_node)
+        if not class_node:
+            return None
+        for child in class_node.children:
+            if child.type not in (
+                "argument_list",
+                "superclass",
+                "extends_clause",
+                "class_heritage",
+            ):
+                continue
+            bases = self._get_base_classes_from_arg_list(child)
+            if bases:
+                return bases[0]
         return None
 
     def _find_enclosing_class(self, scope_stack: list[str]) -> str | None:
