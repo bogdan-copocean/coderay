@@ -147,3 +147,29 @@ class TestSearchResultToDict:
         result = SearchResult.from_raw(_make_row())
         with pytest.raises(AttributeError):
             result.content = "mutated"  # type: ignore[misc]
+
+    def test_low_confidence_absent_without_top_score(self):
+        result = SearchResult.from_raw(_make_row(score=0.5))
+        d = result.to_dict()
+        assert "low_confidence" not in d
+
+    def test_low_confidence_false_when_above_threshold(self):
+        result = SearchResult.from_raw(_make_row(score=0.5))
+        d = result.to_dict(top_score=1.0)
+        assert d["low_confidence"] is False
+
+    def test_low_confidence_true_when_below_threshold(self):
+        result = SearchResult.from_raw(_make_row(score=0.1))
+        d = result.to_dict(top_score=1.0)
+        assert d["low_confidence"] is True
+
+    def test_low_confidence_at_exact_boundary(self):
+        result = SearchResult.from_raw(_make_row(score=0.3))
+        d = result.to_dict(top_score=1.0)
+        # Exactly at 30% boundary → not low confidence (< not <=)
+        assert d["low_confidence"] is False
+
+    def test_low_confidence_top_result_never_flagged(self):
+        result = SearchResult.from_raw(_make_row(score=0.8))
+        d = result.to_dict(top_score=0.8)
+        assert d["low_confidence"] is False

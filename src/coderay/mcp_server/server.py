@@ -37,6 +37,21 @@ mcp = FastMCP(
 _retrieval_cache: dict[Path, Any] = {}
 _state_machine_cache: dict[Path, Any] = {}
 
+_TEST_PATH_PATTERNS: tuple[str, ...] = (
+    "/tests/",
+    "/test/",
+    "/test_",
+    "_test.py",
+    "/conftest.py",
+    "/conftest_",
+)
+
+
+def _is_test_path(path: str) -> bool:
+    """Return True if *path* looks like a test file."""
+    normalised = f"/{path}"
+    return any(p in normalised for p in _TEST_PATH_PATTERNS)
+
 
 def _resolve_index_dir() -> Path:
     """Resolve the index directory to an absolute path."""
@@ -81,8 +96,10 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 @mcp.tool(
     description=(
         "Search code by meaning. Returns chunks ranked by relevance, "
-        "each with path, line range, symbol, and content. "
-        "Best for 'how/where' questions; use grep for exact symbols."
+        "each with path, line range, symbol, score, and content. "
+        "Best for 'how/where' questions; use grep for exact symbols. "
+        "Results include a low_confidence flag when a result's score "
+        "is well below the top hit."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
@@ -101,6 +118,15 @@ def semantic_search(
             ),
         ),
     ] = None,
+    include_tests: Annotated[
+        bool,
+        Field(
+            description=(
+                "Include test files in results. Set to false to see "
+                "only production code."
+            ),
+        ),
+    ] = True,
 ) -> dict:
     """Search the semantic index."""
     retrieval = _get_retrieval()
@@ -115,7 +141,12 @@ def semantic_search(
         path_prefix=path_prefix,
     )
     results = [SearchResult.from_raw(r) for r in raw_results]
-    return {"results": [r.to_dict() for r in results]}
+
+    if not include_tests:
+        results = [r for r in results if not _is_test_path(r.path)]
+
+    top_score = results[0].score if results else 0.0
+    return {"results": [r.to_dict(top_score=top_score) for r in results]}
 
 
 @mcp.tool(

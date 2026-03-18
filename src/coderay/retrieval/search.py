@@ -16,6 +16,50 @@ from coderay.storage.lancedb import Store, index_exists
 logger = logging.getLogger(__name__)
 
 
+def deduplicate_by_containment(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove results whose line range fully contains a more specific result.
+
+    When a class and one of its methods both appear in the result set
+    (same file, parent line range fully encloses child), the outer
+    (less specific) result is dropped.  The inner result is kept because
+    it is the more targeted match.
+
+    Args:
+        results: Ranked search results (highest score first).
+
+    Returns:
+        Filtered list with outer duplicates removed, order preserved.
+    """
+    if len(results) <= 1:
+        return results
+
+    # Index results by file for O(n*m) comparison within each file
+    by_file: dict[str, list[int]] = {}
+    for i, r in enumerate(results):
+        by_file.setdefault(r.get("path", ""), []).append(i)
+
+    drop: set[int] = set()
+    for indices in by_file.values():
+        if len(indices) < 2:
+            continue
+        for i in indices:
+            if i in drop:
+                continue
+            ri = results[i]
+            ri_start, ri_end = ri["start_line"], ri["end_line"]
+            for j in indices:
+                if j == i or j in drop:
+                    continue
+                rj = results[j]
+                rj_start, rj_end = rj["start_line"], rj["end_line"]
+                # ri fully contains rj → drop ri (the outer one)
+                if ri_start <= rj_start and ri_end >= rj_end:
+                    drop.add(i)
+                    break
+
+    return [r for i, r in enumerate(results) if i not in drop]
+
+
 class Retrieval:
     """Query interface for the semantic index."""
 
@@ -78,7 +122,8 @@ class Retrieval:
                 query_text=query,
             )
 
-        return self._booster.boost(results)
+        boosted = self._booster.boost(results)
+        return deduplicate_by_containment(boosted)
 
     def load_graph(self) -> list[dict[str, Any]]:
         """Load graph edges from index_dir/graph.json. [] if missing."""

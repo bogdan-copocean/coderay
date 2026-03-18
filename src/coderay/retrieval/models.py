@@ -51,8 +51,14 @@ class SearchResult:
             truncated=truncated,
         )
 
-    def to_dict(self) -> dict:
-        """Serialize to a JSON-compatible dict for the MCP response."""
+    def to_dict(self, *, top_score: float | None = None) -> dict:
+        """Serialize to a JSON-compatible dict for the MCP response.
+
+        Args:
+            top_score: When provided, a ``low_confidence`` flag is added
+                to the output.  Results scoring below 30 % of the top
+                score are flagged.
+        """
         d: dict = {
             "path": self.path,
             "start_line": self.start_line,
@@ -63,4 +69,7 @@ class SearchResult:
         }
         if self.truncated:
             d["truncated"] = True
+        if top_score is not None:
+            threshold = top_score * 0.3
+            d["low_confidence"] = self.score < threshold
         return d
