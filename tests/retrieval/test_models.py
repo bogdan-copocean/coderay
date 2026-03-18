@@ -189,9 +189,7 @@ class TestSearchResultToDict:
         assert d["relevance"] == "low"
 
     def test_search_mode_in_dict(self):
-        result = SearchResult.from_raw(
-            _make_row(content="x", search_mode="hybrid")
-        )
+        result = SearchResult.from_raw(_make_row(content="x", search_mode="hybrid"))
         d = result.to_dict()
         assert d["search_mode"] == "hybrid"
 

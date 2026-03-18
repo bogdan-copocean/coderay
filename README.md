@@ -98,7 +98,7 @@ Run `coderay build` (or `coderay watch`) from the project root first.
 | `coderay list [--by-file]`              | List indexed chunks                                             |
 | `coderay status`                        | Index state, branch, commit, chunk count                        |
 | `coderay maintain --repo .`             | Compact index, reclaim space                                    |
-| `coderay skeleton FILE`                 | Print file skeleton                                             |
+| `coderay skeleton FILE [--include-imports] [--symbol NAME]` | Print file skeleton (optionally with imports, or filtered to one class/function) |
 | `coderay graph --kind calls             | imports`                                                        |
 
 

@@ -276,12 +276,30 @@ def maintain(ctx: click.Context, repo: Path) -> None:
 
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True, path_type=Path))
-def skeleton(file_path: Path) -> None:
+@click.option(
+    "--include-imports",
+    is_flag=True,
+    default=False,
+    help="Include import statements in the skeleton.",
+)
+@click.option(
+    "--symbol",
+    type=str,
+    default=None,
+    help="Filter to a specific class or top-level function by name.",
+)
+def skeleton(
+    file_path: Path,
+    include_imports: bool,
+    symbol: str | None,
+) -> None:
     """Print the API skeleton (signatures, no bodies) for a source file."""
     from coderay.skeleton.extractor import extract_skeleton
 
     content = file_path.read_text(encoding="utf-8", errors="replace")
-    out = extract_skeleton(file_path, content)
+    out = extract_skeleton(
+        file_path, content, include_imports=include_imports, symbol=symbol
+    )
     click.echo(out)
 
 

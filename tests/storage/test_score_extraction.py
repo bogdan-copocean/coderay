@@ -3,7 +3,7 @@
 import pytest
 
 from coderay.core.errors import ScoreExtractionError
-from coderay.storage.lancedb import _ScoreField, _extract_score
+from coderay.storage.lancedb import _extract_score, _ScoreField
 
 
 class TestExtractScore:

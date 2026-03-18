@@ -70,9 +70,7 @@ class TestSearchScoring:
         """Every result has a search_mode key ('hybrid' or 'vector')."""
         store = self._make_store(app_config)
         for query_text in [None, "foo"]:
-            results = store.search(
-                [1.0, 0.0, 0.0, 0.0], top_k=2, query_text=query_text
-            )
+            results = store.search([1.0, 0.0, 0.0, 0.0], top_k=2, query_text=query_text)
             for r in results:
                 assert r["search_mode"] in ("hybrid", "vector")
 
