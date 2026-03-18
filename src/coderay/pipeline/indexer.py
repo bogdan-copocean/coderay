@@ -84,10 +84,7 @@ class Indexer:
         saved_paths = current_run.paths_to_process if current_run else []
         processed_count = current_run.processed_count if current_run else 0
 
-        can_resume = (
-            self._state.is_in_progress
-            and self._state.has_partial_progress
-        )
+        can_resume = self._state.is_in_progress and self._state.has_partial_progress
 
         if can_resume:
             paths_remaining = saved_paths[processed_count:]

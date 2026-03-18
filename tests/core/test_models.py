@@ -2,7 +2,14 @@
 
 import pytest
 
-from coderay.core.models import Chunk, EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
+from coderay.core.models import (
+    Chunk,
+    EdgeKind,
+    GraphEdge,
+    GraphNode,
+    ImpactResult,
+    NodeKind,
+)
 
 
 class TestChunk:
@@ -85,8 +92,13 @@ class TestGraphEdge:
 class TestImpactResult:
     def _node(self) -> GraphNode:
         return GraphNode(
-            id="a.py::foo", kind=NodeKind.FUNCTION, file_path="a.py",
-            start_line=1, end_line=5, name="foo", qualified_name="foo",
+            id="a.py::foo",
+            kind=NodeKind.FUNCTION,
+            file_path="a.py",
+            start_line=1,
+            end_line=5,
+            name="foo",
+            qualified_name="foo",
         )
 
     def test_to_dict_with_results(self):

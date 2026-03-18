@@ -1,4 +1,4 @@
-"""Tests for indexer.graph.builder."""
+"""Tests for graph.builder."""
 
 from coderay.graph.builder import (
     build_and_save_graph,
@@ -63,3 +63,84 @@ class TestBuildAndSaveGraph:
         assert "foo" in names
         assert "bar_v2" in names
         assert "bar" not in names
+
+
+class TestCrossFileResolution:
+    """End-to-end tests verifying cross-file CALLS edges are pre-resolved."""
+
+    def test_build_graph_resolves_cross_file_function_call(self):
+        """File A imports and calls a function from file B."""
+        file_b = "def compute(x):\n    return x * 2\n"
+        file_a = "from lib.math import compute\n\ndef run():\n    compute(42)\n"
+        graph = build_graph(
+            ".",
+            [
+                ("src/lib/math.py", file_b),
+                ("src/app/main.py", file_a),
+            ],
+        )
+
+        result = graph.get_impact_radius("src/lib/math.py::compute", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "src/app/main.py::run" in ids
+
+    def test_build_graph_resolves_cross_file_class_method_call(self):
+        """File A imports a module and calls a class via attribute access."""
+        file_b = (
+            "class Formatter:\n"
+            "    def format_text(self, text):\n"
+            "        return text.strip()\n"
+        )
+        file_a = (
+            "from lib import formatter\n\ndef process():\n    formatter.Formatter()\n"
+        )
+        graph = build_graph(
+            ".",
+            [
+                ("src/lib/formatter.py", file_b),
+                ("src/app/worker.py", file_a),
+            ],
+        )
+
+        edges = graph.to_dict()["edges"]
+        calls = [e for e in edges if e["kind"] == "calls"]
+        call_targets = {e["target"] for e in calls}
+        assert any("Formatter" in t for t in call_targets)
+
+    def test_build_graph_resolves_cross_file_imported_function(self):
+        """Direct call to an imported function resolves at extraction time."""
+        file_b = "def validate(data):\n    return bool(data)\n"
+        file_a = (
+            "from core import validator\n\ndef handle():\n    validator.validate({})\n"
+        )
+        graph = build_graph(
+            ".",
+            [
+                ("src/core/validator.py", file_b),
+                ("src/api/handler.py", file_a),
+            ],
+        )
+
+        result = graph.get_impact_radius("src/core/validator.py::validate", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "src/api/handler.py::handle" in ids
+
+    def test_impact_radius_includes_decorator_callers(self):
+        """Changing a decorator should show decorated callers in impact radius."""
+        decorator = "def my_decorator(fn):\n    return fn\n"
+        consumer = (
+            "from pkg.decorators import my_decorator\n\n"
+            "@my_decorator\n"
+            "def foo():\n"
+            "    pass\n"
+        )
+        graph = build_graph(
+            ".",
+            [
+                ("src/pkg/decorators.py", decorator),
+                ("src/app/main.py", consumer),
+            ],
+        )
+        result = graph.get_impact_radius("src/pkg/decorators.py::my_decorator", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "src/app/main.py" in ids

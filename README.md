@@ -70,13 +70,20 @@ Add to `~/.claude/claude_code_config.json` or Cursor MCP settings:
   "mcpServers": {
     "coderay": {
       "command": "/path/to/your/.venv/bin/coderay-mcp",
-      "args": []
+      "args": [],
+      "env": {
+        "CODERAY_INDEX_DIR": "${workspaceFolder}/.index"
+      }
     }
   }
 }
 ```
 
 Replace `/path/to/your/.venv/bin/coderay-mcp` with the output of `which coderay-mcp`.
+
+**Important:** Set `CODERAY_INDEX_DIR` so the MCP server finds the index and graph
+in your project. Cursor interpolates `${workspaceFolder}` to the workspace root.
+Run `coderay build` (or `coderay watch`) from the project root first.
 
 ## CLI reference
 
