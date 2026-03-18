@@ -40,6 +40,7 @@ class GraphConfig:
     call_types: tuple[str, ...]
     extra_class_scope_types: tuple[str, ...] = ()
     assignment_types: tuple[str, ...] = ("assignment",)
+    class_body_types: tuple[str, ...] = ("block",)
     import_source_field: str | None = None
     typed_param_types: tuple[str, ...] = ("typed_parameter",)
 
@@ -119,6 +120,7 @@ class JavaScriptConfig:
     function_scope_types: tuple[str, ...] = (
         "function_declaration",
         "method_definition",
+        "arrow_function",
     )
     class_scope_types: tuple[str, ...] = ("class_declaration",)
     decorator_scope_types: tuple[str, ...] = ()
@@ -144,6 +146,7 @@ class JavaScriptConfig:
         default_factory=lambda: GraphConfig(
             call_types=("call_expression",),
             assignment_types=("assignment_expression", "variable_declarator"),
+            class_body_types=("block", "class_body"),
             import_source_field="source",
         ),
     )
@@ -159,6 +162,7 @@ class TypeScriptConfig:
     function_scope_types: tuple[str, ...] = (
         "function_declaration",
         "method_definition",
+        "arrow_function",
     )
     class_scope_types: tuple[str, ...] = ("class_declaration",)
     decorator_scope_types: tuple[str, ...] = ()
@@ -191,6 +195,7 @@ class TypeScriptConfig:
             call_types=("call_expression",),
             extra_class_scope_types=("interface_declaration",),
             assignment_types=("assignment_expression", "variable_declarator"),
+            class_body_types=("block", "class_body"),
             import_source_field="source",
             typed_param_types=(
                 "typed_parameter",

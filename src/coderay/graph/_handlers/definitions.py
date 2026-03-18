@@ -15,7 +15,8 @@ class DefinitionHandlerMixin:
 
     def _handle_function_def(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Create FUNCTION node and DEFINES edge; recurse into body."""
-        name = self.identifier_from_node(node)
+        parent = node.parent if node.type == "arrow_function" else None
+        name = self.identifier_from_node(node, parent)
         if not name:
             return
 

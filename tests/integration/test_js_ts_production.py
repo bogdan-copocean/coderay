@@ -133,6 +133,12 @@ class TestTsProductionFixtures:
         nodes, edges = _extract_graph(FIXTURES_DIR / "types.ts")
         assert len(nodes) >= 1
 
+    def test_graph_api_client_arrow_function_definition(self) -> None:
+        """Top-level arrow createApiClient is registered; calls resolve."""
+        nodes, edges = _extract_graph(FIXTURES_DIR / "apiClient.ts")
+        funcs = [n for n in nodes if n.kind == NodeKind.FUNCTION]
+        assert any(n.name == "createApiClient" for n in funcs)
+
 
 @pytest.mark.skipif(
     not (_has_tree_sitter_js() and _has_tree_sitter_ts()),
