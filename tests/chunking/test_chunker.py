@@ -1,5 +1,7 @@
 """Tests for indexer.chunking.chunker."""
 
+import pytest
+
 from coderay.chunking.chunker import chunk_file
 
 
@@ -28,6 +30,19 @@ class TestChunkFile:
             assert len(chunks) >= 1
         except ImportError:
             assert chunks == []
+
+    def test_arrow_function_symbol(self):
+        """const foo = () => {} — symbol is foo, not arrow_function."""
+        code = "const foo = () => {};"
+        try:
+            import tree_sitter_javascript  # noqa: F401
+        except ImportError:
+            pytest.skip("tree-sitter-javascript not installed")
+
+        chunks = chunk_file("test.js", code)
+        symbols = {c.symbol for c in chunks}
+        assert "foo" in symbols
+        assert "<arrow_function>" not in symbols
 
     def test_no_expression_statement_chunks(self):
         code = "x = 1\ny = 2\ndef foo():\n    pass\n"

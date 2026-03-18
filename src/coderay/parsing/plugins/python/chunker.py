@@ -1,22 +1,42 @@
+"""Python-specific chunker."""
+
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from coderay.core.models import Chunk
-from coderay.parsing.base import BaseTreeSitterParser, parse_file
-from coderay.parsing.plugins.registry import get_chunker
+from coderay.parsing.base import BaseTreeSitterParser
 
 logger = logging.getLogger(__name__)
 
 MODULE_SYMBOL = "<module>"
 
+# Python tree-sitter node types for chunking
+_CHUNK_TYPES = (
+    "function_definition",
+    "class_definition",
+    "decorated_definition",
+)
 
-class ChunkingTreeSitterParser(BaseTreeSitterParser):
-    """Tree-sitter chunker (fallback for languages without a plugin)."""
+
+class PythonChunker:
+    """Chunk Python files into semantic units."""
+
+    def chunk(self, ctx) -> list[Chunk]:
+        """Collect chunks for a Python file."""
+        parser = _PythonChunkingParser(ctx)
+        try:
+            return parser.collect_chunks()
+        except Exception as e:  # pragma: no cover
+            logger.warning("Chunking failed for %s: %s", ctx.file_path, e)
+            return []
+
+
+class _PythonChunkingParser(BaseTreeSitterParser):
+    """Tree-sitter chunker for Python."""
 
     def collect_chunks(self) -> list[Chunk]:
-        """Collect chunks for file and language."""
+        """Collect chunks for file."""
         tree = self.get_tree()
         root = tree.root_node
         chunks: list[Chunk] = []
@@ -33,12 +53,9 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
             )
 
         def _dfs(node) -> None:
-            if node.type in self._ctx.lang_cfg.chunker.chunk_types:
+            if node.type in _CHUNK_TYPES:
                 parent = node.parent
-                if (
-                    parent is not None
-                    and parent.type in self._ctx.lang_cfg.chunker.chunk_types
-                ):
+                if parent is not None and parent.type in _CHUNK_TYPES:
                     for child in node.children:
                         _dfs(child)
                     return
@@ -66,26 +83,9 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         """Collect top-level lines outside chunk definitions."""
         lines: list[str] = []
         for child in root.children:
-            if child.type in self._ctx.lang_cfg.chunker.chunk_types:
+            if child.type in _CHUNK_TYPES:
                 continue
             text = self.node_text(child).strip()
             if text:
                 lines.append(text)
         return lines
-
-
-def chunk_file(path: str | Path, content: str) -> list[Chunk]:
-    """Chunk file into semantic units (functions, classes, preamble)."""
-    ctx = parse_file(path, content)
-    if ctx is None:
-        logger.warning("No language config for %s", path)
-        return []
-    chunker = get_chunker(ctx.lang_cfg.name)
-    if chunker is not None:
-        return chunker.chunk(ctx)
-    parser = ChunkingTreeSitterParser(ctx)
-    try:
-        return parser.collect_chunks()
-    except Exception as e:  # pragma: no cover - defensive logging
-        logger.warning("Chunking failed for %s: %s", path, e)
-        return []

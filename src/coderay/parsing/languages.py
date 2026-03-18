@@ -22,6 +22,8 @@ class SkeletonConfig:
     extra_class_like_types: tuple[str, ...] = ()
     top_level_expr_types: tuple[str, ...] = ("expression_statement",)
     export_like_types: tuple[str, ...] = ("export_statement", "lexical_declaration")
+    body_block_types: tuple[str, ...] = ("block", "statement_block")
+    docstring_expr_type: str = "expression_statement"
 
 
 @dataclass
@@ -37,17 +39,26 @@ class GraphConfig:
 
     call_types: tuple[str, ...]
     extra_class_scope_types: tuple[str, ...] = ()
+    assignment_types: tuple[str, ...] = ("assignment",)
+    class_body_types: tuple[str, ...] = ("block",)
+    import_source_field: str | None = None
+    typed_param_types: tuple[str, ...] = ("typed_parameter",)
 
 
 class LanguageConfigProtocol(Protocol):
-    """Protocol for Tree-sitter language configuration."""
+    """Protocol for Tree-sitter language configuration.
+
+    Plugin languages (Python, JS, TS) have minimal config; graph, skeleton,
+    chunker are None. Fallback languages (Go) have full config.
+    """
 
     name: str
     extensions: tuple[str, ...]
     language_fn: Callable[[], Any]
-    graph: GraphConfig
-    skeleton: SkeletonConfig
-    chunker: ChunkerConfig
+    init_filenames: tuple[str, ...]
+    graph: GraphConfig | None
+    skeleton: SkeletonConfig | None
+    chunker: ChunkerConfig | None
 
 
 def _python_language():
@@ -65,6 +76,8 @@ def _javascript_language():
 def _typescript_language():
     import tree_sitter_typescript as tsts
 
+    if hasattr(tsts, "language_typescript"):
+        return tsts.language_typescript()
     return tsts.language()
 
 
@@ -76,106 +89,41 @@ def _go_language():
 
 @dataclass
 class PythonConfig:
+    """Minimal config for Python; plugins provide chunking, skeleton, graph."""
+
     name: str = "python"
     extensions: tuple[str, ...] = (".py", ".pyi")
     language_fn: Callable[[], Any] = _python_language
-    import_types: tuple[str, ...] = (
-        "import_statement",
-        "import_from_statement",
-        "future_import_statement",
-    )
-    function_scope_types: tuple[str, ...] = ("function_definition",)
-    class_scope_types: tuple[str, ...] = ("class_definition",)
-    decorator_scope_types: tuple[str, ...] = ("decorated_definition",)
-    skeleton: SkeletonConfig = field(default_factory=SkeletonConfig)
-    chunker: ChunkerConfig = field(
-        default_factory=lambda: ChunkerConfig(
-            chunk_types=(
-                "function_definition",
-                "class_definition",
-                "decorated_definition",
-            ),
-        ),
-    )
-    graph: GraphConfig = field(
-        default_factory=lambda: GraphConfig(call_types=("call",))
-    )
     init_filenames: tuple[str, ...] = ("__init__",)
+    graph: GraphConfig | None = None
+    skeleton: SkeletonConfig | None = None
+    chunker: ChunkerConfig | None = None
 
 
 @dataclass
 class JavaScriptConfig:
+    """Minimal config for JavaScript; plugins provide chunking, skeleton, graph."""
+
     name: str = "javascript"
     extensions: tuple[str, ...] = (".js", ".jsx", ".mjs", ".cjs")
     language_fn: Callable[[], Any] = _javascript_language
-    import_types: tuple[str, ...] = ("import_statement",)
-    function_scope_types: tuple[str, ...] = (
-        "function_declaration",
-        "method_definition",
-    )
-    class_scope_types: tuple[str, ...] = ("class_declaration",)
-    decorator_scope_types: tuple[str, ...] = ()
-    skeleton: SkeletonConfig = field(default_factory=SkeletonConfig)
-    chunker: ChunkerConfig = field(
-        default_factory=lambda: ChunkerConfig(
-            chunk_types=(
-                "function_declaration",
-                "class_declaration",
-                "method_definition",
-                "arrow_function",
-                "export_statement",
-                "lexical_declaration",
-            ),
-        ),
-    )
-    graph: GraphConfig = field(
-        default_factory=lambda: GraphConfig(call_types=("call_expression",)),
-    )
     init_filenames: tuple[str, ...] = ("index",)
+    graph: GraphConfig | None = None
+    skeleton: SkeletonConfig | None = None
+    chunker: ChunkerConfig | None = None
 
 
 @dataclass
 class TypeScriptConfig:
+    """Minimal config for TypeScript; plugins provide chunking, skeleton, graph."""
+
     name: str = "typescript"
     extensions: tuple[str, ...] = (".ts", ".tsx")
     language_fn: Callable[[], Any] = _typescript_language
-    import_types: tuple[str, ...] = ("import_statement",)
-    function_scope_types: tuple[str, ...] = (
-        "function_declaration",
-        "method_definition",
-    )
-    class_scope_types: tuple[str, ...] = ("class_declaration",)
-    decorator_scope_types: tuple[str, ...] = ()
-    skeleton: SkeletonConfig = field(
-        default_factory=lambda: SkeletonConfig(
-            extra_class_like_types=(
-                "interface_declaration",
-                "type_alias_declaration",
-                "type_declaration",
-            ),
-        ),
-    )
-    chunker: ChunkerConfig = field(
-        default_factory=lambda: ChunkerConfig(
-            chunk_types=(
-                "function_declaration",
-                "class_declaration",
-                "method_definition",
-                "arrow_function",
-                "export_statement",
-                "lexical_declaration",
-                "interface_declaration",
-                "type_alias_declaration",
-            ),
-        ),
-    )
-    graph: GraphConfig = field(
-        default_factory=lambda: GraphConfig(
-            call_types=("call_expression",),
-            extra_class_scope_types=("interface_declaration",),
-        ),
-    )
     init_filenames: tuple[str, ...] = ("index",)
+    graph: GraphConfig | None = None
+    skeleton: SkeletonConfig | None = None
+    chunker: ChunkerConfig | None = None
 
 
 @dataclass
@@ -235,28 +183,3 @@ def get_language_for_file(path: str | Path) -> LanguageConfigProtocol | None:
 def get_supported_extensions() -> set[str]:
     """Return supported file extensions."""
     return set(_EXTENSION_MAP.keys())
-
-
-def get_init_filenames() -> set[str]:
-    """Return init-style filenames (e.g. __init__, index)."""
-    names: set[str] = set()
-    for cfg in LANGUAGE_REGISTRY.values():
-        names.update(cfg.init_filenames)
-    return names
-
-
-def get_resolution_suffixes() -> list[str]:
-    """Return file suffixes for import resolution."""
-    suffixes: list[str] = []
-    seen: set[str] = set()
-    for cfg in LANGUAGE_REGISTRY.values():
-        for ext in cfg.extensions:
-            if ext not in seen:
-                suffixes.append(ext)
-                seen.add(ext)
-            for init in cfg.init_filenames:
-                combo = f"/{init}{ext}"
-                if combo not in seen:
-                    suffixes.append(combo)
-                    seen.add(combo)
-    return suffixes

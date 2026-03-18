@@ -48,7 +48,7 @@ class TypeResolutionMixin:
         current = node.parent
         class_names: list[str] = []
         while current:
-            if current.type in self._ctx.lang_cfg.class_scope_types:
+            if current.type in self._lc.class_scope_types:
                 name_node = current.child_by_field_name("name") or (
                     current.named_children[0] if current.named_children else None
                 )
@@ -104,36 +104,63 @@ class TypeResolutionMixin:
     def _find_method_in_class(self, class_name: str, method_name: str) -> TSNode | None:
         """Find method definition in class."""
         tree = self.get_tree()
-        # Scan top-level nodes for the class
-        for node in tree.root_node.children:
-            if node.type not in self._ctx.lang_cfg.class_scope_types:
+        class_types = self._lc.class_scope_types + self._lc.extra_class_scope_types
+        body_types = self._lc.class_body_types
+
+        def find_class(n: TSNode) -> TSNode | None:
+            if n.type in class_types:
+                name_node = n.child_by_field_name("name") or (
+                    n.named_children[0] if n.named_children else None
+                )
+                if name_node and self.node_text(name_node) == class_name:
+                    return n
+            for c in n.children:
+                found = find_class(c)
+                if found:
+                    return found
+            return None
+
+        class_node = find_class(tree.root_node)
+        if not class_node:
+            return None
+        for child in class_node.children:
+            if child.type not in body_types:
                 continue
-            name_node = node.child_by_field_name("name") or (
-                node.children[1] if len(node.children) > 1 else None
-            )
-            if not name_node or self.node_text(name_node) != class_name:
-                continue
-            for child in node.children:
-                if child.type != "block":
+            for stmt in child.children:
+                fn = self._unwrap_decorated(stmt)
+                if fn is None:
                     continue
-                for stmt in child.children:
-                    fn = self._unwrap_decorated(stmt)  # Handle @staticmethod etc.
-                    if fn is None:
-                        continue  # Skip non-function stmt (e.g. assignment)
-                    fn_name = self.node_text(fn.child_by_field_name("name"))
+                fn_name = self.node_text(fn.child_by_field_name("name"))
+                if fn_name == method_name:
+                    return fn
+                if stmt.type == "method_definition":
+                    fn_name = self.node_text(stmt.child_by_field_name("name"))
                     if fn_name == method_name:
-                        return fn
-            break
+                        return stmt
         return None
 
     def _find_top_level_function(self, func_name: str) -> TSNode | None:
-        """Find top-level function by name."""
-        for node in self.get_tree().root_node.children:
-            if node.type not in self._ctx.lang_cfg.function_scope_types:
-                continue
-            if self.node_text(node.child_by_field_name("name")) == func_name:
-                return node
-        return None
+        """Find top-level function by name (incl. export-wrapped, arrow in const)."""
+        func_types = self._lc.function_scope_types
+
+        def search(n: TSNode) -> TSNode | None:
+            if n.type in ("function_declaration", "function_definition"):
+                name_node = n.child_by_field_name("name")
+                if name_node and self.node_text(name_node) == func_name:
+                    return n
+            if n.type == "variable_declarator":
+                name_node = n.child_by_field_name("name")
+                if name_node and self.node_text(name_node) == func_name:
+                    value = n.child_by_field_name("value")
+                    if value and value.type == "arrow_function":
+                        return value
+            for c in n.children:
+                found = search(c)
+                if found:
+                    return found
+            return None
+
+        return search(self.get_tree().root_node)
 
     def _unwrap_decorated(self, stmt: TSNode) -> TSNode | None:
         """Return inner function_definition from decorated_definition."""
@@ -161,7 +188,7 @@ class TypeResolutionMixin:
         """Walk up tree to find enclosing function definition."""
         current = node.parent
         while current:
-            if current.type in self._ctx.lang_cfg.function_scope_types:
+            if current.type in self._lc.function_scope_types:
                 return current
             current = current.parent
         return None
@@ -171,9 +198,10 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
+        param_types = self._lc.typed_param_types
         result: list[tuple[str, list[str]]] = []
         for child in params.children:
-            if child.type == "typed_parameter":
+            if child.type in param_types:
                 extracted = self._extract_type_from_typed_param(child)
                 if extracted:
                     result.append(extracted)
@@ -186,8 +214,9 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return None
+        param_types = self._lc.typed_param_types
         for child in params.children:
-            if child.type == "typed_parameter":
+            if child.type in param_types:
                 extracted = self._extract_type_from_typed_param(child)
                 if extracted and extracted[0] == param_name:
                     refs = extracted[1]

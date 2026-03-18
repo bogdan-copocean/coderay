@@ -1,47 +1,57 @@
+"""JS/TS-specific skeleton extractor."""
+
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from coderay.parsing.base import BaseTreeSitterParser, parse_file
-from coderay.parsing.plugins.registry import get_skeleton
+from coderay.parsing.base import BaseTreeSitterParser
 
 logger = logging.getLogger(__name__)
 
 ELLIPSIS = "..."
 
+# JS/TS tree-sitter node types
+_IMPORT_TYPES = ("import_statement",)
+_FUNCTION_SCOPE_TYPES = (
+    "function_declaration",
+    "method_definition",
+    "arrow_function",
+)
+_CLASS_SCOPE_TYPES = ("class_declaration",)
+_EXTRA_CLASS_LIKE_TYPES = (
+    "interface_declaration",
+    "type_alias_declaration",
+    "type_declaration",
+)
+_BODY_BLOCK_TYPES = ("statement_block",)
+_TOP_LEVEL_EXPR_TYPES = ("expression_statement", "lexical_declaration")
+_DOCSTRING_EXPR_TYPE = "expression_statement"
 
-def extract_skeleton(
-    path: str | Path,
-    content: str,
-    *,
-    include_imports: bool = False,
-    symbol: str | None = None,
-) -> str:
-    """Extract skeleton (signatures, no bodies)."""
-    ctx = parse_file(path, content)
-    if ctx is None:
-        return content
 
-    skeleton_plugin = get_skeleton(ctx.lang_cfg.name)
-    if skeleton_plugin is not None:
-        return skeleton_plugin.extract(
+class JsTsSkeleton:
+    """Extract skeleton from JS/TS files."""
+
+    def extract(
+        self,
+        ctx,
+        *,
+        include_imports: bool = True,
+        symbol: str | None = None,
+    ) -> str:
+        """Return skeleton text (signatures, docstrings, no bodies)."""
+        parser = _JsTsSkeletonParser(
             ctx, include_imports=include_imports, symbol=symbol
         )
-
-    parser = SkeletonTreeSitterParser(
-        ctx, include_imports=include_imports, symbol=symbol
-    )
-    try:
-        lines = parser.collect_lines()
-    except Exception:  # pragma: no cover - defensive fallback
-        logger.exception("Skeleton extraction failed")
-        return content
-    return "\n".join(lines)
+        try:
+            lines = parser.collect_lines()
+            return "\n".join(lines)
+        except Exception:  # pragma: no cover
+            logger.exception("Skeleton extraction failed")
+            return ctx.content
 
 
-class SkeletonTreeSitterParser(BaseTreeSitterParser):
-    """Tree-sitter skeleton parser."""
+class _JsTsSkeletonParser(BaseTreeSitterParser):
+    """Tree-sitter skeleton parser for JS/TS."""
 
     def __init__(
         self,
@@ -58,14 +68,13 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         """Return skeleton lines."""
         tree = self.get_tree()
         lines: list[str] = []
-        self._seen = set()
+        self._seen: set[int] = set()
         self._dfs(tree.root_node, lines, depth=0)
         return lines
 
     def _extract_text(self, node) -> str | None:
-        """Extract string from docstring-capable node (e.g. expression_statement)."""
-        expr_type = self._ctx.lang_cfg.skeleton.docstring_expr_type
-        if node.type != expr_type:
+        """Extract string from docstring-capable node."""
+        if node.type != _DOCSTRING_EXPR_TYPE:
             return None
         for sub in node.children:
             if sub.type == "string":
@@ -76,28 +85,22 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         """Extract docstring from body block."""
         if not hasattr(node, "children"):
             return None
-
-        lang_cfg = self._ctx.lang_cfg
         scope_types = (
-            *lang_cfg.function_scope_types,
-            *lang_cfg.class_scope_types,
-            *lang_cfg.skeleton.extra_class_like_types,
+            *_FUNCTION_SCOPE_TYPES,
+            *_CLASS_SCOPE_TYPES,
+            *_EXTRA_CLASS_LIKE_TYPES,
         )
         if node.type in scope_types:
-            body_block_types = lang_cfg.skeleton.body_block_types
             body = None
             for child in node.children:
-                if child.type in body_block_types:
+                if child.type in _BODY_BLOCK_TYPES:
                     body = child
                     break
-
             if body is None:
                 return None
-
             for child in body.children:
                 if text := self._extract_text(child):
                     return text
-
         for child in node.children:
             if text := self._extract_text(child):
                 return text
@@ -121,7 +124,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if node matches symbol."""
+        """Return True if node matches symbol filter."""
         if self._symbol is None:
             return True
         if depth > 0:
@@ -130,37 +133,23 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         target = self._symbol.split(".")[0] if "." in self._symbol else self._symbol
         return name == target
 
-    def _decorated_inner(self, node):
-        """Return inner class/function from decorated node."""
-        lang_cfg = self._ctx.lang_cfg
-        for child in node.named_children:
-            if child.type in (
-                *lang_cfg.function_scope_types,
-                *lang_cfg.class_scope_types,
-            ):
-                return child
-        return None
-
     def _dfs(self, node, lines: list[str], depth: int) -> None:
         indent = "    " * depth
         ntype = node.type
-        lang_cfg = self._ctx.lang_cfg
 
         interesting = (
             "module",
-            *lang_cfg.import_types,
-            *lang_cfg.function_scope_types,
-            *lang_cfg.class_scope_types,
-            *lang_cfg.skeleton.extra_class_like_types,
-            *lang_cfg.decorator_scope_types,
+            *_IMPORT_TYPES,
+            *_FUNCTION_SCOPE_TYPES,
+            *_CLASS_SCOPE_TYPES,
+            *_EXTRA_CLASS_LIKE_TYPES,
         )
 
         if node.id in self._seen:
             return
 
         if ntype not in interesting:
-            skel_cfg = lang_cfg.skeleton
-            if depth == 0 and ntype in skel_cfg.top_level_expr_types:
+            if depth == 0 and ntype in _TOP_LEVEL_EXPR_TYPES:
                 if self._symbol is None:
                     text = self.node_text(node).strip()
                     if text and (
@@ -171,31 +160,12 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 self._dfs(child, lines, depth)
             return
 
-        if ntype in lang_cfg.import_types:
+        if ntype in _IMPORT_TYPES:
             if self._include_imports and self._symbol is None:
                 lines.append(indent + self.node_text(node).strip())
             return
 
-        if ntype in lang_cfg.decorator_scope_types:
-            inner = self._decorated_inner(node)
-            if inner is not None and not self._matches_symbol(inner, depth):
-                self._seen.add(node.id)
-                return
-            for child in node.named_children:
-                if child.type == "decorator":
-                    lines.append(indent + self.node_text(child).strip())
-                    self._seen.add(child.id)
-                    continue
-                if child.type in (
-                    *lang_cfg.function_scope_types,
-                    *lang_cfg.class_scope_types,
-                ):
-                    self._dfs(child, lines, depth)
-                    break
-            self._seen.add(node.id)
-            return
-
-        if ntype in lang_cfg.function_scope_types:
+        if ntype in _FUNCTION_SCOPE_TYPES:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return
@@ -206,9 +176,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
-        if ntype in (
-            lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
-        ):
+        if ntype in (*_CLASS_SCOPE_TYPES, *_EXTRA_CLASS_LIKE_TYPES):
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return

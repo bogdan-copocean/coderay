@@ -6,11 +6,12 @@ import builtins
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge
+from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
 
-# Builtins (print, len, etc.) are filtered from CALLS edges
+# Re-exported for tests
 _PYTHON_BUILTINS: frozenset[str] = frozenset(
     name for name in dir(builtins) if not name.startswith("_")
 )
@@ -68,18 +69,21 @@ class CallHandlerMixin:
     def _resolve_super_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve super().method() to parent method."""
-        if not raw.startswith("super()."):
+        """Resolve super().method (Python) or super.method (JS) to parent method."""
+        if raw.startswith("super()."):
+            method = raw[len("super().") :]
+        elif raw.startswith("super."):
+            method = raw[len("super.") :]
+        else:
             return None
-        method = raw[len("super().") :]
         parent_target = self._resolve_super_call(scope_stack, method)
         return [parent_target] if parent_target else [method]
 
     def _resolve_self_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve self.method() via instance/class attrs."""
-        if not raw.startswith(("self.", "this.")):
+        """Resolve self.method() or this.method() via instance/class attrs."""
+        if not self._lc.self_prefixes or not raw.startswith(self._lc.self_prefixes):
             return None
         suffix = raw.split(".", 1)[1]
         parts = suffix.split(".")
@@ -90,7 +94,7 @@ class CallHandlerMixin:
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}.{method}"]
 
-        prefix = "self." if raw.startswith("self.") else "this."
+        prefix = next((p for p in self._lc.self_prefixes if raw.startswith(p)), "self.")
         instance_key = prefix + ".".join(parts[:-1])
         class_ref = self._file_ctx.resolve_instance(instance_key)
         if not class_ref:
@@ -142,13 +146,14 @@ class CallHandlerMixin:
 
     def _is_excluded(self, resolved: str, raw: str) -> bool:
         """Return True if callee is excluded (builtins, typing, etc.)."""
-        # Excluded: typing, abc, __future__; also bare builtins (print, len)
         if "::" in resolved:
             module_part = resolved.split("::")[0]
             if module_part in self._excluded_modules:
                 return True
         bare = raw.rsplit(".", 1)[-1]
-        return resolved == bare and bare in _PYTHON_BUILTINS
+        if resolved != bare:
+            return False
+        return bare in self._lc.builtins
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
         """Resolve super().method() to parent method."""
@@ -168,22 +173,30 @@ class CallHandlerMixin:
         """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
+        class_types = self._lc.class_scope_types + self._lc.extra_class_scope_types
 
-        for node in tree.root_node.children:
-            if node.type not in self._ctx.lang_cfg.class_scope_types:
-                continue
-            name_node = node.child_by_field_name("name") or (
-                node.named_children[0] if node.named_children else None
-            )
-            if not name_node or self.node_text(name_node) != target_class:
-                continue
+        def find_class(node: TSNode) -> TSNode | None:
+            if node.type in class_types:
+                name_node = node.child_by_field_name("name") or (
+                    node.named_children[0] if node.named_children else None
+                )
+                if name_node and self.node_text(name_node) == target_class:
+                    return node
             for child in node.children:
-                if child.type not in ("argument_list", "superclass", "extends_clause"):
-                    continue
-                bases = self._get_base_classes_from_arg_list(child)
-                if bases:
-                    return bases[0]
-            break
+                found = find_class(child)
+                if found:
+                    return found
+            return None
+
+        class_node = find_class(tree.root_node)
+        if not class_node:
+            return None
+        for child in class_node.children:
+            if child.type not in _BASE_CLASS_NODE_TYPES:
+                continue
+            bases = self._get_base_classes_from_arg_list(child)
+            if bases:
+                return bases[0]
         return None
 
     def _find_enclosing_class(self, scope_stack: list[str]) -> str | None:
@@ -196,10 +209,14 @@ class CallHandlerMixin:
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
-        if parent is None or parent.type != "assignment":
-            return  # Not an assignment RHS
+        if parent is None or parent.type not in self._lc.assignment_types:
+            return
 
-        lhs = parent.children[0] if parent.children else None
+        lhs = (
+            parent.child_by_field_name("name")
+            or parent.child_by_field_name("left")
+            or (parent.children[0] if parent.children else None)
+        )
         if lhs is None:
             return
 
@@ -207,7 +224,9 @@ class CallHandlerMixin:
             var_name = self.node_text(lhs)
         elif lhs.type == "attribute":
             var_name = self.node_text(lhs)
-            if not var_name.startswith(("self.", "this.")):
+            if not self._lc.self_prefixes or not var_name.startswith(
+                self._lc.self_prefixes
+            ):
                 return  # Only track self.attr = X(), not other.attr = X()
         else:
             return
@@ -224,7 +243,7 @@ class CallHandlerMixin:
         if is_known_class or is_likely_class:
             self._file_ctx.register_instance(var_name, resolved or callee_base)
             # Also register for class (enables service.client.get resolution)
-            if var_name.startswith(("self.", "this.")):
+            if self._lc.self_prefixes and var_name.startswith(self._lc.self_prefixes):
                 func_node = self._get_enclosing_function_node(call_node)
                 if func_node:
                     class_qualified = self._find_enclosing_class_from_node(func_node)
@@ -235,7 +254,7 @@ class CallHandlerMixin:
                         )
 
     def _handle_decorator(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create CALLS edge to decorator target."""
+        """Create CALLS edge to decorator target (Python only)."""
         text = self.node_text(node).strip()
         if not text or not text.startswith("@"):
             return

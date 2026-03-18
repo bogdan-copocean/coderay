@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 
 TSNode = Any
 
@@ -68,7 +69,9 @@ class DefinitionHandlerMixin:
             self._dfs(child, scope_stack=new_scope)
 
     def _is_property(self, func_node: TSNode) -> bool:
-        """Return True if function has @property decorator."""
+        """Return True if function has @property decorator (Python only)."""
+        if not self._lc.has_property:
+            return False
         parent = func_node.parent
         if parent is None or parent.type != "decorated_definition":
             return False
@@ -106,9 +109,8 @@ class DefinitionHandlerMixin:
             GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
         )
 
-        # Extract base classes: class Dog(Animal) or class GuideDog(Dog, ABC)
         for child in node.children:
-            if child.type not in ("argument_list", "superclass", "extends_clause"):
+            if child.type not in _BASE_CLASS_NODE_TYPES:
                 continue
             for base_name in self._get_base_classes_from_arg_list(child):
                 resolved = self._resolve_base_class(base_name)
@@ -127,15 +129,24 @@ class DefinitionHandlerMixin:
             self._dfs(child, scope_stack=new_scope)
 
     def _get_base_classes_from_arg_list(self, arg_list_node: TSNode) -> list[str]:
-        """Extract base class names from arg list."""
+        """Extract base class names from arg list or extends_clause."""
         base_types = (
             "identifier",
             "dotted_name",
             "attribute",
             "type_identifier",
+            "member_expression",
         )
         result: list[str] = []
-        for arg in arg_list_node.named_children:
+        candidates = arg_list_node.named_children
+        if not candidates and arg_list_node.type in (
+            "extends_clause",
+            "class_heritage",
+        ):
+            value = arg_list_node.child_by_field_name("value")
+            if value:
+                candidates = [value]
+        for arg in candidates:
             if arg.type in base_types:
                 name = self.node_text(arg)
                 if name:

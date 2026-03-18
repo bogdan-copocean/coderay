@@ -72,25 +72,34 @@ class BaseTreeSitterParser:
             "utf-8", errors="replace"
         )
 
-    def identifier_from_node(self, node) -> str:
+    def identifier_from_node(self, node, parent=None) -> str:
         """Extract identifier from definition node; empty if none."""
         # Unwrap decorated definitions (e.g. @decorator … def func)
         if node.type == "decorated_definition":
             inner = node.child_by_field_name("definition")
             return self.identifier_from_node(inner) if inner else ""
 
+        # Arrow function: const foo = () => {} — name from variable_declarator
+        p = parent if parent is not None else getattr(node, "parent", None)
+        if node.type == "arrow_function" and p and p.type == "variable_declarator":
+            name_node = p.child_by_field_name("name")
+            if name_node and name_node.type == "identifier":
+                return self.node_text(name_node)
+
         # Preferred: use the grammar's "name" field (explicit, no guessing)
         name_node = node.child_by_field_name("name")
-        if name_node and name_node.type in (
+        id_types = (
             "identifier",
             "type_identifier",
             "field_identifier",
-        ):
+            "property_identifier",
+        )
+        if name_node and name_node.type in id_types:
             return self.node_text(name_node)
 
         # Fallback: scan named children for an identifier-like node
         for child in node.named_children:
-            if child.type in ("identifier", "type_identifier", "field_identifier"):
+            if child.type in id_types:
                 return self.node_text(child)
 
         # Leaf node that is itself an identifier (e.g. property_identifier)

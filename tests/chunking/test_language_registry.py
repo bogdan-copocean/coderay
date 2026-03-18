@@ -11,19 +11,26 @@ from coderay.parsing.languages import (
 
 class TestLanguageRegistry:
     @pytest.mark.parametrize(
-        "lang,ext,chunk_type",
+        "lang,ext",
         [
-            ("python", ".py", "function_definition"),
-            ("javascript", ".js", "function_declaration"),
-            ("typescript", ".ts", "interface_declaration"),
-            ("go", ".go", "function_declaration"),
+            ("python", ".py"),
+            ("javascript", ".js"),
+            ("typescript", ".ts"),
+            ("go", ".go"),
         ],
     )
-    def test_language_registered(self, lang, ext, chunk_type):
+    def test_language_registered(self, lang, ext):
+        """Each language has name, extensions, and init_filenames."""
         assert lang in LANGUAGE_REGISTRY
         cfg = LANGUAGE_REGISTRY[lang]
         assert ext in cfg.extensions
-        assert chunk_type in cfg.chunker.chunk_types
+        assert hasattr(cfg, "init_filenames")
+
+    def test_go_has_fallback_config(self):
+        """Go uses fallback parsers; requires chunker, skeleton, graph."""
+        cfg = LANGUAGE_REGISTRY["go"]
+        assert cfg.chunker is not None
+        assert "function_declaration" in cfg.chunker.chunk_types
 
 
 class TestGetLanguageForFile:

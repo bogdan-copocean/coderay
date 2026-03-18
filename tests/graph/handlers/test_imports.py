@@ -26,6 +26,9 @@ class TestResolveRelativeImport:
             ("src/a/b/c/file.py", "...foo", "src/a/foo"),
             ("src/a/b/file.py", ".", "src/a/b"),
             ("file.py", "...foo", None),
+            ("src/utils/helper.ts", "./api", "src/utils/api"),
+            ("src/a/b/file.js", "../shared", "src/a/shared"),
+            ("src/a/b/c/file.ts", "../../utils/helper", "src/a/utils/helper"),
         ],
     )
     def test_resolve_relative_import(self, file_path, import_spec, expected):

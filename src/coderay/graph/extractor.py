@@ -17,6 +17,7 @@ from coderay.graph._handlers import (
 from coderay.graph._handlers.calls import _PYTHON_BUILTINS
 from coderay.graph._utils import is_init_file, resolve_relative_import
 from coderay.graph.identifiers import file_path_to_module_names
+from coderay.graph.lang_constants import LangConstants, from_lang_cfg
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
 
 # Re-export for tests that assert on internal helpers
@@ -226,12 +227,22 @@ def extract_graph_from_file(
         Tuple of (nodes, edges). Returns ``([], [])`` if the language
         is unsupported or parsing fails.
     """
+    from coderay.parsing.plugins.registry import get_graph_extractor
+
     ctx = parse_file(file_path, content)
     if ctx is None:
         return [], []
 
     if excluded_modules is None:
         excluded_modules = build_module_filter()
+
+    extractor = get_graph_extractor(ctx.lang_cfg.name)
+    if extractor is not None:
+        return extractor.extract(
+            ctx,
+            module_index=module_index or {},
+            excluded_modules=excluded_modules,
+        )
 
     parser = GraphTreeSitterParser(
         ctx,
@@ -253,7 +264,8 @@ class GraphTreeSitterParser(
 
     Composes handler mixins for imports, definitions, type resolution,
     assignments, and calls. The DFS dispatches to the appropriate handler
-    based on node type.
+    based on node type. Uses LangConstants when provided; otherwise derives
+    from lang_cfg (for Go fallback).
     """
 
     def __init__(
@@ -262,6 +274,7 @@ class GraphTreeSitterParser(
         *,
         excluded_modules: frozenset[str],
         module_index: ModuleIndex | None = None,
+        lang_constants: LangConstants | None = None,
     ) -> None:
         """Initialize the parser with file context and module filter."""
         super().__init__(context)
@@ -271,6 +284,14 @@ class GraphTreeSitterParser(
         self._edges: list[GraphEdge] = []
         self._module_index = module_index or {}
         self._file_ctx = FileContext(module_index=self._module_index)
+        self._lang_constants = lang_constants
+
+    @property
+    def _lc(self) -> LangConstants:
+        """Effective language constants; from param or derived from lang_cfg."""
+        if self._lang_constants is not None:
+            return self._lang_constants
+        return from_lang_cfg(self._ctx.lang_cfg)
 
     def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
         """Walk the syntax tree and return all graph nodes and edges."""
@@ -293,25 +314,23 @@ class GraphTreeSitterParser(
     def _dfs(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Recursively walk the AST, dispatching to type-specific handlers."""
         ntype = node.type
-        lang_cfg = self._ctx.lang_cfg
+        lc = self._lc
 
-        if ntype in lang_cfg.import_types:
+        if ntype in lc.import_types:
             self._handle_import(node)
-        elif ntype in lang_cfg.function_scope_types:
+        elif ntype in lc.function_scope_types:
             self._handle_function_def(node, scope_stack=scope_stack)
             return
-        elif ntype in (
-            lang_cfg.class_scope_types + lang_cfg.graph.extra_class_scope_types
-        ):
+        elif ntype in (lc.class_scope_types + lc.extra_class_scope_types):
             self._handle_class_def(node, scope_stack=scope_stack)
             return
-        elif ntype in lang_cfg.graph.call_types:
+        elif ntype in lc.call_types:
             self._handle_call(node, scope_stack=scope_stack)
-        elif ntype == "decorator":
+        elif lc.has_decorator and ntype == "decorator":
             self._handle_decorator(node, scope_stack=scope_stack)
-        elif ntype == "assignment":
+        elif ntype in lc.assignment_types:
             self._handle_assignment(node, scope_stack=scope_stack)
-        elif ntype == "with_statement":
+        elif lc.has_with_statement and ntype == "with_statement":
             self._handle_with_statement(node, scope_stack=scope_stack)
 
         for child in node.children:
