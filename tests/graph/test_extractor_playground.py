@@ -1,9 +1,4 @@
-"""Integration tests over graph_sample.py and known-gap documentation.
-
-Handler-specific tests live in tests/graph/handlers/. This file provides:
-- Full graph_sample integration smoke test
-- Known-gap tests (xfail) that document missing features
-"""
+"""Integration over graph_sample.py and known-gap xfail tests."""
 
 from pathlib import Path
 
@@ -17,7 +12,7 @@ SAMPLE_PATH = Path(__file__).parent / "graph_sample.py"
 
 @pytest.fixture
 def graph():
-    """Extract the full graph from graph_sample.py."""
+    """Extract full graph from graph_sample.py."""
     content = SAMPLE_PATH.read_text()
     return extract_graph_from_file(str(SAMPLE_PATH), content)
 
@@ -36,7 +31,7 @@ def _node_names(nodes, kind: NodeKind) -> set[str]:
 
 
 class TestGraphSampleIntegration:
-    """Smoke test: full graph_sample extraction produces expected structure."""
+    """Smoke test: graph_sample extraction produces expected structure."""
 
     def test_extracts_module_and_classes(self, graph):
         nodes, edges = graph
@@ -68,12 +63,7 @@ class TestGraphSampleIntegration:
 
 
 class TestKnownGaps:
-    """Tests for features documented as TODOs in the extractor.
-
-    Each test is marked xfail so CI stays green while gaps are visible.
-    When a gap is fixed, the xfail will start passing and pytest will
-    report it as xpass, signaling the marker should be removed.
-    """
+    """Xfail tests for documented extractor gaps. Remove xfail when fixed."""
 
     @pytest.mark.xfail(reason="TODO: lambda/comprehension scope attribution")
     def test_lambda_call_attributed_to_lambda_scope(self, graph):
@@ -102,21 +92,3 @@ class TestKnownGaps:
         assert "collections::defaultdict" in targets
 
 
-# ---------------------------------------------------------------------------
-# Manual inspection helper
-# ---------------------------------------------------------------------------
-
-
-def test_print_graph(graph):
-    """Print nodes and edges for manual inspection (run with -s)."""
-    nodes, edges = graph
-    print("\n=== NODES ===")
-    for n in sorted(nodes, key=lambda x: (x.kind.value, x.qualified_name)):
-        print(f"  {n.kind.value:8} {n.qualified_name}")
-    print("\n=== EDGES ===")
-    for kind in EdgeKind:
-        kind_edges = [e for e in edges if e.kind == kind]
-        if kind_edges:
-            print(f"\n  {kind.value}:")
-            for e in kind_edges:
-                print(f"    {e.source} -> {e.target}")
