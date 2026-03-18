@@ -69,7 +69,9 @@ class DefinitionHandlerMixin:
             self._dfs(child, scope_stack=new_scope)
 
     def _is_property(self, func_node: TSNode) -> bool:
-        """Return True if function has @property decorator."""
+        """Return True if function has @property decorator (Python only)."""
+        if not self._lc.has_property:
+            return False
         parent = func_node.parent
         if parent is None or parent.type != "decorated_definition":
             return False
@@ -137,7 +139,10 @@ class DefinitionHandlerMixin:
         )
         result: list[str] = []
         candidates = arg_list_node.named_children
-        if not candidates and arg_list_node.type in ("extends_clause", "class_heritage"):
+        if not candidates and arg_list_node.type in (
+            "extends_clause",
+            "class_heritage",
+        ):
             value = arg_list_node.child_by_field_name("value")
             if value:
                 candidates = [value]

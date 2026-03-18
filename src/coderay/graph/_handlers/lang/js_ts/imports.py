@@ -28,7 +28,11 @@ class JsTsImportHandler:
             return
 
         raw_source = parser.node_text(source_node).strip()
-        if len(raw_source) >= 2 and raw_source[0] in ("'", '"') and raw_source[-1] == raw_source[0]:
+        if (
+            len(raw_source) >= 2
+            and raw_source[0] in ("'", '"')
+            and raw_source[-1] == raw_source[0]
+        ):
             raw_source = raw_source[1:-1]
         if not raw_source:
             return
@@ -71,9 +75,7 @@ class JsTsImportHandler:
                     orig = parser.node_text(name_node).strip() if name_node else ""
                     if orig:
                         local = (
-                            parser.node_text(alias_node).strip()
-                            if alias_node
-                            else orig
+                            parser.node_text(alias_node).strip() if alias_node else orig
                         )
                         imported.append((orig, local))
         elif import_clause.type == "namespace_import":

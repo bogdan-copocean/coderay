@@ -89,7 +89,9 @@ class PythonImportHandler:
                 module.append(text)
                 imported.append((text, local))
 
-    def _parse_aliased_import(self, node: TSNode, parser: Any) -> tuple[str | None, str | None]:
+    def _parse_aliased_import(
+        self, node: TSNode, parser: Any
+    ) -> tuple[str | None, str | None]:
         original: str | None = None
         alias: str | None = None
         for child in node.children:

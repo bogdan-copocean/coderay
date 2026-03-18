@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from coderay.graph._handlers.lang.registry import get_import_handler
-
 TSNode = Any
 
 
@@ -14,5 +12,5 @@ class ImportHandlerMixin:
 
     def _handle_import(self, node: TSNode) -> None:
         """Create IMPORTS edges and register names in FileContext."""
-        handler = get_import_handler(self._ctx.lang_cfg.name)
+        handler = self._lc.import_handler_factory()
         handler.handle(node, self)

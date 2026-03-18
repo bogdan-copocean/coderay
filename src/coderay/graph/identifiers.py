@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from coderay.parsing.languages import get_init_filenames, get_supported_extensions
+from coderay.parsing.conventions import get_init_filenames
+from coderay.parsing.languages import get_supported_extensions
 
 _KNOWN_EXTENSIONS: frozenset[str] = frozenset()
 _KNOWN_INIT_FILENAMES: frozenset[str] = frozenset()

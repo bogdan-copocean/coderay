@@ -24,6 +24,7 @@ def _extract_graph(path: Path):
 def _has_tree_sitter_js() -> bool:
     try:
         import tree_sitter_javascript  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -32,6 +33,7 @@ def _has_tree_sitter_js() -> bool:
 def _has_tree_sitter_ts() -> bool:
     try:
         import tree_sitter_typescript as tsts
+
         tsts.language_typescript()
         return True
     except (ImportError, AttributeError):
@@ -70,7 +72,11 @@ class TestJsProductionFixtures:
         chunks = chunk_file(path, path.read_text())
         symbols = {c.symbol for c in chunks}
         assert "createUser" in symbols or "fetchUsers" in symbols
-        assert "UserService" in symbols or "createUserService" in symbols or len(chunks) >= 3
+        assert (
+            "UserService" in symbols
+            or "createUserService" in symbols
+            or len(chunks) >= 3
+        )
 
     def test_graph_user_service_imports(self) -> None:
         nodes, edges = _extract_graph(FIXTURES_DIR / "userService.js")
@@ -87,7 +93,10 @@ class TestJsProductionFixtures:
         nodes, edges = _extract_graph(FIXTURES_DIR / "userService.js")
         inherits = [e for e in edges if e.kind == EdgeKind.INHERITS]
         assert len(inherits) >= 1
-        us_node = next((n for n in nodes if "UserService" in n.name and n.kind == NodeKind.CLASS), None)
+        us_node = next(
+            (n for n in nodes if "UserService" in n.name and n.kind == NodeKind.CLASS),
+            None,
+        )
         assert us_node is not None
         assert any(e.source == us_node.id for e in inherits)
 
@@ -114,7 +123,11 @@ class TestTsProductionFixtures:
         content = path.read_text()
         skeleton = extract_skeleton(path, content)
 
-        assert "interface" in skeleton or "RequestConfig" in skeleton or "Response" in skeleton
+        assert (
+            "interface" in skeleton
+            or "RequestConfig" in skeleton
+            or "Response" in skeleton
+        )
 
     def test_chunker_api_client(self) -> None:
         path = FIXTURES_DIR / "apiClient.ts"
@@ -122,7 +135,11 @@ class TestTsProductionFixtures:
         chunks = chunk_file(path, content)
 
         symbols = {c.symbol for c in chunks}
-        assert "createApiClient" in symbols or "get" in symbols or "_parseResponse" in symbols
+        assert (
+            "createApiClient" in symbols
+            or "get" in symbols
+            or "_parseResponse" in symbols
+        )
         assert len(chunks) >= 2
 
     def test_graph_api_client_imports(self) -> None:
@@ -152,8 +169,7 @@ class TestFullPipeline:
         file_names = ["userService.js", "config.js", "index.js"]
         changed_paths = file_names
         files_content = [
-            (name, (FIXTURES_DIR / name).read_text())
-            for name in file_names
+            (name, (FIXTURES_DIR / name).read_text()) for name in file_names
         ]
 
         build_and_save_graph(
@@ -165,6 +181,7 @@ class TestFullPipeline:
         graph_path = Path(app_config.index.path) / "graph.json"
         assert graph_path.exists()
         import json
+
         data = json.loads(graph_path.read_text())
         nodes = data.get("nodes", [])
         edges = data.get("edges", [])

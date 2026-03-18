@@ -1,9 +1,14 @@
 """Shared utilities for graph extraction."""
 
-from coderay.parsing.languages import get_init_filenames
+from coderay.parsing.conventions import get_init_filenames
 
 # Node types that contain base class names (Python: argument_list, superclass; JS/TS: extends_clause, class_heritage)
-_BASE_CLASS_NODE_TYPES = ("argument_list", "superclass", "extends_clause", "class_heritage")
+_BASE_CLASS_NODE_TYPES = (
+    "argument_list",
+    "superclass",
+    "extends_clause",
+    "class_heritage",
+)
 
 
 def is_init_file(file_path: str) -> bool:

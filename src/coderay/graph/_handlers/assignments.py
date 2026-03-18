@@ -10,7 +10,9 @@ TSNode = Any
 class AssignmentHandlerMixin:
     """Handle assignments and with statements for instance/alias tracking."""
 
-    def _get_assignment_sides(self, node: TSNode) -> tuple[TSNode | None, TSNode | None]:
+    def _get_assignment_sides(
+        self, node: TSNode
+    ) -> tuple[TSNode | None, TSNode | None]:
         """Return (lhs, rhs) for assignment-like nodes; (None, None) if not applicable."""
         if node.type == "variable_declarator":
             lhs = node.child_by_field_name("name")
@@ -78,7 +80,7 @@ class AssignmentHandlerMixin:
                     self._file_ctx.register_alias(
                         lhs_name, f"{prefix_resolved}::{attr}"
                     )
-        elif rhs.type in self._ctx.lang_cfg.graph.call_types:
+        elif rhs.type in self._lc.call_types:
             # functools.partial: p = partial(foo, 1); p() → alias to foo
             callee_node = rhs.child_by_field_name("function")
             if callee_node:
@@ -112,19 +114,13 @@ class AssignmentHandlerMixin:
         if value.type == "as_pattern":
             target_node = value.child_by_field_name("alias")
             call_node = next(
-                (
-                    c
-                    for c in value.named_children
-                    if c.type in self._ctx.lang_cfg.graph.call_types
-                ),
+                (c for c in value.named_children if c.type in self._lc.call_types),
                 None,
             )
         else:
             # with x(): no "as" target — we don't register
             target_node = value if value.type == "as_pattern_target" else None
-            call_node = (
-                value if value.type in self._ctx.lang_cfg.graph.call_types else None
-            )
+            call_node = value if value.type in self._lc.call_types else None
         if not call_node or not target_node:
             return
         var_name = self.node_text(target_node)
@@ -151,7 +147,7 @@ class AssignmentHandlerMixin:
             return
 
         # RHS must be a call
-        if rhs.type not in self._ctx.lang_cfg.graph.call_types:
+        if rhs.type not in self._lc.call_types:
             return
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:

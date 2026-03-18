@@ -11,12 +11,9 @@ from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
 
-# Builtins filtered from CALLS edges
+# Re-exported for tests
 _PYTHON_BUILTINS: frozenset[str] = frozenset(
     name for name in dir(builtins) if not name.startswith("_")
-)
-_JS_BUILTINS: frozenset[str] = frozenset(
-    {"fetch", "console", "JSON", "Promise", "Map", "Set", "Array", "Object", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "Date", "RegExp", "Error", "parseInt", "parseFloat", "isNaN", "isFinite", "eval", "encodeURI", "decodeURI", "encodeURIComponent", "decodeURIComponent", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame"}
 )
 
 
@@ -85,8 +82,8 @@ class CallHandlerMixin:
     def _resolve_self_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve self.method() via instance/class attrs."""
-        if not raw.startswith(("self.", "this.")):
+        """Resolve self.method() or this.method() via instance/class attrs."""
+        if not self._lc.self_prefixes or not raw.startswith(self._lc.self_prefixes):
             return None
         suffix = raw.split(".", 1)[1]
         parts = suffix.split(".")
@@ -97,7 +94,7 @@ class CallHandlerMixin:
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}.{method}"]
 
-        prefix = "self." if raw.startswith("self.") else "this."
+        prefix = next((p for p in self._lc.self_prefixes if raw.startswith(p)), "self.")
         instance_key = prefix + ".".join(parts[:-1])
         class_ref = self._file_ctx.resolve_instance(instance_key)
         if not class_ref:
@@ -156,12 +153,7 @@ class CallHandlerMixin:
         bare = raw.rsplit(".", 1)[-1]
         if resolved != bare:
             return False
-        lang = self._ctx.lang_cfg.name
-        if lang == "python":
-            return bare in _PYTHON_BUILTINS
-        if lang in ("javascript", "typescript"):
-            return bare in _JS_BUILTINS
-        return False
+        return bare in self._lc.builtins
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
         """Resolve super().method() to parent method."""
@@ -181,10 +173,7 @@ class CallHandlerMixin:
         """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
-        class_types = (
-            self._ctx.lang_cfg.class_scope_types
-            + self._ctx.lang_cfg.graph.extra_class_scope_types
-        )
+        class_types = self._lc.class_scope_types + self._lc.extra_class_scope_types
 
         def find_class(node: TSNode) -> TSNode | None:
             if node.type in class_types:
@@ -220,7 +209,7 @@ class CallHandlerMixin:
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
-        if parent is None or parent.type not in self._ctx.lang_cfg.graph.assignment_types:
+        if parent is None or parent.type not in self._lc.assignment_types:
             return
 
         lhs = (
@@ -235,7 +224,9 @@ class CallHandlerMixin:
             var_name = self.node_text(lhs)
         elif lhs.type == "attribute":
             var_name = self.node_text(lhs)
-            if not var_name.startswith(("self.", "this.")):
+            if not self._lc.self_prefixes or not var_name.startswith(
+                self._lc.self_prefixes
+            ):
                 return  # Only track self.attr = X(), not other.attr = X()
         else:
             return
@@ -252,7 +243,7 @@ class CallHandlerMixin:
         if is_known_class or is_likely_class:
             self._file_ctx.register_instance(var_name, resolved or callee_base)
             # Also register for class (enables service.client.get resolution)
-            if var_name.startswith(("self.", "this.")):
+            if self._lc.self_prefixes and var_name.startswith(self._lc.self_prefixes):
                 func_node = self._get_enclosing_function_node(call_node)
                 if func_node:
                     class_qualified = self._find_enclosing_class_from_node(func_node)
@@ -263,7 +254,7 @@ class CallHandlerMixin:
                         )
 
     def _handle_decorator(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create CALLS edge to decorator target."""
+        """Create CALLS edge to decorator target (Python only)."""
         text = self.node_text(node).strip()
         if not text or not text.startswith("@"):
             return
