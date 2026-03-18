@@ -15,6 +15,12 @@ from coderay.skeleton.extractor import extract_skeleton
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "js_ts_production"
 
 
+def _extract_graph(path: Path):
+    """Extract graph from file; return (nodes, edges)."""
+    content = path.read_text()
+    return extract_graph_from_file(str(path), content)
+
+
 def _has_tree_sitter_js() -> bool:
     try:
         import tree_sitter_javascript  # noqa: F401
@@ -61,44 +67,29 @@ class TestJsProductionFixtures:
 
     def test_chunker_user_service(self) -> None:
         path = FIXTURES_DIR / "userService.js"
-        content = path.read_text()
-        chunks = chunk_file(path, content)
-
+        chunks = chunk_file(path, path.read_text())
         symbols = {c.symbol for c in chunks}
         assert "createUser" in symbols or "fetchUsers" in symbols
-        assert "createUserService" in symbols or "UserService" in symbols or len(chunks) >= 3
+        assert "UserService" in symbols or "createUserService" in symbols or len(chunks) >= 3
 
     def test_graph_user_service_imports(self) -> None:
-        path = FIXTURES_DIR / "userService.js"
-        content = path.read_text()
-        nodes, edges = extract_graph_from_file(str(path), content)
-
-        module_nodes = [n for n in nodes if n.kind == NodeKind.MODULE]
-        assert len(module_nodes) == 1
-
-        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
-        assert len(import_edges) >= 1
+        nodes, edges = _extract_graph(FIXTURES_DIR / "userService.js")
+        assert len([n for n in nodes if n.kind == NodeKind.MODULE]) == 1
+        assert len([e for e in edges if e.kind == EdgeKind.IMPORTS]) >= 1
 
     def test_graph_user_service_definitions(self) -> None:
-        path = FIXTURES_DIR / "userService.js"
-        content = path.read_text()
-        nodes, edges = extract_graph_from_file(str(path), content)
-
+        nodes, edges = _extract_graph(FIXTURES_DIR / "userService.js")
         class_nodes = [n for n in nodes if n.kind == NodeKind.CLASS]
-        assert any("UserService" in n.name for n in class_nodes) or len(nodes) >= 1
+        assert any("UserService" in n.name for n in class_nodes)
 
     def test_graph_user_service_inherits(self) -> None:
         """UserService extends BaseService produces INHERITS edge."""
-        path = FIXTURES_DIR / "userService.js"
-        content = path.read_text()
-        nodes, edges = extract_graph_from_file(str(path), content)
-
+        nodes, edges = _extract_graph(FIXTURES_DIR / "userService.js")
         inherits = [e for e in edges if e.kind == EdgeKind.INHERITS]
         assert len(inherits) >= 1
         us_node = next((n for n in nodes if "UserService" in n.name and n.kind == NodeKind.CLASS), None)
         assert us_node is not None
-        us_inherits = [e for e in inherits if e.source == us_node.id]
-        assert len(us_inherits) >= 1
+        assert any(e.source == us_node.id for e in inherits)
 
 
 @pytest.mark.skipif(
@@ -135,18 +126,11 @@ class TestTsProductionFixtures:
         assert len(chunks) >= 2
 
     def test_graph_api_client_imports(self) -> None:
-        path = FIXTURES_DIR / "apiClient.ts"
-        content = path.read_text()
-        nodes, edges = extract_graph_from_file(str(path), content)
-
-        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
-        assert len(import_edges) >= 1
+        nodes, edges = _extract_graph(FIXTURES_DIR / "apiClient.ts")
+        assert len([e for e in edges if e.kind == EdgeKind.IMPORTS]) >= 1
 
     def test_graph_types_module(self) -> None:
-        path = FIXTURES_DIR / "types.ts"
-        content = path.read_text()
-        nodes, edges = extract_graph_from_file(str(path), content)
-
+        nodes, edges = _extract_graph(FIXTURES_DIR / "types.ts")
         assert len(nodes) >= 1
 
 

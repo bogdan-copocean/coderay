@@ -25,6 +25,6 @@ _IMPORT_HANDLERS: dict[str, object] = {
 }
 
 
-def get_import_handler(lang_name: str):
+def get_import_handler(lang_name: str) -> object:
     """Return import handler for language; no-op for unsupported."""
     return _IMPORT_HANDLERS.get(lang_name, _NoOpImportHandler())

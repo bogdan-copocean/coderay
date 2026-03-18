@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 
 TSNode = Any
 
@@ -106,14 +107,8 @@ class DefinitionHandlerMixin:
             GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
         )
 
-        # Extract base classes: Python (argument_list, superclass), JS/TS (extends_clause, class_heritage)
         for child in node.children:
-            if child.type not in (
-                "argument_list",
-                "superclass",
-                "extends_clause",
-                "class_heritage",
-            ):
+            if child.type not in _BASE_CLASS_NODE_TYPES:
                 continue
             for base_name in self._get_base_classes_from_arg_list(child):
                 resolved = self._resolve_base_class(base_name)
@@ -143,10 +138,7 @@ class DefinitionHandlerMixin:
         result: list[str] = []
         candidates = arg_list_node.named_children
         if not candidates and arg_list_node.type in ("extends_clause", "class_heritage"):
-            value = arg_list_node.child_by_field_name("value") or next(
-                (c for c in arg_list_node.children if c.type == "identifier"),
-                None,
-            )
+            value = arg_list_node.child_by_field_name("value")
             if value:
                 candidates = [value]
         for arg in candidates:

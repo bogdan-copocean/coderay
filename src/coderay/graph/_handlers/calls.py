@@ -6,13 +6,17 @@ import builtins
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge
+from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
 
-# Builtins (print, len, etc.) are filtered from CALLS edges
+# Builtins filtered from CALLS edges
 _PYTHON_BUILTINS: frozenset[str] = frozenset(
     name for name in dir(builtins) if not name.startswith("_")
+)
+_JS_BUILTINS: frozenset[str] = frozenset(
+    {"fetch", "console", "JSON", "Promise", "Map", "Set", "Array", "Object", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "Date", "RegExp", "Error", "parseInt", "parseFloat", "isNaN", "isFinite", "eval", "encodeURI", "decodeURI", "encodeURIComponent", "decodeURIComponent", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame"}
 )
 
 
@@ -68,10 +72,13 @@ class CallHandlerMixin:
     def _resolve_super_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve super().method() to parent method."""
-        if not raw.startswith("super()."):
+        """Resolve super().method (Python) or super.method (JS) to parent method."""
+        if raw.startswith("super()."):
+            method = raw[len("super().") :]
+        elif raw.startswith("super."):
+            method = raw[len("super.") :]
+        else:
             return None
-        method = raw[len("super().") :]
         parent_target = self._resolve_super_call(scope_stack, method)
         return [parent_target] if parent_target else [method]
 
@@ -142,13 +149,19 @@ class CallHandlerMixin:
 
     def _is_excluded(self, resolved: str, raw: str) -> bool:
         """Return True if callee is excluded (builtins, typing, etc.)."""
-        # Excluded: typing, abc, __future__; also bare builtins (print, len)
         if "::" in resolved:
             module_part = resolved.split("::")[0]
             if module_part in self._excluded_modules:
                 return True
         bare = raw.rsplit(".", 1)[-1]
-        return resolved == bare and bare in _PYTHON_BUILTINS
+        if resolved != bare:
+            return False
+        lang = self._ctx.lang_cfg.name
+        if lang == "python":
+            return bare in _PYTHON_BUILTINS
+        if lang in ("javascript", "typescript"):
+            return bare in _JS_BUILTINS
+        return False
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
         """Resolve super().method() to parent method."""
@@ -190,12 +203,7 @@ class CallHandlerMixin:
         if not class_node:
             return None
         for child in class_node.children:
-            if child.type not in (
-                "argument_list",
-                "superclass",
-                "extends_clause",
-                "class_heritage",
-            ):
+            if child.type not in _BASE_CLASS_NODE_TYPES:
                 continue
             bases = self._get_base_classes_from_arg_list(child)
             if bases:
@@ -212,10 +220,14 @@ class CallHandlerMixin:
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
-        if parent is None or parent.type != "assignment":
-            return  # Not an assignment RHS
+        if parent is None or parent.type not in self._ctx.lang_cfg.graph.assignment_types:
+            return
 
-        lhs = parent.children[0] if parent.children else None
+        lhs = (
+            parent.child_by_field_name("name")
+            or parent.child_by_field_name("left")
+            or (parent.children[0] if parent.children else None)
+        )
         if lhs is None:
             return
 

@@ -2,6 +2,9 @@
 
 from coderay.parsing.languages import get_init_filenames
 
+# Node types that contain base class names (Python: argument_list, superclass; JS/TS: extends_clause, class_heritage)
+_BASE_CLASS_NODE_TYPES = ("argument_list", "superclass", "extends_clause", "class_heritage")
+
 
 def is_init_file(file_path: str) -> bool:
     """Return True if file_path is package init (e.g. __init__.py)."""
@@ -26,13 +29,11 @@ def resolve_relative_import(source_file: str, relative_target: str) -> str | Non
         target = target[2:]
         levels_up = 0
     elif target.startswith("../"):
-        segs = []
-        rest = target
-        while rest.startswith("../"):
-            segs.append("..")
-            rest = rest[3:]
-        levels_up = len(segs)
-        target = rest
+        levels_up = 0
+        while target.startswith("../"):
+            levels_up += 1
+            target = target[3:]
+        target = target.lstrip("/")
     else:
         # Python-style: count leading dots
         dots = len(target) - len(target.lstrip("."))

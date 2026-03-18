@@ -39,7 +39,7 @@ class GraphConfig:
 
     call_types: tuple[str, ...]
     extra_class_scope_types: tuple[str, ...] = ()
-    class_body_type: str = "block"
+    assignment_types: tuple[str, ...] = ("assignment",)
     import_source_field: str | None = None
     typed_param_types: tuple[str, ...] = ("typed_parameter",)
 
@@ -143,7 +143,7 @@ class JavaScriptConfig:
     graph: GraphConfig = field(
         default_factory=lambda: GraphConfig(
             call_types=("call_expression",),
-            class_body_type="class_body",
+            assignment_types=("assignment_expression", "variable_declarator"),
             import_source_field="source",
         ),
     )
@@ -190,7 +190,7 @@ class TypeScriptConfig:
         default_factory=lambda: GraphConfig(
             call_types=("call_expression",),
             extra_class_scope_types=("interface_declaration",),
-            class_body_type="class_body",
+            assignment_types=("assignment_expression", "variable_declarator"),
             import_source_field="source",
             typed_param_types=(
                 "typed_parameter",
