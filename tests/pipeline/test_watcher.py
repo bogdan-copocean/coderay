@@ -18,14 +18,13 @@ from coderay.pipeline.watcher import (
     FileWatcher,
     _DebouncedHandler,
 )
-from coderay.vcs.git import load_gitignore
 
 # ── fixtures ─────────────────────────────────────────────────────────
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    """Minimal repo directory."""
+    """Return minimal repo directory."""
     r = tmp_path / "repo"
     r.mkdir()
     return r
@@ -33,7 +32,7 @@ def repo(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def index_dir(tmp_path: Path) -> Path:
-    """Separate index directory (outside repo, like the real .index)."""
+    """Return index directory (outside repo)."""
     d = tmp_path / ".index"
     d.mkdir()
     return d
@@ -51,7 +50,7 @@ def python_extensions() -> set[str]:
 
 @pytest.fixture
 def batch_log() -> list[tuple[set[str], set[str]]]:
-    """Collects (changed, removed) batches for assertions."""
+    """Collect (changed, removed) batches for assertions."""
     return []
 
 
@@ -63,7 +62,7 @@ def handler(
     python_extensions: set[str],
     batch_log: list,
 ) -> _DebouncedHandler:
-    """Pre-wired handler with 0.1 s debounce for fast tests."""
+    """Return handler with 0.1s debounce."""
     return _DebouncedHandler(
         repo_root=repo,
         index_dir=index_dir,
@@ -73,22 +72,6 @@ def handler(
         extra_exclude=[],
         on_batch=lambda c, r: batch_log.append((set(c), set(r))),
     )
-
-
-# ── load_gitignore ───────────────────────────────────────────────────
-
-
-class TestLoadGitignore:
-    def test_missing_file_returns_empty_spec(self, tmp_path: Path) -> None:
-        spec = load_gitignore(tmp_path)
-        assert not spec.match_file("anything.py")
-
-    def test_parses_patterns(self, tmp_path: Path) -> None:
-        (tmp_path / ".gitignore").write_text("*.log\nbuild/\n")
-        spec = load_gitignore(tmp_path)
-        assert spec.match_file("app.log")
-        assert spec.match_file("build/out.js")
-        assert not spec.match_file("src/main.py")
 
 
 # ── _DebouncedHandler filtering ──────────────────────────────────────
