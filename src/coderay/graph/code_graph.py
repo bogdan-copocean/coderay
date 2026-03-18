@@ -175,7 +175,15 @@ class CodeGraph:
             symbol: Fully qualified node ID or resolvable name.
             depth: Number of reverse-BFS hops.
         """
-        resolved = self.resolve_symbol(symbol) or symbol
+        resolution_warning: str | None = None
+        resolved = self.resolve_symbol(symbol)
+
+        if resolved is None:
+            resolved, resolution_warning = self._fuzzy_resolve(symbol)
+
+        if resolved is None:
+            return self._not_found_result(symbol)
+
         if resolved not in self._g:
             return self._not_found_result(symbol)
 
@@ -208,7 +216,14 @@ class CodeGraph:
         nodes = [
             self.get_node(nid) for nid in visited if self.get_node(nid) is not None
         ]
-        return ImpactResult(resolved_node=resolved, nodes=nodes)
+
+        hint = self._zero_callers_hint(resolved) if not nodes else None
+        return ImpactResult(
+            resolved_node=resolved,
+            nodes=nodes,
+            hint=hint,
+            resolution_warning=resolution_warning,
+        )
 
     def _bare_name_targets(self, node_id: str) -> list[str]:
         """Return bare-name phantom nodes that match the given real node.
@@ -239,6 +254,83 @@ class CodeGraph:
         if available:
             hint += f" Available nodes in {file_part}: {available}"
         return ImpactResult(resolved_node=None, nodes=[], hint=hint)
+
+    def _fuzzy_resolve(self, symbol: str) -> tuple[str | None, str | None]:
+        """Attempt fuzzy resolution when exact resolution fails.
+
+        Parses the symbol into file and qualifier components, then
+        searches the file's nodes for a match by method/function name.
+
+        Args:
+            symbol: The symbol that failed exact resolution.
+
+        Returns:
+            Tuple of (resolved_node_id, warning_message).  Both are
+            None when fuzzy resolution also fails.
+        """
+        if "::" not in symbol:
+            return None, None
+
+        file_part, qualifier = symbol.split("::", 1)
+        file_nodes = self._file_index.get(file_part, set())
+        if not file_nodes:
+            return None, None
+
+        # Extract the method/function name (last component)
+        method_name = qualifier.rsplit(".", 1)[-1] if "." in qualifier else qualifier
+
+        candidates = []
+        for nid in file_nodes:
+            node = self.get_node(nid)
+            if node is None:
+                continue
+            node_method = node.qualified_name.rsplit(".", 1)[-1]
+            if node_method == method_name:
+                candidates.append(nid)
+
+        if len(candidates) == 1:
+            resolved = candidates[0]
+            warning = (
+                f"Requested '{qualifier}' not found; "
+                f"resolved to '{resolved.split('::', 1)[1]}'"
+            )
+            return resolved, warning
+
+        return None, None
+
+    def _zero_callers_hint(self, node_id: str) -> str | None:
+        """Build a diagnostic hint when a node has zero callers.
+
+        Checks whether the node's parent module is imported by other
+        files to distinguish 'genuinely no callers' from 'resolution
+        likely failed'.
+
+        Args:
+            node_id: The resolved node ID with zero callers.
+        """
+        node = self.get_node(node_id)
+        if node is None:
+            return None
+
+        module_id = node.file_path
+        importer_count = 0
+        if module_id in self._g:
+            for pred in self._g.predecessors(module_id):
+                edge_data = self._g.edges[pred, module_id]
+                if edge_data.get("kind") == EdgeKind.IMPORTS:
+                    importer_count += 1
+
+        if importer_count > 0:
+            return (
+                f"No callers found via static analysis, but this module "
+                f"is imported by {importer_count} file(s) — callers may "
+                f"exist but couldn't be resolved statically. "
+                f"Supplement with grep for the method name."
+            )
+        return (
+            "No callers found. This module is not imported by any "
+            "other indexed file."
+        )
 
     @property
     def node_count(self) -> int:

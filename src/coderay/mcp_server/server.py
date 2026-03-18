@@ -200,9 +200,10 @@ def get_file_skeleton(
 @mcp.tool(
     description=(
         "Reverse dependency traversal: lists callers and dependents "
-        "of a function or class from the code graph. Returns empty "
-        "results when node_id has no dependents. "
-        "Static analysis only; dynamic dispatch may be missed."
+        "of a function or class from the code graph. "
+        "Static analysis only — blind spots include DI containers "
+        "(e.g. inject.instance()), dynamic dispatch, and untyped "
+        "factory returns. Supplement with grep for these patterns."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"analysis"},

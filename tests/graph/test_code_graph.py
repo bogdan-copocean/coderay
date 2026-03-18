@@ -130,14 +130,43 @@ class TestCodeGraph:
         assert result.hint is not None
         assert "svc.py::run" in result.hint
 
-    def test_impact_radius_no_callers(self):
+    def test_impact_radius_no_callers_no_imports(self):
+        """Zero callers on an unimported module gives a 'not imported' hint."""
         g = CodeGraph()
         g.add_node(_make_node("a.py::lonely", NodeKind.FUNCTION, "lonely"))
 
         result = g.get_impact_radius("a.py::lonely")
         assert result.resolved_node == "a.py::lonely"
         assert result.nodes == []
-        assert result.hint is None
+        assert result.hint is not None
+        assert "not imported" in result.hint
+
+    def test_impact_radius_no_callers_module_imported(self):
+        """Zero callers but module is imported gives an informative hint."""
+        g = CodeGraph()
+        mod = _make_node("svc.py", NodeKind.MODULE, "svc.py", file_path="svc.py")
+        method = GraphNode(
+            id="svc.py::Service.run",
+            kind=NodeKind.FUNCTION,
+            file_path="svc.py",
+            start_line=5,
+            end_line=10,
+            name="run",
+            qualified_name="Service.run",
+        )
+        importer = _make_node(
+            "app.py::main", NodeKind.FUNCTION, "main", file_path="app.py"
+        )
+        g.add_node(mod)
+        g.add_node(method)
+        g.add_node(importer)
+        g.add_edge(_make_edge("app.py::main", "svc.py", EdgeKind.IMPORTS))
+
+        result = g.get_impact_radius("svc.py::Service.run")
+        assert result.resolved_node == "svc.py::Service.run"
+        assert result.nodes == []
+        assert result.hint is not None
+        assert "imported by 1 file(s)" in result.hint
 
     def test_to_dict_and_from_dict(self):
         g = CodeGraph()
@@ -444,3 +473,94 @@ class TestCodeGraph:
         g.remove_edge("a.py::main", "ghost")
         g.remove_orphan_phantoms()
         assert g.node_count == 1
+
+    # ------------------------------------------------------------------
+    # Fuzzy resolution
+    # ------------------------------------------------------------------
+
+    def test_fuzzy_resolve_single_match(self):
+        """Fuzzy resolve succeeds when method name matches one node in file."""
+        g = CodeGraph()
+        g.add_node(
+            GraphNode(
+                id="svc.py::ActualClass.run",
+                kind=NodeKind.FUNCTION,
+                file_path="svc.py",
+                start_line=5,
+                end_line=10,
+                name="run",
+                qualified_name="ActualClass.run",
+            )
+        )
+
+        result = g.get_impact_radius("svc.py::WrongClass.run")
+        assert result.resolved_node == "svc.py::ActualClass.run"
+        assert result.resolution_warning is not None
+        assert "WrongClass.run" in result.resolution_warning
+        assert "ActualClass.run" in result.resolution_warning
+
+    def test_fuzzy_resolve_multiple_matches_falls_back(self):
+        """Fuzzy resolve falls back to not-found when multiple methods match."""
+        g = CodeGraph()
+        g.add_node(
+            GraphNode(
+                id="svc.py::ClassA.run",
+                kind=NodeKind.FUNCTION,
+                file_path="svc.py",
+                start_line=5,
+                end_line=10,
+                name="run",
+                qualified_name="ClassA.run",
+            )
+        )
+        g.add_node(
+            GraphNode(
+                id="svc.py::ClassB.run",
+                kind=NodeKind.FUNCTION,
+                file_path="svc.py",
+                start_line=15,
+                end_line=20,
+                name="run",
+                qualified_name="ClassB.run",
+            )
+        )
+
+        result = g.get_impact_radius("svc.py::WrongClass.run")
+        assert result.resolved_node is None
+        assert result.hint is not None
+
+    def test_fuzzy_resolve_preserves_not_found_for_total_miss(self):
+        """When nothing matches, the existing hint with available nodes is shown."""
+        g = CodeGraph()
+        g.add_node(
+            GraphNode(
+                id="svc.py::Service.run",
+                kind=NodeKind.FUNCTION,
+                file_path="svc.py",
+                start_line=5,
+                end_line=10,
+                name="run",
+                qualified_name="Service.run",
+            )
+        )
+
+        result = g.get_impact_radius("svc.py::Totally.different")
+        assert result.resolved_node is None
+        assert result.hint is not None
+        assert "svc.py::Service.run" in result.hint
+
+    def test_resolution_warning_in_to_dict(self):
+        """resolution_warning is included in serialized output."""
+        result = ImpactResult(
+            resolved_node="a.py::Foo.bar",
+            nodes=[],
+            resolution_warning="Resolved from 'Baz.bar'",
+        )
+        d = result.to_dict()
+        assert d["resolution_warning"] == "Resolved from 'Baz.bar'"
+
+    def test_resolution_warning_absent_when_none(self):
+        """resolution_warning is omitted when None."""
+        result = ImpactResult(resolved_node="a.py::Foo.bar", nodes=[])
+        d = result.to_dict()
+        assert "resolution_warning" not in d

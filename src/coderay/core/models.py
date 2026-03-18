@@ -77,6 +77,7 @@ class ImpactResult:
     resolved_node: str | None
     nodes: list[GraphNode]
     hint: str | None = None
+    resolution_warning: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-compatible dict."""
@@ -86,4 +87,6 @@ class ImpactResult:
         }
         if self.hint:
             d["hint"] = self.hint
+        if self.resolution_warning:
+            d["resolution_warning"] = self.resolution_warning
         return d
