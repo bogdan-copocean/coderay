@@ -12,7 +12,7 @@ F = TypeVar("F", bound=Callable[..., object])
 
 
 def timed(phase: str) -> Callable[[F], F]:
-    """Decorator that logs execution time at DEBUG level."""
+    """Decorator: log execution time at DEBUG."""
 
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
@@ -30,7 +30,7 @@ def timed(phase: str) -> Callable[[F], F]:
 
 
 class TimedPhase:
-    """Context manager that measures block execution time and optionally logs it."""
+    """Context manager: measure block execution time."""
 
     def __init__(self, phase: str, *, log: bool = True) -> None:
         self.phase = phase

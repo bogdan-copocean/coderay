@@ -1,4 +1,4 @@
-"""Type hint resolution for factory, param, property, context manager."""
+"""Type hint resolution for DI patterns."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ TSNode = Any
 
 
 class TypeResolutionMixin:
-    """Resolve type annotations for factory, param, property, context manager."""
+    """Resolve type annotations for DI."""
 
     def _resolve_type_text(self, type_text: str | None) -> str | None:
         """Resolve type annotation to qualified class reference."""

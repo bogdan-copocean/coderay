@@ -1,4 +1,4 @@
-"""Domain-specific error hierarchy for CodeRay."""
+"""CodeRay error hierarchy."""
 
 from __future__ import annotations
 
@@ -8,16 +8,16 @@ class CodeRayError(Exception):
 
 
 class IndexStaleError(CodeRayError):
-    """Raised when the index is in-progress or incomplete."""
+    """Raised when index is in-progress or incomplete."""
 
 
 class EmbeddingDimensionError(CodeRayError):
-    """Raised when embedding dimensions don't match the store schema."""
+    """Raised when embedding dimensions don't match store."""
 
 
 class ScoreExtractionError(CodeRayError):
-    """Raised when a LanceDB result row lacks the expected score field."""
+    """Raised when LanceDB row lacks score field."""
 
 
 class SearchError(CodeRayError):
-    """Raised when search fails due to store or embedding issues."""
+    """Raised when search fails (store or embedding)."""

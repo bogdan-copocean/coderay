@@ -5,7 +5,7 @@ _DEFAULT_MSG = (
 
 
 class IndexNotBuiltError(Exception):
-    """Raised when a tool requires a coderay index that has not been built."""
+    """Raised when index not built."""
 
     def __init__(self, message: str = _DEFAULT_MSG) -> None:
         super().__init__(message)

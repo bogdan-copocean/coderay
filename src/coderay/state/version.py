@@ -11,18 +11,18 @@ VERSION_FILENAME = "version.json"
 
 
 class IndexVersionError(Exception):
-    """Raised when the index schema version doesn't match the current code."""
+    """Raised when index schema version mismatches."""
 
 
 def write_index_version(index_dir: str | Path) -> None:
-    """Write the current schema version to index_dir/version.json."""
+    """Write schema version to version.json."""
     path = Path(index_dir) / VERSION_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"schema_version": INDEX_SCHEMA_VERSION}))
 
 
 def read_index_version(index_dir: str | Path) -> int | None:
-    """Read the schema version from index_dir/version.json. Returns None if missing."""
+    """Read schema version; None if missing."""
     path = Path(index_dir) / VERSION_FILENAME
     if not path.is_file():
         return None
@@ -34,7 +34,7 @@ def read_index_version(index_dir: str | Path) -> int | None:
 
 
 def check_index_version(index_dir: str | Path) -> None:
-    """Warn if the index version doesn't match the current schema."""
+    """Warn if index version mismatches schema."""
     version = read_index_version(index_dir)
     if version is None:
         return

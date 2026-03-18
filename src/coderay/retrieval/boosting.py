@@ -9,7 +9,7 @@ from coderay.core.config import get_config
 
 @dataclass
 class BoostRule:
-    """Single path-based score multiplier rule (regex pattern + factor)."""
+    """Path-based score multiplier (regex + factor)."""
 
     regex: re.Pattern[str]
     factor: float
@@ -17,18 +17,14 @@ class BoostRule:
 
 @dataclass
 class StructuralBooster:
-    """Applies path-based score multipliers to search results."""
+    """Apply path-based score multipliers."""
 
     penalties: list[BoostRule] = field(default_factory=list)
     bonuses: list[BoostRule] = field(default_factory=list)
 
     @classmethod
     def from_config(cls) -> StructuralBooster:
-        """Build a booster from the application config.
-
-        Returns:
-            StructuralBooster with path-based rules from config.
-        """
+        """Build booster from config."""
         boosting = get_config().semantic_search.boosting
         return cls(
             penalties=[
@@ -52,7 +48,7 @@ class StructuralBooster:
         return multiplier
 
     def boost(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Apply path-based score multipliers and re-sort results."""
+        """Apply multipliers and re-sort."""
         boosted = []
         for r in results:
             row = dict(r)
