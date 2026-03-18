@@ -31,19 +31,19 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
                 )
             )
 
-        def _dfs(node) -> None:
+        def _dfs(node, parent=None) -> None:
             if node.type in self._ctx.lang_cfg.chunker.chunk_types:
                 if (
-                    node.parent
-                    and node.parent.type in self._ctx.lang_cfg.chunker.chunk_types
+                    parent
+                    and parent.type in self._ctx.lang_cfg.chunker.chunk_types
                 ):
                     for child in node.children:
-                        _dfs(child)
+                        _dfs(child, node)
                     return
                 start_line = node.start_point[0] + 1
                 end_line = node.end_point[0] + 1
                 text = self.node_text(node)
-                symbol = self.identifier_from_node(node) or f"<{node.type}>"
+                symbol = self.identifier_from_node(node, parent) or f"<{node.type}>"
                 chunks.append(
                     Chunk(
                         path=self.file_path,
@@ -54,7 +54,7 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
                     )
                 )
             for child in node.children:
-                _dfs(child)
+                _dfs(child, node)
 
         _dfs(root)
         logger.debug("Chunked %s: %d chunks", self.file_path, len(chunks))
