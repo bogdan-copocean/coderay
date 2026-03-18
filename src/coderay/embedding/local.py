@@ -7,16 +7,17 @@ from coderay.embedding.base import Embedder, EmbedTask
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "nomic-ai/nomic-embed-text-v1.5"
-DEFAULT_DIMENSIONS = 768
+DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_DIMENSIONS = 384
 
-# nomic-embed-text-v1.5 supports 8192 tokens.  Code averages roughly
-# 1.5 characters per token, giving ~12 000 usable characters.  Truncating
-# early avoids the tokenizer wasting time on text the model will discard.
-MAX_CHARS = 12_000
+# all-MiniLM-L6-v2 supports 256 tokens (~384 chars). Truncate early to avoid waste.
+MAX_CHARS = 384
 
 # Number of parallel ONNX workers (0 = auto based on CPU cores)
 _PARALLEL_WORKERS = int(os.environ.get("EMBED_WORKERS", 0)) or None
+
+# Batch size for embedding; lower if OOM (e.g. EMBED_BATCH_SIZE=32)
+_BATCH_SIZE = int(os.environ.get("EMBED_BATCH_SIZE", 64))
 
 # Model-specific task prefixes for asymmetric retrieval.
 # Models not listed here get no prefix (symmetric embedding).
@@ -46,11 +47,28 @@ class LocalEmbedder(Embedder):
         self._model = None
 
     def _load_model(self):
-        """Lazily load the fastembed model on first use."""
+        """Lazily load the fastembed model on first use.
+
+        Tries local cache first (fully offline). If the model is not cached,
+        falls back to download so first-time setup requires no manual steps.
+        """
         from fastembed import TextEmbedding
 
         logger.info("Loading local embedding model %s...", self._model_name)
-        self._model = TextEmbedding(model_name=self._model_name)
+        try:
+            self._model = TextEmbedding(
+                model_name=self._model_name,
+                local_files_only=True,
+            )
+        except ValueError as e:
+            if "Could not load model" in str(e):
+                logger.info("Model not cached, downloading (one-time)...")
+                self._model = TextEmbedding(
+                    model_name=self._model_name,
+                    local_files_only=False,
+                )
+            else:
+                raise
 
     @property
     def dimensions(self) -> int:
@@ -87,7 +105,7 @@ class LocalEmbedder(Embedder):
             self._model.embed(
                 prefixed,
                 parallel=_PARALLEL_WORKERS,
-                batch_size=256,
+                batch_size=_BATCH_SIZE,
             )
         )
         return [e.tolist() for e in embeddings]

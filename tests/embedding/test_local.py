@@ -10,8 +10,8 @@ from coderay.embedding.local import LocalEmbedder, MAX_CHARS, _TASK_PREFIXES
 
 class TestLocalEmbedder:
     def test_dimensions_property(self):
-        e = LocalEmbedder(dimensions=768)
-        assert e.dimensions == 768
+        e = LocalEmbedder()
+        assert e.dimensions == 384
 
     def test_embed_empty(self):
         e = LocalEmbedder()
@@ -19,16 +19,16 @@ class TestLocalEmbedder:
 
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
     def test_embed_calls_model(self, mock_load):
-        e = LocalEmbedder(dimensions=768)
+        e = LocalEmbedder()
         mock_model = MagicMock()
         mock_model.embed.return_value = iter(
-            [np.array([0.1] * 768), np.array([0.2] * 768)]
+            [np.array([0.1] * 384), np.array([0.2] * 384)]
         )
         e._model = mock_model
 
         result = e.embed(["hello", "world"])
         assert len(result) == 2
-        assert len(result[0]) == 768
+        assert len(result[0]) == 384
         mock_model.embed.assert_called_once()
 
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
@@ -36,7 +36,7 @@ class TestLocalEmbedder:
         e = LocalEmbedder()
         assert e._model is None
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
+        mock_model.embed.return_value = iter([np.array([0.1] * 384)])
 
         def _fake_load():
             e._model = mock_model
@@ -47,9 +47,9 @@ class TestLocalEmbedder:
 
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
     def test_truncates_long_text(self, mock_load):
-        e = LocalEmbedder(dimensions=768)
+        e = LocalEmbedder()
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
+        mock_model.embed.return_value = iter([np.array([0.1] * 384)])
         e._model = mock_model
 
         long_text = "x" * 20000

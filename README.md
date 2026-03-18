@@ -6,12 +6,14 @@ AI coding assistants and a standalone CLI.
 
 ## What you get
 
-| Capability | What it does | Why it matters | AI assistant benefit |
-|---|---|---|---|
-| **Semantic search** | Find code by meaning, not keywords. "where do we handle auth errors" returns results even if the code never uses that phrase. | Grep finds text. This finds *intent*. | Better context retrieval for plan and edit modes |
-| **Blast radius** (`get_impact_radius`) | Given a function or module, show every node reachable within N hops via calls, imports, and inheritance. | Before changing `UserService.save()`, see exactly what breaks. | Safer refactors — agent sees downstream impact before editing |
-| **File skeleton** (`get_file_skeleton`) | Signatures, docstrings, imports — no function bodies. The API surface of a file at a glance. | Understand a 500-line file in 30 lines without reading the implementation. | Drastically fewer tokens than reading the full file |
-| **Index status** | Chunk count, schema version, branch, last commit, store health. | Confirm the index is fresh before relying on results. | Agent self-checks before trusting search results |
+
+| Capability                              | What it does                                                                                                                  | Why it matters                                                             | AI assistant benefit                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **Semantic search**                     | Find code by meaning, not keywords. "where do we handle auth errors" returns results even if the code never uses that phrase. | Grep finds text. This finds *intent*.                                      | Better context retrieval for plan and edit modes              |
+| **Blast radius** (`get_impact_radius`)  | Given a function or module, show every node reachable within N hops via calls, imports, and inheritance.                      | Before changing `UserService.save()`, see exactly what breaks.             | Safer refactors — agent sees downstream impact before editing |
+| **File skeleton** (`get_file_skeleton`) | Signatures, docstrings, imports — no function bodies. The API surface of a file at a glance.                                  | Understand a 500-line file in 30 lines without reading the implementation. | Drastically fewer tokens than reading the full file           |
+| **Index status**                        | Chunk count, schema version, branch, last commit, store health.                                                               | Confirm the index is fresh before relying on results.                      | Agent self-checks before trusting search results              |
+
 
 ## Install
 
@@ -87,16 +89,24 @@ Run `coderay build` (or `coderay watch`) from the project root first.
 
 ## CLI reference
 
-| Command | Description |
-|---|---|
+
+| Command                                 | Description                                                     |
+| --------------------------------------- | --------------------------------------------------------------- |
 | `coderay watch --repo . [--debounce N]` | **Recommended.** Watch for file changes, re-index automatically |
-| `coderay build [--full] --repo .` | Build or incremental update. Use `--full` for full rebuild |
-| `coderay search "query" [--top-k N]` | Semantic search |
-| `coderay list [--by-file]` | List indexed chunks |
-| `coderay status` | Index state, branch, commit, chunk count |
-| `coderay maintain --repo .` | Compact index, reclaim space |
-| `coderay skeleton FILE` | Print file skeleton |
-| `coderay graph --kind calls\|imports` | List graph edges |
+| `coderay build [--full] --repo .`       | Build or incremental update. Use `--full` for full rebuild      |
+| `coderay search "query" [--top-k N]`    | Semantic search                                                 |
+| `coderay list [--by-file]`              | List indexed chunks                                             |
+| `coderay status`                        | Index state, branch, commit, chunk count                        |
+| `coderay maintain --repo .`             | Compact index, reclaim space                                    |
+| `coderay skeleton FILE`                 | Print file skeleton                                             |
+| `coderay graph --kind calls             | imports`                                                        |
+
+
+## Embedding
+
+Embedding is **offline-first**: the model loads from the local cache only, with no HuggingFace API calls. On first use, if the model is not cached, it downloads automatically (one-time, requires network). No manual steps.
+
+If you previously used a different model, run `coderay build --full` after upgrading.
 
 ## Configuration
 
@@ -134,3 +144,4 @@ graph:
   exclude_modules: []   # module names to exclude from CALLS/IMPORTS edges
   include_modules: []  # force-include (override excludes)
 ```
+
