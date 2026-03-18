@@ -22,6 +22,8 @@ class SkeletonConfig:
     extra_class_like_types: tuple[str, ...] = ()
     top_level_expr_types: tuple[str, ...] = ("expression_statement",)
     export_like_types: tuple[str, ...] = ("export_statement", "lexical_declaration")
+    body_block_types: tuple[str, ...] = ("block", "statement_block")
+    docstring_expr_type: str = "expression_statement"
 
 
 @dataclass
@@ -37,6 +39,9 @@ class GraphConfig:
 
     call_types: tuple[str, ...]
     extra_class_scope_types: tuple[str, ...] = ()
+    class_body_type: str = "block"
+    import_source_field: str | None = None
+    typed_param_types: tuple[str, ...] = ("typed_parameter",)
 
 
 class LanguageConfigProtocol(Protocol):
@@ -65,6 +70,8 @@ def _javascript_language():
 def _typescript_language():
     import tree_sitter_typescript as tsts
 
+    if hasattr(tsts, "language_typescript"):
+        return tsts.language_typescript()
     return tsts.language()
 
 
@@ -115,7 +122,12 @@ class JavaScriptConfig:
     )
     class_scope_types: tuple[str, ...] = ("class_declaration",)
     decorator_scope_types: tuple[str, ...] = ()
-    skeleton: SkeletonConfig = field(default_factory=SkeletonConfig)
+    skeleton: SkeletonConfig = field(
+        default_factory=lambda: SkeletonConfig(
+            body_block_types=("statement_block",),
+            top_level_expr_types=("expression_statement", "lexical_declaration"),
+        ),
+    )
     chunker: ChunkerConfig = field(
         default_factory=lambda: ChunkerConfig(
             chunk_types=(
@@ -129,7 +141,11 @@ class JavaScriptConfig:
         ),
     )
     graph: GraphConfig = field(
-        default_factory=lambda: GraphConfig(call_types=("call_expression",)),
+        default_factory=lambda: GraphConfig(
+            call_types=("call_expression",),
+            class_body_type="class_body",
+            import_source_field="source",
+        ),
     )
     init_filenames: tuple[str, ...] = ("index",)
 
@@ -153,6 +169,7 @@ class TypeScriptConfig:
                 "type_alias_declaration",
                 "type_declaration",
             ),
+            body_block_types=("statement_block",),
         ),
     )
     chunker: ChunkerConfig = field(
@@ -173,6 +190,13 @@ class TypeScriptConfig:
         default_factory=lambda: GraphConfig(
             call_types=("call_expression",),
             extra_class_scope_types=("interface_declaration",),
+            class_body_type="class_body",
+            import_source_field="source",
+            typed_param_types=(
+                "typed_parameter",
+                "required_parameter",
+                "optional_parameter",
+            ),
         ),
     )
     init_filenames: tuple[str, ...] = ("index",)
