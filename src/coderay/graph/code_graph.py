@@ -111,10 +111,7 @@ class CodeGraph:
 
     def has_symbol_candidates(self, name: str) -> bool:
         """Return True if *name* has any resolution candidates."""
-        return bool(
-            self._symbol_index.get(name)
-            or self._qualified_index.get(name)
-        )
+        return bool(self._symbol_index.get(name) or self._qualified_index.get(name))
 
     def all_file_paths(self) -> set[str]:
         """Return the set of all file paths currently in the graph."""
@@ -237,11 +234,7 @@ class CodeGraph:
     def _not_found_result(self, symbol: str) -> ImpactResult:
         """Build an ImpactResult with diagnostic hints for a missing node."""
         file_part = symbol.split("::")[0] if "::" in symbol else None
-        available = (
-            sorted(self._file_index.get(file_part, set()))
-            if file_part
-            else []
-        )
+        available = sorted(self._file_index.get(file_part, set())) if file_part else []
         hint = f"Node '{symbol}' not in the graph."
         if available:
             hint += f" Available nodes in {file_part}: {available}"

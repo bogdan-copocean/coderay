@@ -143,15 +143,16 @@ def get_file_skeleton(
     """Get the API surface of a file (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
 
-    p = Path(file_path)
-    if not p.is_file():
-        # Resolve relative paths against workspace root (parent of index dir)
-        workspace_root = _resolve_index_dir().parent
-        p = workspace_root / file_path
-    if not p.is_file():
+    workspace_root = _resolve_index_dir().parent.resolve()
+    candidate = (workspace_root / file_path).resolve()
+    try:
+        candidate.relative_to(workspace_root)
+    except ValueError:
         raise FileNotFoundError(f"File not found: {file_path}")
-    content = p.read_text(encoding="utf-8", errors="replace")
-    return extract_skeleton(p, content, include_imports=include_imports)
+    if not candidate.is_file():
+        raise FileNotFoundError(f"File not found: {file_path}")
+    content = candidate.read_text(encoding="utf-8", errors="replace")
+    return extract_skeleton(candidate, content, include_imports=include_imports)
 
 
 @mcp.tool(

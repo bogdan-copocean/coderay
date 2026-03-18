@@ -123,9 +123,7 @@ class AssignmentHandlerMixin:
             # with x(): no "as" target — we don't register
             target_node = value if value.type == "as_pattern_target" else None
             call_node = (
-                value
-                if value.type in self._ctx.lang_cfg.graph.call_types
-                else None
+                value if value.type in self._ctx.lang_cfg.graph.call_types else None
             )
         if not call_node or not target_node:
             return
@@ -170,10 +168,9 @@ class AssignmentHandlerMixin:
         )
         if not func_node:
             return
-        type_node = (
-            func_node.child_by_field_name("return_type")
-            or func_node.child_by_field_name("type")
-        )
+        type_node = func_node.child_by_field_name(
+            "return_type"
+        ) or func_node.child_by_field_name("type")
         if not type_node:
             return
 

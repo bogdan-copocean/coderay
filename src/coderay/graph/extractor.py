@@ -87,9 +87,7 @@ class FileContext:
         """Resolve a dotted module name to a file path via the module index."""
         return self._module_index.get(mod_name)
 
-    def _resolve_qualified_import(
-        self, mod_name: str, symbol: str
-    ) -> str:
+    def _resolve_qualified_import(self, mod_name: str, symbol: str) -> str:
         """Resolve ``from mod_name import symbol`` to a file-path-based target."""
         submod = f"{mod_name}.{symbol}"
         submod_file = self._resolve_module_to_file(submod)

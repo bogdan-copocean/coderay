@@ -71,10 +71,7 @@ class TestCrossFileResolution:
     def test_build_graph_resolves_cross_file_function_call(self):
         """File A imports and calls a function from file B."""
         file_b = "def compute(x):\n    return x * 2\n"
-        file_a = (
-            "from lib.math import compute\n\n"
-            "def run():\n    compute(42)\n"
-        )
+        file_a = "from lib.math import compute\n\ndef run():\n    compute(42)\n"
         graph = build_graph(
             ".",
             [
@@ -83,9 +80,7 @@ class TestCrossFileResolution:
             ],
         )
 
-        result = graph.get_impact_radius(
-            "src/lib/math.py::compute", depth=2
-        )
+        result = graph.get_impact_radius("src/lib/math.py::compute", depth=2)
         ids = {n.id for n in result.nodes}
         assert "src/app/main.py::run" in ids
 
@@ -97,9 +92,7 @@ class TestCrossFileResolution:
             "        return text.strip()\n"
         )
         file_a = (
-            "from lib import formatter\n\n"
-            "def process():\n"
-            "    formatter.Formatter()\n"
+            "from lib import formatter\n\ndef process():\n    formatter.Formatter()\n"
         )
         graph = build_graph(
             ".",
@@ -118,9 +111,7 @@ class TestCrossFileResolution:
         """Direct call to an imported function resolves at extraction time."""
         file_b = "def validate(data):\n    return bool(data)\n"
         file_a = (
-            "from core import validator\n\n"
-            "def handle():\n"
-            "    validator.validate({})\n"
+            "from core import validator\n\ndef handle():\n    validator.validate({})\n"
         )
         graph = build_graph(
             ".",
@@ -130,9 +121,7 @@ class TestCrossFileResolution:
             ],
         )
 
-        result = graph.get_impact_radius(
-            "src/core/validator.py::validate", depth=2
-        )
+        result = graph.get_impact_radius("src/core/validator.py::validate", depth=2)
         ids = {n.id for n in result.nodes}
         assert "src/api/handler.py::handle" in ids
 
@@ -152,8 +141,6 @@ class TestCrossFileResolution:
                 ("src/app/main.py", consumer),
             ],
         )
-        result = graph.get_impact_radius(
-            "src/pkg/decorators.py::my_decorator", depth=2
-        )
+        result = graph.get_impact_radius("src/pkg/decorators.py::my_decorator", depth=2)
         ids = {n.id for n in result.nodes}
         assert "src/app/main.py" in ids

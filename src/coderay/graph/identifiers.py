@@ -19,11 +19,11 @@ def _ensure_registry_cache() -> None:
 def file_path_to_module_names(file_path: str) -> list[str]:
     """Derive possible module names from a file path.
 
-    Strips extension, common layout prefix (src), and init filenames,
-    then produces dotted and slashed variants for each path suffix.
+    Strips extension and init filenames, then produces dotted and
+    slashed variants for each path suffix.
 
     Args:
-        file_path: Path to a source file (e.g. ``src/pkg/mod.py``).
+        file_path: Path to a source file (e.g. ``pkg/mod.py``).
 
     Returns:
         List of possible module names (e.g. ``["pkg.mod", "pkg/mod", "mod"]``).
@@ -37,9 +37,6 @@ def file_path_to_module_names(file_path: str) -> list[str]:
             break
 
     parts = cleaned.replace("\\", "/").split("/")
-
-    if parts and parts[0] == "src":
-        parts = parts[1:]
 
     if parts and parts[-1] in _KNOWN_INIT_FILENAMES:
         parts = parts[:-1]

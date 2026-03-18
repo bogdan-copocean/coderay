@@ -60,12 +60,8 @@ class TestCodeGraph:
         for n in [module, cls, method, caller]:
             g.add_node(n)
         g.add_edge(_make_edge("mod.py", "mod.py::Cls", EdgeKind.DEFINES))
-        g.add_edge(
-            _make_edge("mod.py::Cls", "mod.py::Cls.run", EdgeKind.DEFINES)
-        )
-        g.add_edge(
-            _make_edge("other.py::main", "mod.py::Cls.run", EdgeKind.CALLS)
-        )
+        g.add_edge(_make_edge("mod.py::Cls", "mod.py::Cls.run", EdgeKind.DEFINES))
+        g.add_edge(_make_edge("other.py::main", "mod.py::Cls.run", EdgeKind.CALLS))
 
         result = g.get_impact_radius("mod.py::Cls.run", depth=2)
         ids = {n.id for n in result.nodes}
@@ -91,9 +87,7 @@ class TestCodeGraph:
         child = _make_node("b.py::Child", NodeKind.CLASS, "Child")
         g.add_node(base)
         g.add_node(child)
-        g.add_edge(
-            _make_edge("b.py::Child", "a.py::Base", EdgeKind.INHERITS)
-        )
+        g.add_edge(_make_edge("b.py::Child", "a.py::Base", EdgeKind.INHERITS))
 
         result = g.get_impact_radius("a.py::Base", depth=1)
         ids = {n.id for n in result.nodes}
@@ -138,9 +132,7 @@ class TestCodeGraph:
 
     def test_impact_radius_no_callers(self):
         g = CodeGraph()
-        g.add_node(
-            _make_node("a.py::lonely", NodeKind.FUNCTION, "lonely")
-        )
+        g.add_node(_make_node("a.py::lonely", NodeKind.FUNCTION, "lonely"))
 
         result = g.get_impact_radius("a.py::lonely")
         assert result.resolved_node == "a.py::lonely"
@@ -159,9 +151,7 @@ class TestCodeGraph:
 
     def test_resolve_symbol_unique(self):
         g = CodeGraph()
-        g.add_node(
-            _make_node("a.py::MyClass", NodeKind.CLASS, "MyClass")
-        )
+        g.add_node(_make_node("a.py::MyClass", NodeKind.CLASS, "MyClass"))
         resolved = g.resolve_symbol("MyClass")
         assert resolved == "a.py::MyClass"
 
@@ -414,9 +404,7 @@ class TestCodeGraph:
 
     def test_has_symbol_candidates(self):
         g = CodeGraph()
-        g.add_node(
-            _make_node("a.py::helper", NodeKind.FUNCTION, "helper")
-        )
+        g.add_node(_make_node("a.py::helper", NodeKind.FUNCTION, "helper"))
         assert g.has_symbol_candidates("helper") is True
         assert g.has_symbol_candidates("nonexistent") is False
 

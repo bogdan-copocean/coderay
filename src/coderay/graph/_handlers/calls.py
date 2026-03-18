@@ -12,6 +12,7 @@ import builtins
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge
+from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
 
@@ -137,7 +138,9 @@ class CallHandlerMixin:
         obj_resolved = self._file_ctx.resolve(obj_name)
         if obj_resolved:
             tail = ".".join(parts[1:])
-            if obj_resolved.endswith((".py", ".js", ".ts", ".go")):
+            _, ext = obj_resolved.rsplit(".", 1) if "." in obj_resolved else ("", "")
+            supported = get_supported_extensions()
+            if ext and f".{ext}" in supported:
                 return [f"{obj_resolved}::{tail}"]
             return [f"{obj_resolved}.{tail}"]
 
@@ -199,9 +202,7 @@ class CallHandlerMixin:
                 return ".".join(scope_stack[: i + 1])
         return None
 
-    def _maybe_track_instantiation(
-        self, call_node: TSNode, raw_callee: str
-    ) -> None:
+    def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track ``x = SomeClass()`` or ``self.attr = SomeClass()`` as instance.
 
         Called after _handle_call; checks if this call is the RHS of an

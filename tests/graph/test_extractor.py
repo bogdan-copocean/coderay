@@ -110,9 +110,7 @@ class TestBuildModuleFilter:
     def test_include_modules_overrides_default(self):
         from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
 
-        _reset_config_for_testing(
-            Config(graph=GraphConfig(include_modules=["typing"]))
-        )
+        _reset_config_for_testing(Config(graph=GraphConfig(include_modules=["typing"])))
         try:
             filt = build_module_filter()
         finally:

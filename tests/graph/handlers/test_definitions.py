@@ -102,7 +102,9 @@ class TestClassDefinitions:
         content = SAMPLE_PATH.read_text()
         _, edges = extract_graph_from_file(str(SAMPLE_PATH), content)
         outer_defines = [
-            e for e in edges if e.kind == EdgeKind.DEFINES and f"{pg}::Outer" in e.source
+            e
+            for e in edges
+            if e.kind == EdgeKind.DEFINES and f"{pg}::Outer" in e.source
         ]
         targets = {e.target for e in outer_defines}
         assert any("Outer.Inner" in t for t in targets)

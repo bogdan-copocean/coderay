@@ -30,9 +30,7 @@ class TestResolveRelativeImport:
         )
 
     def test_triple_dot_two_levels_up(self):
-        assert (
-            _resolve_relative_import("src/a/b/c/file.py", "...foo") == "src/a/foo"
-        )
+        assert _resolve_relative_import("src/a/b/c/file.py", "...foo") == "src/a/foo"
 
     def test_dot_only_current_package(self):
         assert _resolve_relative_import("src/a/b/file.py", ".") == "src/a/b"
@@ -154,5 +152,3 @@ class TestExcludedModuleImports:
     def test_non_excluded_import_creates_edge(self):
         _, edges = extract_graph_from_file("test.py", "from flask import Flask\n")
         assert "flask::Flask" in _import_targets(edges)
-
-

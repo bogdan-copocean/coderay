@@ -104,9 +104,7 @@ class ImportHandlerMixin:
             return resolve_relative_import(self._module_id, text)
         return text or None
 
-    def _collect_import_name(
-        self, child: TSNode, names: list[tuple[str, str]]
-    ) -> None:
+    def _collect_import_name(self, child: TSNode, names: list[tuple[str, str]]) -> None:
         """Collect an imported name (``Y`` or ``Y as Z``) into *names*."""
         ctype = child.type
         # dotted_name/identifier = bare name; aliased_import = "X as Y"
@@ -143,9 +141,7 @@ class ImportHandlerMixin:
                 module.append(text)
                 imported.append((text, local))
 
-    def _parse_aliased_import(
-        self, node: TSNode
-    ) -> tuple[str | None, str | None]:
+    def _parse_aliased_import(self, node: TSNode) -> tuple[str | None, str | None]:
         """Extract ``(original_name, alias)`` from an ``aliased_import`` node.
 
         AST: aliased_import has children [dotted_name, identifier] for "X as Y".

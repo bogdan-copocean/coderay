@@ -18,7 +18,6 @@ TSNode = Any
 class TypeResolutionMixin:
     """Resolves type annotations for factory, param, property, and context manager."""
 
-
     def _resolve_type_text(self, type_text: str | None) -> str | None:
         """Resolve a type annotation string to a qualified class reference.
 
@@ -122,9 +121,7 @@ class TypeResolutionMixin:
             func_node = self._find_top_level_function(callee_name)
         return self._get_return_type_from_func_node(func_node) if func_node else None
 
-    def _find_method_in_class(
-        self, class_name: str, method_name: str
-    ) -> TSNode | None:
+    def _find_method_in_class(self, class_name: str, method_name: str) -> TSNode | None:
         """Find a method definition inside a class in the current file."""
         tree = self.get_tree()
         # Scan top-level nodes for the class
@@ -173,10 +170,9 @@ class TypeResolutionMixin:
 
     def _get_return_type_from_func_node(self, func_node: TSNode) -> str | None:
         """Extract return type from a function definition's type annotation."""
-        type_node = (
-            func_node.child_by_field_name("return_type")
-            or func_node.child_by_field_name("type")
-        )
+        type_node = func_node.child_by_field_name(
+            "return_type"
+        ) or func_node.child_by_field_name("type")
         if not type_node:
             return None
         refs = self._resolve_type_texts(

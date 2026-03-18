@@ -72,12 +72,24 @@ class TestGetFileSkeleton:
             get_file_skeleton(str(tmp_path / "nope.py"))
 
     def test_real_file(self, tmp_path):
+        """Read a file within workspace."""
         from coderay.mcp_server.server import get_file_skeleton
 
-        f = tmp_path / "hello.py"
-        f.write_text("def greet(): pass")
-        result = get_file_skeleton(str(f))
-        assert "def greet" in result
+        with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
+            mock_idx.return_value = tmp_path / ".index"
+            f = tmp_path / "hello.py"
+            f.write_text("def greet(): pass")
+            result = get_file_skeleton("hello.py")
+            assert "def greet" in result
+
+    def test_path_traversal_rejected(self, tmp_path):
+        """Paths outside workspace (e.g. ../../secrets) are rejected."""
+        from coderay.mcp_server.server import get_file_skeleton
+
+        with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
+            mock_idx.return_value = tmp_path / ".index"
+            with pytest.raises(FileNotFoundError):
+                get_file_skeleton("../../etc/passwd")
 
 
 class TestSemanticSearch:
@@ -105,9 +117,7 @@ class TestGetImpactRadius:
         from coderay.mcp_server.server import get_impact_radius
 
         g = MagicMock()
-        g.get_impact_radius.return_value = ImpactResult(
-            resolved_node="node", nodes=[]
-        )
+        g.get_impact_radius.return_value = ImpactResult(resolved_node="node", nodes=[])
         mock_load.return_value = g
         result = get_impact_radius("node")
         assert isinstance(result, dict)

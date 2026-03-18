@@ -46,7 +46,8 @@ def build_graph(
             )
             graph.add_nodes_and_edges(nodes, edges)
         except Exception as exc:
-            logger.warning("Graph extraction failed for %s: %s", file_path, exc)
+            logger.exception("Graph extraction failed for %s: %s", file_path, exc)
+            raise
 
     pruned = _prune_phantom_calls(graph)
     logger.info(
@@ -192,9 +193,8 @@ def build_and_save_graph(
                 )
                 existing_graph.add_nodes_and_edges(nodes, edges)
             except Exception as exc:
-                logger.warning(
-                    "Graph extraction failed for %s: %s", fp, exc
-                )
+                logger.exception("Graph extraction failed for %s: %s", fp, exc)
+                raise
         _prune_phantom_calls(existing_graph)
         graph = existing_graph
         logger.info(
