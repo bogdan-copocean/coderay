@@ -1,4 +1,6 @@
-"""Tests for multi-language registry."""
+"""Test multi-language registry."""
+
+import pytest
 
 from coderay.parsing.languages import (
     LANGUAGE_REGISTRY,
@@ -8,65 +10,42 @@ from coderay.parsing.languages import (
 
 
 class TestLanguageRegistry:
-    def test_python_registered(self):
-        assert "python" in LANGUAGE_REGISTRY
-        cfg = LANGUAGE_REGISTRY["python"]
-        assert ".py" in cfg.extensions
-        assert "function_definition" in cfg.chunker.chunk_types
-
-    def test_javascript_registered(self):
-        assert "javascript" in LANGUAGE_REGISTRY
-        cfg = LANGUAGE_REGISTRY["javascript"]
-        assert ".js" in cfg.extensions
-        assert "function_declaration" in cfg.chunker.chunk_types
-
-    def test_typescript_registered(self):
-        assert "typescript" in LANGUAGE_REGISTRY
-        cfg = LANGUAGE_REGISTRY["typescript"]
-        assert ".ts" in cfg.extensions
-        assert "interface_declaration" in cfg.chunker.chunk_types
-
-    def test_go_registered(self):
-        assert "go" in LANGUAGE_REGISTRY
-        cfg = LANGUAGE_REGISTRY["go"]
-        assert ".go" in cfg.extensions
-        assert "function_declaration" in cfg.chunker.chunk_types
+    @pytest.mark.parametrize(
+        "lang,ext,chunk_type",
+        [
+            ("python", ".py", "function_definition"),
+            ("javascript", ".js", "function_declaration"),
+            ("typescript", ".ts", "interface_declaration"),
+            ("go", ".go", "function_declaration"),
+        ],
+    )
+    def test_language_registered(self, lang, ext, chunk_type):
+        assert lang in LANGUAGE_REGISTRY
+        cfg = LANGUAGE_REGISTRY[lang]
+        assert ext in cfg.extensions
+        assert chunk_type in cfg.chunker.chunk_types
 
 
 class TestGetLanguageForFile:
-    def test_python_file(self):
-        cfg = get_language_for_file("src/main.py")
+    @pytest.mark.parametrize(
+        "path,expected_name",
+        [
+            ("src/main.py", "python"),
+            ("app/index.js", "javascript"),
+            ("app/index.ts", "typescript"),
+            ("components/Button.tsx", "typescript"),
+            ("cmd/main.go", "go"),
+            ("types.pyi", "python"),
+        ],
+    )
+    def test_resolves_language(self, path, expected_name):
+        cfg = get_language_for_file(path)
         assert cfg is not None
-        assert cfg.name == "python"
-
-    def test_js_file(self):
-        cfg = get_language_for_file("app/index.js")
-        assert cfg is not None
-        assert cfg.name == "javascript"
-
-    def test_ts_file(self):
-        cfg = get_language_for_file("app/index.ts")
-        assert cfg is not None
-        assert cfg.name == "typescript"
-
-    def test_tsx_file(self):
-        cfg = get_language_for_file("components/Button.tsx")
-        assert cfg is not None
-        assert cfg.name == "typescript"
-
-    def test_go_file(self):
-        cfg = get_language_for_file("cmd/main.go")
-        assert cfg is not None
-        assert cfg.name == "go"
+        assert cfg.name == expected_name
 
     def test_unsupported_extension(self):
         assert get_language_for_file("readme.md") is None
         assert get_language_for_file("data.csv") is None
-
-    def test_pyi_stub(self):
-        cfg = get_language_for_file("types.pyi")
-        assert cfg is not None
-        assert cfg.name == "python"
 
 
 class TestGetSupportedExtensions:
