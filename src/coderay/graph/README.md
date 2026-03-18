@@ -27,28 +27,17 @@ Handler-specific tests live in `tests/graph/handlers/`, one file per mixin:
 `test_extractor.py` covers FileContext, build_module_filter, and minimal integration.
 `test_extractor_playground.py` runs full graph_sample smoke tests and known-gap xfails.
 
+When adding JS/TS or other language support to graph extraction: add one representative
+test per new language per handler (or handler group), not full duplication of Python tests.
+
 ## Known limitations
 
-- **Static analysis only** — dynamic dispatch (`getattr`, `exec`, `eval`,
-  metaclasses) is not tracked.
-- **Wildcard imports** — `from X import *` is not resolved. Names imported
-  via wildcard are not registered; calls to them remain unresolved.
-- **Higher-order callbacks** — calls through parameters (e.g. `map(fn, items)`)
-  or untyped callable params (e.g. `def process(fn): fn()`) are not traced
-  across function boundaries.
-- **Dunder methods via builtins** — `len(obj)` → `obj.__len__`, `iter(x)` →
-  `x.__iter__`. Changing `MyClass.__len__` does not show callers of
-  `len(my_instance)`.
-- **Operator overloading** — `a + b` calls `__add__` / `__radd__`. Changing
-  these methods does not show callers of `a + b`.
-- **Tuple unpacking without type hints** — `a, b = get_pair()`; `a()` when
-  return type is unknown leaves `a` unresolved. Changing the returned callable
-  does not show callers.
-- **Lambda/comprehension scope** — calls inside lambdas (e.g. `abs(x)` in
-  `map(lambda x: abs(x), items)`) are attributed to the enclosing function,
-  not the lambda. Impact radius for "who calls abs?" is correct; "what calls
-  this lambda?" has no node.
-- **super() with multiple inheritance** — only the first base class is used.
-  Changing a later base's method may not show the subclass as impacted.
-- **Default argument evaluation** — `def f(x=expensive_init()):` runs at
-  definition time; attribution may be to module scope.
+- **Static analysis only** — `getattr`, `exec`, `eval`, metaclasses not tracked.
+- **Wildcard imports** — `from X import *` not resolved; calls remain unresolved.
+- **Higher-order callbacks** — `map(fn, items)` or untyped `def process(fn): fn()` not traced.
+- **Dunder via builtins** — `len(obj)` → `obj.__len__`; changing `__len__` does not show `len()` callers.
+- **Operator overloading** — `a + b` calls `__add__`; changing it does not show `+` callers.
+- **Tuple unpacking** — `a, b = get_pair()`; `a()` when return type unknown leaves `a` unresolved.
+- **Lambda/comprehension scope** — calls inside lambdas attributed to enclosing function.
+- **super() with multiple inheritance** — only first base used; later base changes may not show.
+- **Default argument evaluation** — `def f(x=expensive_init())` runs at definition time.
