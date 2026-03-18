@@ -126,3 +126,48 @@ class TestExtractSkeleton:
         )
         assert "import os" not in skeleton
         assert "class UserService:" in skeleton
+
+    def test_javascript_skeleton(self):
+        """Extract JS class and function signatures with ellipsis."""
+        code = """
+import { fetch } from './api';
+
+const MY_CONST = 42;
+
+class UserService {
+    "Manages user operations."
+
+    createUser(name, email) {
+        return db.insert(name, email);
+    }
+}
+
+function helperFunction(x) {
+    "A helper."
+    return x + 1;
+}
+"""
+        try:
+            import tree_sitter_javascript  # noqa: F401
+        except ImportError:
+            pytest.skip("tree-sitter-javascript not installed")
+
+        skeleton = extract_skeleton("test.js", code)
+        assert "class UserService" in skeleton
+        assert "createUser" in skeleton
+        assert "function helperFunction" in skeleton
+        assert "..." in skeleton
+        assert "db.insert" not in skeleton
+        assert "MY_CONST" in skeleton
+
+    def test_javascript_skeleton_with_imports(self):
+        """JS imports included when requested."""
+        code = "import { foo } from './bar';\nfunction baz() {}\n"
+        try:
+            import tree_sitter_javascript  # noqa: F401
+        except ImportError:
+            pytest.skip("tree-sitter-javascript not installed")
+
+        skeleton = extract_skeleton("test.js", code, include_imports=True)
+        assert "import { foo }" in skeleton
+        assert "function baz" in skeleton

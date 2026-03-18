@@ -56,11 +56,13 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return lines
 
     def _extract_text(self, node) -> str | None:
-        """Extract string from expression_statement."""
-        if node.type == "expression_statement":
-            for sub in node.children:
-                if sub.type == "string":
-                    return self.node_text(sub).strip()
+        """Extract string from docstring-capable node (e.g. expression_statement)."""
+        expr_type = self._ctx.lang_cfg.skeleton.docstring_expr_type
+        if node.type != expr_type:
+            return None
+        for sub in node.children:
+            if sub.type == "string":
+                return self.node_text(sub).strip()
         return None
 
     def _get_docstring(self, node) -> str | None:
@@ -68,11 +70,17 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         if not hasattr(node, "children"):
             return None
 
-        # For class/function level docstring
-        if node.type in ("function_definition", "class_definition"):
+        lang_cfg = self._ctx.lang_cfg
+        scope_types = (
+            *lang_cfg.function_scope_types,
+            *lang_cfg.class_scope_types,
+            *lang_cfg.skeleton.extra_class_like_types,
+        )
+        if node.type in scope_types:
+            body_block_types = lang_cfg.skeleton.body_block_types
             body = None
             for child in node.children:
-                if child.type in ("block", "statement_block"):
+                if child.type in body_block_types:
                     body = child
                     break
 
@@ -83,7 +91,6 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 if text := self._extract_text(child):
                     return text
 
-        # Module-level or other: first expression_statement with string
         for child in node.children:
             if text := self._extract_text(child):
                 return text
@@ -137,6 +144,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             *lang_cfg.import_types,
             *lang_cfg.function_scope_types,
             *lang_cfg.class_scope_types,
+            *lang_cfg.skeleton.extra_class_like_types,
             *lang_cfg.decorator_scope_types,
         )
 
@@ -191,7 +199,9 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
-        if ntype in lang_cfg.class_scope_types:
+        if ntype in (
+            lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
+        ):
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return
