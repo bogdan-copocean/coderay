@@ -144,3 +144,36 @@ class TestCrossFileResolution:
         result = graph.get_impact_radius("src/pkg/decorators.py::my_decorator", depth=2)
         ids = {n.id for n in result.nodes}
         assert "src/app/main.py" in ids
+
+    def test_rewrites_package_re_export_phantom_targets(self):
+        """CALLS edges to package::Symbol.method are rewritten to real node IDs.
+
+        When importing from a package __init__ that re-exports from a submodule,
+        the extractor resolves to package::Symbol. The rewrite step resolves by
+        qualified name and rewrites the edge before phantom pruning.
+        """
+        pkg_init = "from .service import UserService\n"
+        pkg_service = (
+            "class UserService:\n"
+            "    def get_user_by_id(self, id: int):\n"
+            "        return None\n"
+        )
+        caller = (
+            "from pkg import UserService\n\n"
+            "def handle(user_service: UserService):\n"
+            "    user_service.get_user_by_id(1)\n"
+        )
+        graph = build_graph(
+            ".",
+            [
+                ("src/pkg/__init__.py", pkg_init),
+                ("src/pkg/service.py", pkg_service),
+                ("src/app/caller.py", caller),
+            ],
+        )
+
+        result = graph.get_impact_radius(
+            "src/pkg/service.py::UserService.get_user_by_id", depth=2
+        )
+        ids = {n.id for n in result.nodes}
+        assert "src/app/caller.py::handle" in ids

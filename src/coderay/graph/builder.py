@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from coderay.core.config import get_config
-from coderay.core.models import EdgeKind
+from coderay.core.models import EdgeKind, GraphEdge
 from coderay.graph.code_graph import CodeGraph
 from coderay.graph.extractor import (
     build_module_filter,
@@ -49,14 +49,56 @@ def build_graph(
             logger.exception("Graph extraction failed for %s: %s", file_path, exc)
             raise
 
+    rewritten = _rewrite_package_phantom_targets(graph)
     pruned = _prune_phantom_calls(graph)
     logger.info(
-        "Graph built: %d nodes, %d edges (%d phantoms pruned)",
+        "Graph built: %d nodes, %d edges (%d phantoms rewritten, %d pruned)",
         graph.node_count,
         graph.edge_count,
+        rewritten,
         pruned,
     )
     return graph
+
+
+def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
+    """Rewrite CALLS edges whose targets are package::Symbol to real node IDs.
+
+    When imports from package __init__ resolve to package::Symbol.method,
+    the target node does not exist (the symbol lives in a submodule).
+    Resolve by qualified name and rewrite the edge before phantom pruning.
+
+    Returns:
+        Number of edges rewritten.
+    """
+    rewritten = 0
+    to_rewrite: list[tuple[str, str, str]] = []  # (source, old_target, new_target)
+
+    for u, v, data in graph.iter_edges():
+        if data.get("kind") != EdgeKind.CALLS:
+            continue
+        if graph.get_node(v) is not None:
+            continue
+        if "::" not in v:
+            continue
+        qualified = v.split("::", 1)[-1]
+        if not qualified:
+            continue
+        resolved = graph.resolve_symbol(qualified)
+        if not resolved or resolved == v:
+            continue
+        if graph.get_node(resolved) is None:
+            continue
+        to_rewrite.append((u, v, resolved))
+
+    for u, v, new_target in to_rewrite:
+        graph.remove_edge(u, v)
+        graph.add_edge(GraphEdge(source=u, target=new_target, kind=EdgeKind.CALLS))
+        rewritten += 1
+
+    if rewritten:
+        logger.info("Rewrote %d package phantom CALLS targets", rewritten)
+    return rewritten
 
 
 def _prune_phantom_calls(graph: CodeGraph) -> int:
@@ -195,6 +237,7 @@ def build_and_save_graph(
             except Exception as exc:
                 logger.exception("Graph extraction failed for %s: %s", fp, exc)
                 raise
+        _rewrite_package_phantom_targets(existing_graph)
         _prune_phantom_calls(existing_graph)
         graph = existing_graph
         logger.info(
