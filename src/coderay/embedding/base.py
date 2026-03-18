@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+class EmbedTask(Enum):
+    """Distinguish document-time vs. query-time embedding."""
+
+    DOCUMENT = "document"
+    QUERY = "query"
 
 
 class Embedder(ABC):
@@ -12,12 +20,17 @@ class Embedder(ABC):
     @property
     @abstractmethod
     def dimensions(self) -> int:
-        """Vector dimension (e.g. 384 for all-MiniLM-L6-v2)."""
+        """Vector dimension produced by this embedder."""
         ...
 
     @abstractmethod
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed a list of texts; returns one vector per text."""
+    def embed(
+        self,
+        texts: list[str],
+        *,
+        task: EmbedTask = EmbedTask.DOCUMENT,
+    ) -> list[list[float]]:
+        """Embed texts into vectors; one vector per input string."""
         ...
 
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 DEFAULT_MAX_CONTENT_LINES: int = 60
+
+Relevance = Literal["high", "medium", "low"]
 
 _TEST_PATH_PATTERNS: tuple[str, ...] = (
     "/tests/",
@@ -31,7 +34,8 @@ class SearchResult:
     content: str
     score: float = 0.0
     truncated: bool = False
-    low_confidence: bool = False
+    relevance: Relevance = "high"
+    search_mode: str = "vector"
 
     @classmethod
     def from_raw(
@@ -40,14 +44,7 @@ class SearchResult:
         *,
         max_lines: int | None = DEFAULT_MAX_CONTENT_LINES,
     ) -> SearchResult:
-        """Build from a raw dict returned by the storage layer.
-
-        Args:
-            row: Dict with keys path, start_line, end_line, symbol,
-                and content.
-            max_lines: Truncate content beyond this many lines.
-                None disables truncation.
-        """
+        """Build from a raw storage-layer dict, optionally truncating content."""
         content: str = row.get("content", "")
         truncated = False
 
@@ -65,13 +62,11 @@ class SearchResult:
             content=content,
             score=float(row.get("score", 0.0)),
             truncated=truncated,
+            search_mode=row.get("search_mode", "vector"),
         )
 
     def contains(self, other: SearchResult) -> bool:
-        """Return True if this result's span fully encloses *other*.
-
-        Both results must be in the same file.
-        """
+        """Return True if this result's span fully encloses *other* in the same file."""
         return (
             self.path == other.path
             and self.start_line <= other.start_line
@@ -87,9 +82,9 @@ class SearchResult:
             "symbol": self.symbol,
             "content": self.content,
             "score": self.score,
+            "relevance": self.relevance,
+            "search_mode": self.search_mode,
         }
         if self.truncated:
             d["truncated"] = True
-        if self.low_confidence:
-            d["low_confidence"] = True
         return d

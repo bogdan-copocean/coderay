@@ -14,7 +14,7 @@ from coderay.core.config import (
     _reset_config_for_testing,
 )
 from coderay.core.models import Chunk
-from coderay.embedding.base import Embedder
+from coderay.embedding.base import Embedder, EmbedTask
 
 
 class MockEmbedder(Embedder):
@@ -26,7 +26,12 @@ class MockEmbedder(Embedder):
     def dimensions(self) -> int:
         return self.DIMS
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(
+        self,
+        texts: list[str],
+        *,
+        task: EmbedTask = EmbedTask.DOCUMENT,
+    ) -> list[list[float]]:
         return [[float(i + 1)] * self.DIMS for i, _ in enumerate(texts)]
 
 
