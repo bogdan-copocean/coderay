@@ -23,8 +23,8 @@ ENV_CONFIG_FILE = "CODERAY_CONFIG_FILE"
 
 @dataclass(frozen=True)
 class EmbedderConfig:
-    model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    dimensions: int = 384
+    model: str = "nomic-ai/nomic-embed-text-v1.5"
+    dimensions: int = 768
 
 
 @dataclass(frozen=True)

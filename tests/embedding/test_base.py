@@ -5,13 +5,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from coderay.core.config import Config, EmbedderConfig, _reset_config_for_testing
-from coderay.embedding.base import Embedder, load_embedder_from_config
+from coderay.embedding.base import Embedder, EmbedTask, load_embedder_from_config
 
 
 class TestEmbedderABC:
     def test_cannot_instantiate(self):
         with pytest.raises(TypeError):
             Embedder()
+
+
+class TestEmbedTask:
+    def test_document_value(self):
+        assert EmbedTask.DOCUMENT.value == "document"
+
+    def test_query_value(self):
+        assert EmbedTask.QUERY.value == "query"
 
 
 class TestLoadEmbedderFromConfig:
