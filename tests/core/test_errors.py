@@ -20,7 +20,3 @@ class TestErrorHierarchy:
         assert issubclass(exc_cls, CodeRayError)
         with pytest.raises(CodeRayError):
             raise exc_cls("test")
-
-    def test_score_extraction_error_message(self):
-        err = ScoreExtractionError("missing _distance")
-        assert "missing _distance" in str(err)

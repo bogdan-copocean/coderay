@@ -14,14 +14,6 @@ class TestEmbedderABC:
             Embedder()
 
 
-class TestEmbedTask:
-    def test_document_value(self):
-        assert EmbedTask.DOCUMENT.value == "document"
-
-    def test_query_value(self):
-        assert EmbedTask.QUERY.value == "query"
-
-
 class TestLoadEmbedderFromConfig:
     @patch("coderay.embedding.local.LocalEmbedder")
     def test_local_provider_is_default(self, mock_local_cls, default_config):

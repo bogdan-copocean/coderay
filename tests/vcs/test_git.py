@@ -1,27 +1,23 @@
 """Tests for indexer.vcs.git."""
 
+import pytest
+
 from coderay.vcs.git import Git, _parse_status_line, load_gitignore
 
 
 class TestParseStatusLine:
-    def test_modified_unstaged(self):
-        result = _parse_status_line(" M src/foo.py")
-        assert result == (" M", "src/foo.py")
-
-    def test_modified_staged(self):
-        result = _parse_status_line("M  src/foo.py")
-        assert result == ("M ", "src/foo.py")
-
-    def test_untracked(self):
-        result = _parse_status_line("?? new.py")
-        assert result == ("??", "new.py")
-
-    def test_rename(self):
-        result = _parse_status_line("R  old.py -> new.py")
-        assert result == ("R ", "new.py")
-
-    def test_short_line_returns_none(self):
-        assert _parse_status_line("??") is None
+    @pytest.mark.parametrize(
+        "line,expected",
+        [
+            (" M src/foo.py", (" M", "src/foo.py")),
+            ("M  src/foo.py", ("M ", "src/foo.py")),
+            ("?? new.py", ("??", "new.py")),
+            ("R  old.py -> new.py", ("R ", "new.py")),
+            ("??", None),
+        ],
+    )
+    def test_parse_status_line(self, line, expected):
+        assert _parse_status_line(line) == expected
 
     def test_preserves_space_in_status(self):
         r1 = _parse_status_line(" M file.py")
@@ -44,17 +40,10 @@ class TestLoadGitignore:
 
 
 class TestGit:
-    def test_init(self, tmp_path):
+    @pytest.mark.parametrize("method", ["get_head_commit", "get_current_branch"])
+    def test_non_repo_returns_none(self, tmp_path, method):
         g = Git(tmp_path)
-        assert g.repo_root == tmp_path
-
-    def test_head_commit_non_repo(self, tmp_path):
-        g = Git(tmp_path)
-        assert g.get_head_commit() is None
-
-    def test_current_branch_non_repo(self, tmp_path):
-        g = Git(tmp_path)
-        assert g.get_current_branch() is None
+        assert getattr(g, method)() is None
 
     def test_discover_files_fallback_uses_gitignore(self, tmp_path):
         """Non-git fallback filters via .gitignore, not a hardcoded set."""

@@ -43,25 +43,18 @@ class TestGetLanguageForFile:
         assert cfg is not None
         assert cfg.name == expected_name
 
-    def test_unsupported_extension(self):
-        assert get_language_for_file("readme.md") is None
-        assert get_language_for_file("data.csv") is None
+    @pytest.mark.parametrize("path", ["readme.md", "data.csv"])
+    def test_unsupported_extension(self, path):
+        assert get_language_for_file(path) is None
 
 
 class TestGetSupportedExtensions:
-    def test_includes_common_extensions(self):
-        exts = get_supported_extensions()
-        assert ".py" in exts
-        assert ".js" in exts
-        assert ".ts" in exts
-        assert ".go" in exts
-
-    def test_includes_variants(self):
-        exts = get_supported_extensions()
-        assert ".jsx" in exts
-        assert ".tsx" in exts
-        assert ".mjs" in exts
-        assert ".pyi" in exts
+    @pytest.mark.parametrize(
+        "ext",
+        [".py", ".js", ".ts", ".go", ".jsx", ".tsx", ".mjs", ".pyi"],
+    )
+    def test_includes_extensions(self, ext):
+        assert ext in get_supported_extensions()
 
 
 class TestLanguageConfigParser:

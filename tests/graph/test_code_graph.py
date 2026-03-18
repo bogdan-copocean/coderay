@@ -1,5 +1,7 @@
 """Tests for graph.code_graph."""
 
+import pytest
+
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
 from coderay.graph.code_graph import CodeGraph
 
@@ -148,7 +150,9 @@ class TestCodeGraph:
         for n in [port_cls, port_method, impl_cls, impl_method, caller]:
             g.add_node(n)
         g.add_edge(_make_edge("impl.py::Impl", "ports.py::Port", EdgeKind.INHERITS))
-        g.add_edge(_make_edge("app.py::UseCase.execute", "ports.py::Port.save", EdgeKind.CALLS))
+        g.add_edge(
+            _make_edge("app.py::UseCase.execute", "ports.py::Port.save", EdgeKind.CALLS)
+        )
 
         result = g.get_impact_radius("impl.py::Impl.save", depth=2)
         ids = {n.id for n in result.nodes}
@@ -218,7 +222,9 @@ class TestCodeGraph:
         for n in [inner_cls, inner_method, impl_cls, impl_method, caller]:
             g.add_node(n)
         g.add_edge(
-            _make_edge("impl.py::Impl", "ports.py::Module.Outer.Inner", EdgeKind.INHERITS)
+            _make_edge(
+                "impl.py::Impl", "ports.py::Module.Outer.Inner", EdgeKind.INHERITS
+            )
         )
         g.add_edge(
             _make_edge(
@@ -292,7 +298,9 @@ class TestCodeGraph:
         for n in [parent_cls, port_a, port_b, impl_cls, impl_method, caller_direct]:
             g.add_node(n)
         g.add_edge(_make_edge("impl.py::Impl", "path::ports.Port", EdgeKind.INHERITS))
-        g.add_edge(_make_edge("app.py::direct_caller", "impl.py::Impl.save", EdgeKind.CALLS))
+        g.add_edge(
+            _make_edge("app.py::direct_caller", "impl.py::Impl.save", EdgeKind.CALLS)
+        )
 
         result = g.get_impact_radius("impl.py::Impl.save", depth=2)
         ids = {n.id for n in result.nodes}
@@ -754,21 +762,25 @@ class TestCodeGraph:
         assert result.hint is not None
         assert "svc.py::Service.run" in result.hint
 
-    def test_resolution_warning_in_to_dict(self):
-        """resolution_warning is included in serialized output."""
+    @pytest.mark.parametrize(
+        "resolution_warning,expected_key,expected_val",
+        [
+            ("Resolved from 'Baz.bar'", True, "Resolved from 'Baz.bar'"),
+            (None, False, None),
+        ],
+    )
+    def test_resolution_warning_in_to_dict(
+        self, resolution_warning, expected_key, expected_val
+    ):
         result = ImpactResult(
             resolved_node="a.py::Foo.bar",
             nodes=[],
-            resolution_warning="Resolved from 'Baz.bar'",
+            resolution_warning=resolution_warning,
         )
         d = result.to_dict()
-        assert d["resolution_warning"] == "Resolved from 'Baz.bar'"
-
-    def test_resolution_warning_absent_when_none(self):
-        """resolution_warning is omitted when None."""
-        result = ImpactResult(resolved_node="a.py::Foo.bar", nodes=[])
-        d = result.to_dict()
-        assert "resolution_warning" not in d
+        assert ("resolution_warning" in d) == expected_key
+        if expected_key:
+            assert d["resolution_warning"] == expected_val
 
     # ------------------------------------------------------------------
     # Bare-name phantom deduplication (common method names)
@@ -801,7 +813,10 @@ class TestCodeGraph:
             qualified_name="ResourceB.get",
         )
         unrelated_caller = _make_node(
-            "tests.py::test_s3_get", NodeKind.FUNCTION, "test_s3_get", file_path="tests.py"
+            "tests.py::test_s3_get",
+            NodeKind.FUNCTION,
+            "test_s3_get",
+            file_path="tests.py",
         )
         g.add_node(resource_a)
         g.add_node(resource_b)
@@ -829,11 +844,16 @@ class TestCodeGraph:
             qualified_name="UserService.delete_user_async",
         )
         caller = _make_node(
-            "views.py::handle_delete", NodeKind.FUNCTION, "handle_delete", file_path="views.py"
+            "views.py::handle_delete",
+            NodeKind.FUNCTION,
+            "handle_delete",
+            file_path="views.py",
         )
         g.add_node(method)
         g.add_node(caller)
-        g.add_edge(_make_edge("views.py::handle_delete", "delete_user_async", EdgeKind.CALLS))
+        g.add_edge(
+            _make_edge("views.py::handle_delete", "delete_user_async", EdgeKind.CALLS)
+        )
 
         result = g.get_impact_radius("svc.py::UserService.delete_user_async", depth=2)
         ids = {n.id for n in result.nodes}

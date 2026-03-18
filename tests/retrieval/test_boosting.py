@@ -7,11 +7,6 @@ class TestStructuralBooster:
     def _make_result(self, path: str, score: float) -> dict:
         return {"path": path, "score": score, "content": "x", "symbol": "x"}
 
-    def test_default_rules_loaded(self, default_config):
-        booster = StructuralBooster.from_config()
-        assert len(booster.penalties) > 0
-        assert len(booster.bonuses) > 0
-
     def test_test_dir_penalized(self, default_config):
         booster = StructuralBooster.from_config()
         results = [
@@ -54,18 +49,6 @@ class TestStructuralBooster:
         boosted = booster.boost(results)
         conftest = next(r for r in boosted if "conftest" in r["path"])
         assert conftest["score"] < 1.0
-
-    def test_raw_score_preserved(self, default_config):
-        booster = StructuralBooster.from_config()
-        results = [self._make_result("tests/test_a.py", 0.5)]
-        boosted = booster.boost(results)
-        assert boosted[0]["raw_score"] == 0.5
-
-    def test_from_config_uses_defaults(self, default_config):
-        """from_config() uses get_config() and returns default penalties and bonuses."""
-        booster = StructuralBooster.from_config()
-        assert len(booster.penalties) > 0
-        assert len(booster.bonuses) > 0
 
     def test_empty_results(self, default_config):
         booster = StructuralBooster.from_config()

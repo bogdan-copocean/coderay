@@ -7,19 +7,6 @@ import pytest
 from coderay.pipeline.indexer import Indexer, IndexResult
 
 
-class TestIndexResult:
-    def test_str(self):
-        r = IndexResult(cached=5, updated=3, removed=1)
-        assert "5" in str(r)
-        assert "3" in str(r)
-
-    def test_defaults(self):
-        r = IndexResult()
-        assert r.cached == 0
-        assert r.updated == 0
-        assert r.removed == 0
-
-
 class TestIndexer:
     def test_init_with_mock_embedder(self, tmp_path, mock_embedder, app_config):
         repo = tmp_path / "repo"

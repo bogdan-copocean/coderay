@@ -90,5 +90,3 @@ class TestKnownGaps:
         calls = [e for e in edges if e.kind == EdgeKind.CALLS]
         targets = {e.target for e in calls}
         assert "collections::defaultdict" in targets
-
-

@@ -262,9 +262,7 @@ class CodeGraph:
         """Return True if edge is dependency (not containment)."""
         if not self._g.has_edge(source, target):
             return False
-        kind = self._normalize_edge_kind(
-            self._g.edges[source, target].get("kind")
-        )
+        kind = self._normalize_edge_kind(self._g.edges[source, target].get("kind"))
         return kind in self._IMPACT_EDGE_KINDS if kind else False
 
     def _not_found_result(self, symbol: str) -> ImpactResult:

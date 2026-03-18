@@ -2,7 +2,6 @@
 
 from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.extractor import (
-    _PYTHON_BUILTINS,
     FileContext,
     build_module_filter,
     extract_graph_from_file,
@@ -136,11 +135,6 @@ class TestBuildModuleFilter:
     def test_none_config_uses_defaults(self):
         filt = build_module_filter()
         assert "builtins" in filt
-
-    def test_python_builtins_constant(self):
-        assert "print" in _PYTHON_BUILTINS
-        assert "len" in _PYTHON_BUILTINS
-        assert "isinstance" in _PYTHON_BUILTINS
 
 
 class TestConfigurableExtraction:

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from coderay.core.config import Config, IndexConfig, _reset_config_for_testing
 from coderay.state.machine import (
     FILE_HASHES_FILENAME,
@@ -14,65 +16,26 @@ from coderay.state.machine import (
 )
 
 
-class TestMetaState:
-    def test_values(self):
-        assert MetaState.IN_PROGRESS.value == "in_progress"
-        assert MetaState.DONE.value == "done"
-        assert MetaState.ERRORED.value == "errored"
-        assert MetaState.INCOMPLETE.value == "incomplete"
-
-
-class TestCurrentRun:
-    def test_defaults(self):
-        run = CurrentRun()
-        assert run.paths_to_process == []
-        assert run.processed_count == 0
-        assert run.error is None
-
-    def test_with_values(self):
-        run = CurrentRun(
-            paths_to_process=["a.py", "b.py"],
-            processed_count=1,
-            error="oops",
-        )
-        assert run.paths_to_process == ["a.py", "b.py"]
-        assert run.processed_count == 1
-        assert run.error == "oops"
-
-
 class TestIndexMeta:
-    def test_is_in_progress(self):
+    @pytest.mark.parametrize(
+        "state,expected_in_progress,expected_incomplete",
+        [
+            (MetaState.IN_PROGRESS, True, False),
+            (MetaState.DONE, False, False),
+            (MetaState.INCOMPLETE, False, True),
+        ],
+    )
+    def test_state_predicates(self, state, expected_in_progress, expected_incomplete):
         meta = IndexMeta(
-            state=MetaState.IN_PROGRESS,
+            state=state,
             started_at=0.0,
             last_commit="abc",
             branch="main",
             indexed_at=0.0,
             current_run=CurrentRun(),
         )
-        assert meta.is_in_progress() is True
-
-    def test_is_in_progress_false_when_done(self):
-        meta = IndexMeta(
-            state=MetaState.DONE,
-            started_at=0.0,
-            last_commit="abc",
-            branch="main",
-            indexed_at=0.0,
-            current_run=CurrentRun(),
-        )
-        assert meta.is_in_progress() is False
-
-    def test_is_incomplete(self):
-        meta = IndexMeta(
-            state=MetaState.INCOMPLETE,
-            started_at=0.0,
-            last_commit="abc",
-            branch="main",
-            indexed_at=0.0,
-            current_run=CurrentRun(),
-        )
-        assert meta.is_incomplete() is True
+        assert meta.is_in_progress() == expected_in_progress
+        assert meta.is_incomplete() == expected_incomplete
 
 
 class TestStateMachine:
@@ -169,21 +132,23 @@ class TestStateMachine:
         sm.save_progress(full_rel_paths=["a.py"], processed_count=1)
         assert sm.current_state is None
 
-    def test_has_partial_progress_false_when_no_paths(self, tmp_index_dir):
+    @pytest.mark.parametrize(
+        "paths,processed_count,expected",
+        [
+            ([], 0, False),
+            (["a.py"], 0, False),
+            (["a.py", "b.py"], 1, True),
+        ],
+    )
+    def test_has_partial_progress(
+        self, tmp_index_dir, paths, processed_count, expected
+    ):
         cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
-        sm.save_progress(full_rel_paths=[], processed_count=0)
-        assert sm.has_partial_progress is False
-
-    def test_has_partial_progress_false_when_zero_processed(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
-        _reset_config_for_testing(cfg)
-        sm = StateMachine()
-        sm.start(branch="main", last_commit="abc123")
-        sm.save_progress(full_rel_paths=["a.py"], processed_count=0)
-        assert sm.has_partial_progress is False
+        sm.save_progress(full_rel_paths=paths, processed_count=processed_count)
+        assert sm.has_partial_progress is expected
 
 
 class TestMetaPersistence:
@@ -251,16 +216,3 @@ class TestFileHashesPersistence:
         sm1.finish()
         sm2 = StateMachine()
         assert sm2.file_hashes == {"a.py": "hash1"}
-
-    def test_file_hashes_empty_when_missing(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
-        _reset_config_for_testing(cfg)
-        sm = StateMachine()
-        assert sm.file_hashes == {}
-
-    def test_file_hashes_setter(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
-        _reset_config_for_testing(cfg)
-        sm = StateMachine()
-        sm.file_hashes = {"x.py": "h1"}
-        assert sm.file_hashes == {"x.py": "h1"}

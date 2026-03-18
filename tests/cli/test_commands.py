@@ -2,27 +2,28 @@
 
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from coderay.cli.commands import cli
 
 
 class TestCLI:
-    def test_help(self):
+    @pytest.mark.parametrize(
+        "args,expected_in_output",
+        [
+            (["--help"], "build"),
+            (["build", "--help"], None),
+            (["search", "--help"], None),
+            (["graph", "--help"], None),
+        ],
+    )
+    def test_help(self, args, expected_in_output):
         runner = CliRunner()
-        result = runner.invoke(cli, ["--help"])
+        result = runner.invoke(cli, args)
         assert result.exit_code == 0
-        assert "build" in result.output
-
-    def test_build_help(self):
-        runner = CliRunner()
-        result = runner.invoke(cli, ["build", "--help"])
-        assert result.exit_code == 0
-
-    def test_search_help(self):
-        runner = CliRunner()
-        result = runner.invoke(cli, ["search", "--help"])
-        assert result.exit_code == 0
+        if expected_in_output:
+            assert expected_in_output in result.output
 
     def test_list_no_index(self):
         runner = CliRunner()
@@ -37,8 +38,3 @@ class TestCLI:
             Path(".index").mkdir()
             result = runner.invoke(cli, ["--index-dir", ".index", "maintain"])
             assert result.exit_code in (0, 1) or result.exception is not None
-
-    def test_graph_help(self):
-        runner = CliRunner()
-        result = runner.invoke(cli, ["graph", "--help"])
-        assert result.exit_code == 0

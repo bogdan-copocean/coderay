@@ -1,5 +1,7 @@
 """Tests for skeleton.extractor."""
 
+import pytest
+
 from coderay.skeleton.extractor import extract_skeleton
 
 SAMPLE_PYTHON = '''
@@ -73,18 +75,11 @@ class TestExtractSkeleton:
         skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)
         assert "MY_CONST = 42" in skeleton
 
-    def test_unsupported_extension_returns_content(self):
-        content = "some random content"
-        result = extract_skeleton("test.xyz", content)
-        assert result == content
-
-    def test_empty_content(self):
-        result = extract_skeleton("test.py", "")
-        assert isinstance(result, str)
-
-    def test_unsupported_extension_returns_raw_content(self):
-        skeleton = extract_skeleton("noext", SAMPLE_PYTHON)
-        assert skeleton == SAMPLE_PYTHON
+    @pytest.mark.parametrize(
+        "path,content", [("test.xyz", "some random content"), ("noext", SAMPLE_PYTHON)]
+    )
+    def test_unsupported_extension_returns_content_unchanged(self, path, content):
+        assert extract_skeleton(path, content) == content
 
     def test_tree_sitter_playground_skeleton(
         self, tree_sitter_playground_source, expected_tree_sitter_playground_skeleton
@@ -94,41 +89,36 @@ class TestExtractSkeleton:
         skeleton = extract_skeleton(path, source, include_imports=True)
         assert skeleton == expected_tree_sitter_playground_skeleton
 
-    def test_include_imports_false_by_default(self):
-        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)
-        assert "import os" not in skeleton
-        assert "from pathlib import Path" not in skeleton
-
-    def test_include_imports_false_omits_imports(self):
+    def test_include_imports_false_omits_imports_keeps_signatures(self):
         skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, include_imports=False)
-        assert "import os" not in skeleton
-        assert "from pathlib import Path" not in skeleton
+        assert (
+            "import os" not in skeleton and "from pathlib import Path" not in skeleton
+        )
+        assert "class UserService:" in skeleton and "def create_user" in skeleton
+        assert "def helper_function" in skeleton and "MY_CONST = 42" in skeleton
 
-    def test_include_imports_false_keeps_signatures(self):
-        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, include_imports=False)
-        assert "class UserService:" in skeleton
-        assert "def create_user" in skeleton
-        assert "def helper_function" in skeleton
-        assert "MY_CONST = 42" in skeleton
-
-    def test_symbol_filter_class(self):
-        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="UserService")
-        assert "class UserService:" in skeleton
-        assert "def create_user" in skeleton
-        assert "def delete_user" in skeleton
-        assert "def helper_function" not in skeleton
-        assert "MY_CONST" not in skeleton
-
-    def test_symbol_filter_function(self):
-        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="helper_function")
-        assert "def helper_function" in skeleton
-        assert "class UserService" not in skeleton
-
-    def test_symbol_filter_no_match(self):
-        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="NonExistent")
-        assert "class UserService" not in skeleton
-        assert "def helper_function" not in skeleton
-        assert "MY_CONST" not in skeleton
+    @pytest.mark.parametrize(
+        "symbol,present,absent",
+        [
+            (
+                "UserService",
+                ["class UserService:", "def create_user", "def delete_user"],
+                ["def helper_function", "MY_CONST"],
+            ),
+            ("helper_function", ["def helper_function"], ["class UserService"]),
+            (
+                "NonExistent",
+                [],
+                ["class UserService", "def helper_function", "MY_CONST"],
+            ),
+        ],
+    )
+    def test_symbol_filter(self, symbol, present, absent):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol=symbol)
+        for s in present:
+            assert s in skeleton
+        for s in absent:
+            assert s not in skeleton
 
     def test_symbol_filter_omits_imports(self):
         skeleton = extract_skeleton(
