@@ -171,9 +171,10 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
+        param_types = self._ctx.lang_cfg.graph.typed_param_types
         result: list[tuple[str, list[str]]] = []
         for child in params.children:
-            if child.type == "typed_parameter":
+            if child.type in param_types:
                 extracted = self._extract_type_from_typed_param(child)
                 if extracted:
                     result.append(extracted)
@@ -186,8 +187,9 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return None
+        param_types = self._ctx.lang_cfg.graph.typed_param_types
         for child in params.children:
-            if child.type == "typed_parameter":
+            if child.type in param_types:
                 extracted = self._extract_type_from_typed_param(child)
                 if extracted and extracted[0] == param_name:
                     refs = extracted[1]

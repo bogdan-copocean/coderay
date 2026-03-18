@@ -309,7 +309,7 @@ class GraphTreeSitterParser(
             self._handle_call(node, scope_stack=scope_stack)
         elif ntype == "decorator":
             self._handle_decorator(node, scope_stack=scope_stack)
-        elif ntype == "assignment":
+        elif ntype in lang_cfg.graph.assignment_types:
             self._handle_assignment(node, scope_stack=scope_stack)
         elif ntype == "with_statement":
             self._handle_with_statement(node, scope_stack=scope_stack)

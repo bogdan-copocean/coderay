@@ -10,14 +10,26 @@ TSNode = Any
 class AssignmentHandlerMixin:
     """Handle assignments and with statements for instance/alias tracking."""
 
-    def _handle_assignment(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Track aliases and instance types for call resolution."""
+    def _get_assignment_sides(self, node: TSNode) -> tuple[TSNode | None, TSNode | None]:
+        """Return (lhs, rhs) for assignment-like nodes; (None, None) if not applicable."""
+        if node.type == "variable_declarator":
+            lhs = node.child_by_field_name("name")
+            rhs = node.child_by_field_name("value")
+            return (lhs, rhs)
+        if node.type == "assignment_expression":
+            lhs = node.child_by_field_name("left")
+            rhs = node.child_by_field_name("right")
+            return (lhs, rhs)
         children = node.children
         if len(children) < 3:
-            return  # Need at least: target, "=", value
+            return (None, None)
+        return (children[0], children[-1])
 
-        lhs = children[0]
-        rhs = children[-1]  # [-1] handles "x: int = 5" (annotated)
+    def _handle_assignment(self, node: TSNode, *, scope_stack: list[str]) -> None:
+        """Track aliases and instance types for call resolution."""
+        lhs, rhs = self._get_assignment_sides(node)
+        if lhs is None or rhs is None:
+            return
 
         # Constructor/setter injection: self.storage = storage (storage: StoragePort)
         if lhs.type == "attribute" and rhs.type == "identifier":
