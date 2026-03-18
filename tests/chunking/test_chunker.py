@@ -67,7 +67,7 @@ class TestChunkFile:
 
 
 class TestDecoratedDefinitions:
-    """Verify that decorated functions/classes produce correct chunks."""
+    """Verify decorated functions/classes produce correct chunks."""
 
     def test_single_decorator_function(self):
         code = "@staticmethod\ndef my_func():\n    return 42\n"

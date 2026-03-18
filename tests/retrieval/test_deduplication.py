@@ -5,7 +5,7 @@ from coderay.retrieval.search import Retrieval
 
 
 def _r(path: str, start: int, end: int, score: float = 1.0) -> SearchResult:
-    """Build a minimal SearchResult for tests."""
+    """Build minimal SearchResult for tests."""
     return SearchResult(
         path=path,
         start_line=start,
@@ -17,7 +17,7 @@ def _r(path: str, start: int, end: int, score: float = 1.0) -> SearchResult:
 
 
 class TestDeduplicateByContainment:
-    """Tests for Retrieval._deduplicate_by_containment()."""
+    """Test Retrieval._deduplicate_by_containment()."""
 
     def test_empty_list(self):
         assert Retrieval._deduplicate_by_containment([]) == []
@@ -92,7 +92,7 @@ class TestDeduplicateByContainment:
 
 
 class TestAssignRelevance:
-    """Tests for Retrieval._assign_relevance() tiered scoring."""
+    """Test Retrieval._assign_relevance() tiered scoring."""
 
     def test_empty_list(self):
         assert Retrieval._assign_relevance([]) == []

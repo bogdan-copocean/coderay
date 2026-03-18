@@ -1,8 +1,4 @@
-"""Tree-sitter playground module for end-to-end parsing tests.
-
-This file is intentionally eclectic: it includes a variety of Python constructs
-that exercise chunking, skeleton extraction, and graph building.
-"""
+"""Sample for skeleton/chunking tests."""
 
 from __future__ import annotations
 

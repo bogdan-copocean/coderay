@@ -1,8 +1,4 @@
-"""Tests for CallHandlerMixin: CALLS edges, resolution, filtering.
-
-Covers: simple name, self.method, self.attr.method, super(), chains,
-builtins/excluded filtering, instance tracking, decorators, __call__, partial.
-"""
+"""Test CallHandlerMixin: resolution (self, super, chains), filtering, decorators."""
 
 from pathlib import Path
 

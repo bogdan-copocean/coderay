@@ -66,7 +66,7 @@ class TestBuildAndSaveGraph:
 
 
 class TestCrossFileResolution:
-    """End-to-end tests verifying cross-file CALLS edges are pre-resolved."""
+    """Test cross-file CALLS edges are pre-resolved."""
 
     def test_build_graph_resolves_cross_file_function_call(self):
         """File A imports and calls a function from file B."""

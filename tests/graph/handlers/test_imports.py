@@ -1,8 +1,4 @@
-"""Tests for ImportHandlerMixin: IMPORTS edges and FileContext registration.
-
-Covers: bare imports, from-imports, aliased imports, relative imports,
-excluded modules.
-"""
+"""Test ImportHandlerMixin: bare/from/aliased/relative imports, excluded modules."""
 
 from coderay.core.models import EdgeKind
 from coderay.graph.extractor import _resolve_relative_import, extract_graph_from_file

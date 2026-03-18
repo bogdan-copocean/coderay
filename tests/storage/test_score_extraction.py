@@ -1,4 +1,4 @@
-"""Tests for deterministic score extraction from LanceDB rows."""
+"""Test deterministic score extraction from LanceDB rows."""
 
 import pytest
 
@@ -7,7 +7,7 @@ from coderay.storage.lancedb import _extract_score, _ScoreField
 
 
 class TestExtractScore:
-    """Tests for _extract_score deterministic extraction."""
+    """Test _extract_score deterministic extraction."""
 
     def test_relevance_score_extracted(self):
         row = {"_relevance_score": 0.85, "content": "x"}

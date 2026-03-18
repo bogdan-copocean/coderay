@@ -1,8 +1,4 @@
-"""Tests for DefinitionHandlerMixin: DEFINES, INHERITS edges, nodes.
-
-Covers: function/class nodes, DEFINES hierarchy, INHERITS resolution,
-@property detection, typed parameters for param injection.
-"""
+"""Test DefinitionHandlerMixin: DEFINES, INHERITS, @property, typed params."""
 
 from pathlib import Path
 

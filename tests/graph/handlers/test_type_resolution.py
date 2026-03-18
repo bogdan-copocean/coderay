@@ -1,8 +1,4 @@
-"""Tests for TypeResolutionMixin: type hint extraction and resolution.
-
-Covers: _resolve_type_texts (union, Self, forward refs), _extract_tuple_type_args,
-_get_function_return_type, _get_parameter_type_hint, factory/param/property/context.
-"""
+"""Test TypeResolutionMixin: union, Self, factory/param/property types."""
 
 from pathlib import Path
 

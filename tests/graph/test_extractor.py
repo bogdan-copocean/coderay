@@ -1,7 +1,4 @@
-"""Tests for graph.extractor: FileContext, build_module_filter, integration.
-
-Handler-specific tests live in tests/graph/handlers/.
-"""
+"""Test graph.extractor: FileContext, build_module_filter, integration."""
 
 from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.extractor import (
@@ -13,7 +10,7 @@ from coderay.graph.extractor import (
 
 
 class TestFileContext:
-    """Unit tests for the FileContext name-resolution data structure."""
+    """Test FileContext name-resolution."""
 
     def test_register_and_resolve_import(self):
         ctx = FileContext()
@@ -58,7 +55,7 @@ class TestFileContext:
 
 
 class TestGraphExtraction:
-    """Minimal integration tests for extract_graph_from_file."""
+    """Minimal integration for extract_graph_from_file."""
 
     def test_extracts_module_node(self):
         nodes, edges = extract_graph_from_file("test.py", "x = 1")
@@ -80,7 +77,7 @@ class TestGraphExtraction:
 
 
 class TestBuildModuleFilter:
-    """Tests for the configurable module filter."""
+    """Test configurable module filter."""
 
     def test_default_excludes_core_modules(self):
         filt = build_module_filter()
@@ -147,7 +144,7 @@ class TestBuildModuleFilter:
 
 
 class TestConfigurableExtraction:
-    """Extraction respects module-based filtering end-to-end."""
+    """Test extraction respects module-based filtering."""
 
     def test_default_extraction_filters_builtins(self, default_config):
         code = "def f():\n    len([])\n    custom()\n"
