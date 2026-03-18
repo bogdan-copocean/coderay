@@ -6,7 +6,7 @@ from enum import Enum
 
 @dataclass
 class Chunk:
-    """A single code chunk ready for embedding."""
+    """Code chunk ready for embedding."""
 
     path: str
     start_line: int
@@ -15,12 +15,12 @@ class Chunk:
     content: str
 
     def line_range(self) -> tuple[int, int]:
-        """Return (start_line, end_line) for this chunk."""
+        """Return (start_line, end_line)."""
         return (self.start_line, self.end_line)
 
 
 class NodeKind(str, Enum):
-    """Kind of node in the code graph: module, class, or function."""
+    """Node kind: module, class, or function."""
 
     MODULE = "module"
     CLASS = "class"
@@ -28,7 +28,7 @@ class NodeKind(str, Enum):
 
 
 class EdgeKind(str, Enum):
-    """Kind of directed edge: imports, defines, calls, or inherits."""
+    """Edge kind: imports, defines, calls, inherits."""
 
     IMPORTS = "imports"
     DEFINES = "defines"
@@ -38,7 +38,7 @@ class EdgeKind(str, Enum):
 
 @dataclass(frozen=True)
 class GraphNode:
-    """A node in the code graph (module, class, or function)."""
+    """Node in code graph."""
 
     id: str
     kind: NodeKind
@@ -63,7 +63,7 @@ class GraphNode:
 
 @dataclass(frozen=True)
 class GraphEdge:
-    """A directed edge in the code graph."""
+    """Directed edge in code graph."""
 
     source: str
     target: str
@@ -72,7 +72,7 @@ class GraphEdge:
 
 @dataclass(frozen=True)
 class ImpactResult:
-    """Result of an impact-radius query with resolution diagnostics."""
+    """Impact-radius query result with diagnostics."""
 
     resolved_node: str | None
     nodes: list[GraphNode]

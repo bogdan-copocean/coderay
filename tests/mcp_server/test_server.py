@@ -11,19 +11,19 @@ from coderay.mcp_server.server import mcp
 
 
 def _get_tool_names() -> set[str]:
-    """Retrieve registered tool names from the FastMCP instance."""
+    """Return registered tool names."""
     tools = asyncio.get_event_loop().run_until_complete(mcp.list_tools())
     return {t.name for t in tools}
 
 
 def _get_resource_uris() -> set[str]:
-    """Retrieve registered resource URIs from the FastMCP instance."""
+    """Return registered resource URIs."""
     resources = asyncio.get_event_loop().run_until_complete(mcp.list_resources())
     return {str(r.uri) for r in resources}
 
 
 class TestMCPToolsRegistered:
-    """Verify all expected tools are registered on the FastMCP instance."""
+    """Verify expected tools are registered."""
 
     EXPECTED_TOOLS = [
         "semantic_search",

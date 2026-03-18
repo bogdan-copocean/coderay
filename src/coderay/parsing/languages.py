@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SkeletonConfig:
-    """Skeleton-specific configuration (fields not shared with other features)."""
+    """Skeleton-specific configuration."""
 
     extra_class_like_types: tuple[str, ...] = ()
     top_level_expr_types: tuple[str, ...] = ("expression_statement",)
@@ -26,27 +26,21 @@ class SkeletonConfig:
 
 @dataclass
 class ChunkerConfig:
-    """Configuration for chunking for a language."""
+    """Chunking configuration per language."""
 
     chunk_types: tuple[str, ...]
 
 
 @dataclass
 class GraphConfig:
-    """Graph-specific configuration (fields not shared with other features)."""
+    """Graph-specific configuration."""
 
     call_types: tuple[str, ...]
     extra_class_scope_types: tuple[str, ...] = ()
 
 
 class LanguageConfigProtocol(Protocol):
-    """Describe how a programming language is parsed with Tree-sitter.
-
-    Shared node type sets (``import_types``, ``function_scope_types``,
-    ``class_scope_types``) live here so that skeleton, graph, and future
-    features reference the same definitions.  Feature-specific sub-configs
-    carry only what is unique to that feature.
-    """
+    """Protocol for Tree-sitter language configuration."""
 
     name: str
     extensions: tuple[str, ...]
@@ -230,7 +224,7 @@ for _lang_name, _cfg in LANGUAGE_REGISTRY.items():
 
 
 def get_language_for_file(path: str | Path) -> LanguageConfigProtocol | None:
-    """Return the LanguageConfig for a file based on its extension, or None."""
+    """Return LanguageConfig for file by extension; None if unsupported."""
     ext = Path(path).suffix.lower()
     lang_name = _EXTENSION_MAP.get(ext)
     if lang_name is None:
@@ -239,12 +233,12 @@ def get_language_for_file(path: str | Path) -> LanguageConfigProtocol | None:
 
 
 def get_supported_extensions() -> set[str]:
-    """Return all file extensions we can index."""
+    """Return supported file extensions."""
     return set(_EXTENSION_MAP.keys())
 
 
 def get_init_filenames() -> set[str]:
-    """Return all init-style filenames across languages (e.g. __init__, index)."""
+    """Return init-style filenames (e.g. __init__, index)."""
     names: set[str] = set()
     for cfg in LANGUAGE_REGISTRY.values():
         names.update(cfg.init_filenames)
@@ -252,7 +246,7 @@ def get_init_filenames() -> set[str]:
 
 
 def get_resolution_suffixes() -> list[str]:
-    """Return file suffixes for resolving import targets."""
+    """Return file suffixes for import resolution."""
     suffixes: list[str] = []
     seen: set[str] = set()
     for cfg in LANGUAGE_REGISTRY.values():

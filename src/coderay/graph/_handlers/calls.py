@@ -1,10 +1,4 @@
-"""Call handling for graph extraction.
-
-Creates CALLS edges (caller -> callee) from resolved call expressions.
-Resolves callees via FileContext (instance tracking, aliases, class attrs).
-Also tracks x = SomeClass() for instantiation. Filters out builtins and
-excluded modules.
-"""
+"""Call handling: CALLS edges, resolution, filtering."""
 
 from __future__ import annotations
 
@@ -23,16 +17,16 @@ _PYTHON_BUILTINS: frozenset[str] = frozenset(
 
 
 class CallHandlerMixin:
-    """Handles call expressions: CALLS edges and instantiation tracking."""
+    """Handle calls: CALLS edges and instantiation tracking."""
 
     def _caller_id_from_scope(self, scope_stack: list[str]) -> str:
-        """Return the caller node ID for the given scope stack."""
+        """Return caller node ID for scope."""
         if scope_stack:
             return f"{self.file_path}::{'.'.join(scope_stack)}"
         return self._module_id
 
     def _handle_call(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create a CALLS edge from the enclosing scope to the resolved callee."""
+        """Create CALLS edge to resolved callee."""
         caller_id = self._caller_id_from_scope(scope_stack)
 
         callee_node = node.child_by_field_name("function")
@@ -59,7 +53,7 @@ class CallHandlerMixin:
         self._maybe_track_instantiation(node, raw_callee)
 
     def _resolve_callee_targets(self, raw: str, scope_stack: list[str]) -> list[str]:
-        """Resolve a callee expression to a qualified target for CALLS edges."""
+        """Resolve callee to qualified targets."""
         result = self._resolve_super_targets(raw, scope_stack)
         if result is not None:
             return result
@@ -74,7 +68,7 @@ class CallHandlerMixin:
     def _resolve_super_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve super().method() to parent class method."""
+        """Resolve super().method() to parent method."""
         if not raw.startswith("super()."):
             return None
         method = raw[len("super().") :]
@@ -84,7 +78,7 @@ class CallHandlerMixin:
     def _resolve_self_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve self.method() or self.attr.method() via instance/class attrs."""
+        """Resolve self.method() via instance/class attrs."""
         if not raw.startswith(("self.", "this.")):
             return None
         suffix = raw.split(".", 1)[1]
@@ -111,7 +105,7 @@ class CallHandlerMixin:
         return [method]
 
     def _resolve_simple_name_targets(self, raw: str) -> list[str]:
-        """Resolve simple name func() or obj() via alias/import/instance."""
+        """Resolve simple name via alias/import/instance."""
         name = raw
         instance_class = self._file_ctx.resolve_instance(name)
         if instance_class:
@@ -120,7 +114,7 @@ class CallHandlerMixin:
         return [resolved] if resolved else [name]
 
     def _resolve_chain_targets(self, raw: str) -> list[str]:
-        """Resolve obj.method(), obj.attr.method(), or obj.attr() chains."""
+        """Resolve obj.attr.method() chains."""
         parts = raw.split(".")
         obj_name = parts[0]
         method_name = parts[-1]
@@ -147,7 +141,7 @@ class CallHandlerMixin:
         return [method_name]
 
     def _is_excluded(self, resolved: str, raw: str) -> bool:
-        """Check whether a resolved callee belongs to an excluded module."""
+        """Return True if callee is excluded (builtins, typing, etc.)."""
         # Excluded: typing, abc, __future__; also bare builtins (print, len)
         if "::" in resolved:
             module_part = resolved.split("::")[0]
@@ -157,7 +151,7 @@ class CallHandlerMixin:
         return resolved == bare and bare in _PYTHON_BUILTINS
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
-        """Resolve super().method() to the parent class's method."""
+        """Resolve super().method() to parent method."""
         class_qualified = self._find_enclosing_class(scope_stack)
         if not class_qualified:
             return None
@@ -171,7 +165,7 @@ class CallHandlerMixin:
         return f"{base_resolved}.{method}"
 
     def _get_first_base_class(self, class_qualified: str) -> str | None:
-        """Get the first base class name for a class in the current file."""
+        """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
 
@@ -193,21 +187,14 @@ class CallHandlerMixin:
         return None
 
     def _find_enclosing_class(self, scope_stack: list[str]) -> str | None:
-        """Find the innermost enclosing class name from the scope stack.
-
-        scope_stack = ["Outer", "Inner", "method"] → "Outer.Inner"
-        """
+        """Find innermost enclosing class from scope stack."""
         for i in range(len(scope_stack) - 1, -1, -1):
             if self._file_ctx.is_class(scope_stack[i]):
                 return ".".join(scope_stack[: i + 1])
         return None
 
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
-        """Track ``x = SomeClass()`` or ``self.attr = SomeClass()`` as instance.
-
-        Called after _handle_call; checks if this call is the RHS of an
-        assignment. If so, registers the LHS as an instance of the callee.
-        """
+        """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
         if parent is None or parent.type != "assignment":
             return  # Not an assignment RHS
@@ -248,10 +235,7 @@ class CallHandlerMixin:
                         )
 
     def _handle_decorator(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create a CALLS edge from the enclosing scope to the decorator target.
-
-        @my_decorator and @my_decorator() both imply a call at definition time.
-        """
+        """Create CALLS edge to decorator target."""
         text = self.node_text(node).strip()
         if not text or not text.startswith("@"):
             return

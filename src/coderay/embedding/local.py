@@ -34,24 +34,20 @@ _TASK_PREFIXES: dict[str, dict[EmbedTask, str]] = {
 
 
 class LocalEmbedder(Embedder):
-    """CPU-only embeddings via fastembed (ONNX Runtime)."""
+    """CPU embeddings via fastembed."""
 
     def __init__(
         self,
         model: str = DEFAULT_MODEL,
         dimensions: int = DEFAULT_DIMENSIONS,
     ) -> None:
-        """Initialize with model name and vector dimensions."""
+        """Initialize with model name and dimensions."""
         self._dimensions = dimensions
         self._model_name = model
         self._model = None
 
     def _load_model(self):
-        """Lazily load the fastembed model on first use.
-
-        Tries local cache first (fully offline). If the model is not cached,
-        falls back to download so first-time setup requires no manual steps.
-        """
+        """Load fastembed model on first use; try cache then download."""
         from fastembed import TextEmbedding
 
         logger.info("Loading local embedding model %s...", self._model_name)
@@ -72,11 +68,11 @@ class LocalEmbedder(Embedder):
 
     @property
     def dimensions(self) -> int:
-        """Return the vector dimension."""
+        """Return vector dimension."""
         return self._dimensions
 
     def _apply_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
-        """Prepend model-specific task prefix when available."""
+        """Prepend task prefix when available."""
         prefixes = _TASK_PREFIXES.get(self._model_name)
         if prefixes is None:
             return texts
@@ -91,7 +87,7 @@ class LocalEmbedder(Embedder):
         *,
         task: EmbedTask = EmbedTask.DOCUMENT,
     ) -> list[list[float]]:
-        """Embed texts via fastembed; one vector per input string."""
+        """Embed texts via fastembed."""
         if not texts:
             return []
         if self._model is None:

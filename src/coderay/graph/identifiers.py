@@ -1,4 +1,4 @@
-"""Shared identifier and path utilities for the graph module."""
+"""Identifier and path utilities for graph."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ _KNOWN_INIT_FILENAMES: frozenset[str] = frozenset()
 
 
 def _ensure_registry_cache() -> None:
-    """Lazily populate the cached extension and init filename sets."""
+    """Populate cached extension and init filename sets."""
     global _KNOWN_EXTENSIONS, _KNOWN_INIT_FILENAMES  # noqa: PLW0603
     if not _KNOWN_EXTENSIONS:
         _KNOWN_EXTENSIONS = frozenset(get_supported_extensions())
@@ -17,17 +17,7 @@ def _ensure_registry_cache() -> None:
 
 
 def file_path_to_module_names(file_path: str) -> list[str]:
-    """Derive possible module names from a file path.
-
-    Strips extension and init filenames, then produces dotted and
-    slashed variants for each path suffix.
-
-    Args:
-        file_path: Path to a source file (e.g. ``pkg/mod.py``).
-
-    Returns:
-        List of possible module names (e.g. ``["pkg.mod", "pkg/mod", "mod"]``).
-    """
+    """Derive possible module names from file path."""
     _ensure_registry_cache()
 
     cleaned = file_path

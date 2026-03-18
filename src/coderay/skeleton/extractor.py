@@ -17,16 +17,7 @@ def extract_skeleton(
     include_imports: bool = False,
     symbol: str | None = None,
 ) -> str:
-    """Extract the skeleton of a source file (signatures, no bodies).
-
-    Args:
-        path: Source file path (used for language detection).
-        content: Full file content.
-        include_imports: When False, import statements are omitted from
-            the output to reduce noise.
-        symbol: When provided, only the skeleton of the matching
-            top-level class or function is returned.
-    """
+    """Extract skeleton (signatures, no bodies)."""
     ctx = parse_file(path, content)
     if ctx is None:
         return content
@@ -43,7 +34,7 @@ def extract_skeleton(
 
 
 class SkeletonTreeSitterParser(BaseTreeSitterParser):
-    """Tree-sitter based skeleton extractor for source files."""
+    """Tree-sitter skeleton parser."""
 
     def __init__(
         self,
@@ -57,7 +48,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         self._symbol = symbol
 
     def collect_lines(self) -> list[str]:
-        """Return the skeleton of a file as a list of lines."""
+        """Return skeleton lines."""
         tree = self.get_tree()
         lines: list[str] = []
         self._seen = set()
@@ -65,7 +56,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return lines
 
     def _extract_text(self, node) -> str | None:
-        """Extract string text from an expression_statement, or None."""
+        """Extract string from expression_statement."""
         if node.type == "expression_statement":
             for sub in node.children:
                 if sub.type == "string":
@@ -73,7 +64,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _get_docstring(self, node) -> str | None:
-        """Extract docstring from the first child of the body block, if present."""
+        """Extract docstring from body block."""
         if not hasattr(node, "children"):
             return None
 
@@ -99,7 +90,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _get_signature_line(self, node) -> str:
-        """Get everything up to and including the colon/opening brace."""
+        """Return text up to colon or brace."""
         text = self.node_text(node)
         for delimiter in (":\n", "{\n", ":\r\n", "{\r\n"):
             idx = text.find(delimiter)
@@ -109,20 +100,14 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return first_line
 
     def _node_name(self, node) -> str | None:
-        """Extract the declared name from a class or function node."""
+        """Extract declared name from node."""
         name_node = node.child_by_field_name("name")
         if name_node is not None:
             return self.node_text(name_node).strip()
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if *node* matches the active symbol filter.
-
-        When no filter is set, everything matches.  At depth 0 the
-        node's name must equal the first component of the symbol
-        (e.g. ``MyClass`` from ``MyClass.method``).  Deeper nodes
-        always match so the full subtree is emitted.
-        """
+        """Return True if node matches symbol."""
         if self._symbol is None:
             return True
         if depth > 0:
@@ -132,7 +117,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return name == target
 
     def _decorated_inner(self, node):
-        """Return the inner class/function node from a decorated definition."""
+        """Return inner class/function from decorated node."""
         lang_cfg = self._ctx.lang_cfg
         for child in node.named_children:
             if child.type in (

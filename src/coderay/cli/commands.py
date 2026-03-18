@@ -50,7 +50,7 @@ def _setup_logging(verbose: bool = False) -> None:
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Verbose logging")
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
-    """CodeRay — build, update, search, and inspect the index."""
+    """CodeRay — build, update, search, inspect index."""
     _setup_logging(verbose)
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
@@ -69,7 +69,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 )
 @click.pass_context
 def build(ctx: click.Context, full: bool, repo: Path) -> None:
-    """Build or rebuild the index."""
+    """Build or rebuild index."""
     from coderay.core.config import get_config
 
     config = get_config()
@@ -114,7 +114,7 @@ def search_cmd(
     path_prefix: str | None,
     include_tests: bool,
 ) -> None:
-    """Semantic search the index."""
+    """Semantic search."""
     from coderay.core.config import get_config
 
     config = get_config()
@@ -183,7 +183,7 @@ def list_cmd(
     path_prefix: str | None,
     show_content: bool,
 ) -> None:
-    """Show what is in the index: chunk counts and/or chunk list."""
+    """Show index contents: chunk counts and/or list."""
     from coderay.core.config import get_config
 
     config = get_config()
@@ -221,7 +221,7 @@ def list_cmd(
 @cli.command()
 @click.pass_context
 def status(ctx: click.Context) -> None:
-    """Show index status: state, branch, commit, chunk count."""
+    """Show index status."""
     from coderay.core.config import get_config
     from coderay.state.version import read_index_version
     from coderay.storage.lancedb import Store
@@ -262,7 +262,7 @@ def status(ctx: click.Context) -> None:
 )
 @click.pass_context
 def maintain(ctx: click.Context, repo: Path) -> None:
-    """Reclaim space and compact the index."""
+    """Reclaim space and compact index."""
     from coderay.core.config import get_config
 
     config = get_config()
@@ -301,7 +301,7 @@ def skeleton(
     include_imports: bool,
     symbol: str | None,
 ) -> None:
-    """Print the API skeleton (signatures, no bodies) for a source file."""
+    """Print API skeleton (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
 
     content = file_path.read_text(encoding="utf-8", errors="replace")
@@ -338,7 +338,7 @@ def graph_cmd(
     to_node: str | None,
     limit: int,
 ) -> None:
-    """List call and import graph edges (who calls who, who imports what)."""
+    """List call and import graph edges."""
     from coderay.core.config import get_config
     from coderay.graph.builder import load_graph
 
@@ -383,7 +383,7 @@ def graph_cmd(
 )
 @click.pass_context
 def impact_cmd(ctx: click.Context, node_id: str, max_depth: int) -> None:
-    """List callers and dependents of a function or class (blast radius)."""
+    """List blast radius (callers and dependents)."""
     from coderay.core.config import get_config
     from coderay.graph.builder import load_graph
 
@@ -435,7 +435,7 @@ def watch(
     repo: Path,
     quiet: bool,
 ) -> None:
-    """Watch for file changes and re-index automatically."""
+    """Watch for changes; re-index automatically."""
     from coderay.core.config import get_config
     from coderay.pipeline.watcher import FileWatcher
 
@@ -487,7 +487,7 @@ def watch(
 
 
 def main() -> None:
-    """Entry point for the ``coderay`` command."""
+    """Entry point for coderay CLI."""
     cli(obj={})
 
 

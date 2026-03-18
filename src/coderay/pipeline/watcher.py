@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class _DebouncedHandler:
-    """Accumulates filesystem events and flushes after a quiet window."""
+    """Accumulate filesystem events; flush after quiet window."""
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class _DebouncedHandler:
         extra_exclude: list[str],
         on_batch: Callable[[set[str], set[str]], None],
     ) -> None:
-        """Initialize the debounced event handler."""
+        """Initialize debounced handler."""
         self._repo_root = repo_root
         self._index_dir = index_dir
         self._gitignore = gitignore_spec
@@ -58,7 +58,7 @@ class _DebouncedHandler:
     # -- public (called from watchdog observer thread) -----------------
 
     def on_event(self, event: FileSystemEvent) -> None:
-        """Handle a single filesystem event from watchdog."""
+        """Handle filesystem event."""
         if event.is_directory:
             return
 
@@ -87,7 +87,7 @@ class _DebouncedHandler:
             self._reset_timer()
 
     def flush_now(self) -> None:
-        """Force-flush any pending events (used during shutdown)."""
+        """Force-flush pending events."""
         with self._lock:
             if self._timer is not None:
                 self._timer.cancel()
@@ -96,27 +96,27 @@ class _DebouncedHandler:
 
     @property
     def pending_count(self) -> int:
-        """Number of accumulated events not yet flushed."""
+        """Return count of unflushed events."""
         with self._lock:
             return len(self._changed) + len(self._removed)
 
     # -- internal ------------------------------------------------------
 
     def _event_paths(self, event: FileSystemEvent) -> list[str]:
-        """Extract relevant absolute path(s) from an event."""
+        """Extract absolute path(s) from event."""
         if isinstance(event, FileSystemMovedEvent):
             return [event.dest_path]
         return [event.src_path]
 
     def _relative(self, abs_path: str) -> str | None:
-        """Convert an absolute path to a repo-relative string, or None."""
+        """Convert absolute path to repo-relative; None if outside."""
         try:
             return str(Path(abs_path).relative_to(self._repo_root))
         except ValueError:
             return None
 
     def _should_index(self, rel_path: str, abs_path: str) -> bool:
-        """Return True if the path is indexable (right extension, not ignored)."""
+        """Return True if path is indexable."""
         parts = Path(rel_path).parts
         if ".git" in parts:
             return False
@@ -139,7 +139,7 @@ class _DebouncedHandler:
         return True
 
     def _reset_timer(self) -> None:
-        """Cancel existing timer and start a new debounce window."""
+        """Reset debounce timer."""
         with self._lock:
             if self._timer is not None:
                 self._timer.cancel()
@@ -148,7 +148,7 @@ class _DebouncedHandler:
             self._timer.start()
 
     def _flush(self) -> None:
-        """Drain accumulated paths and invoke the batch callback."""
+        """Drain paths and invoke batch callback."""
         with self._lock:
             changed = self._changed.copy()
             removed = self._removed.copy()
@@ -166,7 +166,7 @@ class _DebouncedHandler:
 
 
 class FileWatcher:
-    """Watches a repository for changes and triggers index updates."""
+    """Watch repo for changes; trigger index updates."""
 
     def __init__(
         self,
@@ -176,7 +176,7 @@ class FileWatcher:
         *,
         use_polling: bool = False,
     ) -> None:
-        """Initialize the file watcher from the application config."""
+        """Initialize watcher from config."""
         from coderay.core.config import get_config
 
         self._repo_root = repo_root.resolve()
@@ -195,11 +195,11 @@ class FileWatcher:
 
     @property
     def update_count(self) -> int:
-        """Number of batch updates executed since start."""
+        """Return batch update count."""
         return self._update_count
 
     def start(self) -> None:
-        """Start the filesystem observer (non-blocking)."""
+        """Start filesystem observer (non-blocking)."""
         gitignore_spec = load_gitignore(self._repo_root)
         extensions = get_supported_extensions()
 
@@ -241,7 +241,7 @@ class FileWatcher:
         )
 
     def stop(self) -> None:
-        """Stop the observer and flush remaining events."""
+        """Stop observer and flush."""
         if self._handler is not None:
             self._handler.flush_now()
         if self._observer is not None:
@@ -250,12 +250,12 @@ class FileWatcher:
         logger.info("Watcher stopped (%d updates total)", self._update_count)
 
     def wait(self, timeout: float | None = None) -> None:
-        """Block until the observer exits or timeout elapses."""
+        """Block until observer exits or timeout."""
         if self._observer is not None:
             self._observer.join(timeout=timeout)
 
     def _default_batch(self, changed: set[str], removed: set[str]) -> None:
-        """Default callback: acquire lock and run Indexer.update_incremental."""
+        """Default callback: acquire lock, run update_incremental."""
         from coderay.core.lock import acquire_indexer_lock
         from coderay.pipeline.indexer import Indexer
 
@@ -278,13 +278,13 @@ class FileWatcher:
 
 
 class _WatchdogAdapter:
-    """Bridges watchdog's event handler protocol to our ``_DebouncedHandler``."""
+    """Bridge watchdog events to _DebouncedHandler."""
 
     def __init__(self, handler: _DebouncedHandler) -> None:
         self._handler = handler
 
     def dispatch(self, event: FileSystemEvent) -> None:
-        """Forward relevant events to the debounced handler."""
+        """Forward events to debounced handler."""
         if event.event_type in (
             EVENT_TYPE_CREATED,
             EVENT_TYPE_MODIFIED,

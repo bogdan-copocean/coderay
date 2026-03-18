@@ -1,9 +1,4 @@
-"""Definition handling for graph extraction.
-
-Creates DEFINES edges (module/class defines function/class) and INHERITS
-edges (class inherits base). Registers names in FileContext and recurses
-into the body. Also wires up typed params and @property for call resolution.
-"""
+"""Definition handling: DEFINES, INHERITS edges, scope."""
 
 from __future__ import annotations
 
@@ -15,14 +10,10 @@ TSNode = Any
 
 
 class DefinitionHandlerMixin:
-    """Handles class and function definitions: DEFINES, INHERITS edges, and scope."""
+    """Handle class/function definitions: DEFINES, INHERITS, scope."""
 
     def _handle_function_def(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create a FUNCTION node and DEFINES edge, then recurse into the body.
-
-        Also registers typed parameters (for param injection) and @property
-        return types (for self.repo.save() resolution).
-        """
+        """Create FUNCTION node and DEFINES edge; recurse into body."""
         name = self.identifier_from_node(node)
         if not name:
             return
@@ -77,11 +68,7 @@ class DefinitionHandlerMixin:
             self._dfs(child, scope_stack=new_scope)
 
     def _is_property(self, func_node: TSNode) -> bool:
-        """Return True if the function is decorated with @property.
-
-        Tree-sitter wraps @decorator def fn in decorated_definition;
-        we check the decorator list for one ending in "property".
-        """
+        """Return True if function has @property decorator."""
         parent = func_node.parent
         if parent is None or parent.type != "decorated_definition":
             return False
@@ -93,7 +80,7 @@ class DefinitionHandlerMixin:
         return False
 
     def _handle_class_def(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create a CLASS node, DEFINES + INHERITS edges, then recurse into body."""
+        """Create CLASS node, DEFINES + INHERITS edges; recurse into body."""
         name = self.identifier_from_node(node)
         if not name:
             return
@@ -140,7 +127,7 @@ class DefinitionHandlerMixin:
             self._dfs(child, scope_stack=new_scope)
 
     def _get_base_classes_from_arg_list(self, arg_list_node: TSNode) -> list[str]:
-        """Extract base class names from argument_list/superclass/extends_clause."""
+        """Extract base class names from arg list."""
         base_types = (
             "identifier",
             "dotted_name",
@@ -156,10 +143,7 @@ class DefinitionHandlerMixin:
         return result
 
     def _resolve_base_class(self, raw: str) -> str:
-        """Resolve a base class name through FileContext.
-
-        "Animal" → file::Animal if local; "abc.ABC" → resolve abc, append .ABC.
-        """
+        """Resolve base class name through FileContext."""
         parts = raw.split(".")
         if len(parts) == 1:
             return self._file_ctx.resolve(raw) or raw

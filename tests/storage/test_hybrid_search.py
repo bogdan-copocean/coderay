@@ -1,15 +1,11 @@
-"""Tests for Store.search() scoring in both vector-only and hybrid modes.
-
-Validates that scores follow higher-is-better convention in both paths
-and that hybrid search falls back gracefully when FTS is unavailable.
-"""
+"""Test Store.search() scoring in vector-only and hybrid modes."""
 
 from coderay.core.models import Chunk
 from coderay.storage.lancedb import Store
 
 
 class TestSearchScoring:
-    """Store.search() returns higher-is-better scores in all modes."""
+    """Test Store.search() returns higher-is-better scores."""
 
     def _make_store(self, app_config) -> Store:
         store = Store()

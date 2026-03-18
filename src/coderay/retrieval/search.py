@@ -25,7 +25,7 @@ class Retrieval:
     """Orchestrate semantic search: embed, query, boost, deduplicate, rank."""
 
     def __init__(self, embedder: Embedder | None = None) -> None:
-        """Initialize retrieval; loads embedder from config when *embedder* is None."""
+        """Initialize; load embedder from config if None."""
         self._config = get_config()
         self.index_dir = Path(self._config.index.path)
         self._explicit_embedder = embedder
@@ -37,7 +37,7 @@ class Retrieval:
 
     @property
     def _embedder(self) -> Embedder:
-        """Return the configured embedder, lazily loading if needed."""
+        """Return embedder (lazy load)."""
         if self._explicit_embedder is not None:
             return self._explicit_embedder
         if self._lazy_embedder is None:
@@ -46,17 +46,17 @@ class Retrieval:
 
     @property
     def config(self) -> Config:
-        """Return the frozen application config."""
+        """Return config."""
         return self._config
 
     def _get_store(self) -> Store:
-        """Return the vector store, creating it lazily."""
+        """Return store (lazy create)."""
         if self._store is None:
             self._store = Store()
         return self._store
 
     def _ensure_version_checked(self) -> None:
-        """Run index version check once, lazily on first search."""
+        """Run version check once on first search."""
         if not self._version_checked:
             check_index_version(self.index_dir)
             self._version_checked = True
@@ -70,11 +70,7 @@ class Retrieval:
         path_prefix: str | None = None,
         include_tests: bool = True,
     ) -> list[SearchResult]:
-        """Search the index and return ranked, deduplicated results with relevance tiers.
-
-        Raises:
-            IndexStaleError: If the index is incomplete or in-progress.
-        """
+        """Search index; return ranked, deduplicated results."""
         if not index_exists(self.index_dir):
             logger.warning("No index at %s", self.index_dir)
             return []
@@ -116,7 +112,7 @@ class Retrieval:
     def _deduplicate_by_containment(
         results: list[SearchResult],
     ) -> list[SearchResult]:
-        """Drop results whose line range fully encloses a more specific hit."""
+        """Drop results whose range encloses a more specific hit."""
         if len(results) <= 1:
             return results
 
@@ -144,7 +140,7 @@ class Retrieval:
     def _assign_relevance(
         results: list[SearchResult],
     ) -> list[SearchResult]:
-        """Assign tiered relevance (high/medium/low) based on consecutive score drops."""
+        """Assign relevance tiers from score drops."""
         if len(results) <= 1:
             return results
 

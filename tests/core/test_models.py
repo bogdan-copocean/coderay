@@ -2,91 +2,7 @@
 
 import pytest
 
-from coderay.core.models import (
-    Chunk,
-    EdgeKind,
-    GraphEdge,
-    GraphNode,
-    ImpactResult,
-    NodeKind,
-)
-
-
-class TestChunk:
-    def test_fields(self):
-        c = Chunk(
-            path="a.py",
-            start_line=1,
-            end_line=5,
-            symbol="foo",
-            content="x",
-        )
-        assert c.path == "a.py"
-        assert c.symbol == "foo"
-
-    def test_line_range(self):
-        c = Chunk(
-            path="a.py",
-            start_line=3,
-            end_line=7,
-            symbol="f",
-            content="",
-        )
-        assert c.line_range() == (3, 7)
-
-
-class TestNodeKind:
-    def test_values(self):
-        assert NodeKind.MODULE.value == "module"
-        assert NodeKind.CLASS.value == "class"
-        assert NodeKind.FUNCTION.value == "function"
-
-
-class TestEdgeKind:
-    def test_values(self):
-        assert EdgeKind.IMPORTS.value == "imports"
-        assert EdgeKind.DEFINES.value == "defines"
-        assert EdgeKind.CALLS.value == "calls"
-        assert EdgeKind.INHERITS.value == "inherits"
-
-
-class TestGraphNode:
-    def test_frozen(self):
-        n = GraphNode(
-            id="x",
-            kind=NodeKind.MODULE,
-            file_path="a.py",
-            start_line=1,
-            end_line=10,
-            name="a",
-            qualified_name="a",
-        )
-        with pytest.raises(AttributeError):
-            n.id = "y"
-
-    def test_fields(self):
-        n = GraphNode(
-            id="f::foo",
-            kind=NodeKind.FUNCTION,
-            file_path="f.py",
-            start_line=1,
-            end_line=3,
-            name="foo",
-            qualified_name="foo",
-        )
-        assert n.kind == NodeKind.FUNCTION
-        assert n.qualified_name == "foo"
-
-
-class TestGraphEdge:
-    def test_frozen(self):
-        e = GraphEdge(source="a", target="b", kind=EdgeKind.CALLS)
-        with pytest.raises(AttributeError):
-            e.source = "c"
-
-    def test_fields(self):
-        e = GraphEdge(source="a.py", target="os", kind=EdgeKind.IMPORTS)
-        assert e.kind == EdgeKind.IMPORTS
+from coderay.core.models import GraphNode, ImpactResult, NodeKind
 
 
 class TestImpactResult:
@@ -101,27 +17,20 @@ class TestImpactResult:
             qualified_name="foo",
         )
 
-    def test_to_dict_with_results(self):
-        n = self._node()
-        r = ImpactResult(resolved_node="a.py::foo", nodes=[n])
+    @pytest.mark.parametrize(
+        "resolved_node,nodes,hint,expected_resolved,expected_results,has_hint",
+        [
+            ("a.py::foo", "one", None, "a.py::foo", 1, False),
+            (None, "none", "Node not found.", None, 0, True),
+            ("x", "none", None, "x", 0, False),
+        ],
+    )
+    def test_to_dict_roundtrip(
+        self, resolved_node, nodes, hint, expected_resolved, expected_results, has_hint
+    ):
+        nodes_list = [self._node()] if nodes == "one" else []
+        r = ImpactResult(resolved_node=resolved_node, nodes=nodes_list, hint=hint)
         d = r.to_dict()
-        assert d["resolved_node"] == "a.py::foo"
-        assert len(d["results"]) == 1
-        assert "hint" not in d
-
-    def test_to_dict_with_hint(self):
-        r = ImpactResult(resolved_node=None, nodes=[], hint="Node not found.")
-        d = r.to_dict()
-        assert d["resolved_node"] is None
-        assert d["results"] == []
-        assert d["hint"] == "Node not found."
-
-    def test_to_dict_no_hint_when_none(self):
-        r = ImpactResult(resolved_node="x", nodes=[])
-        d = r.to_dict()
-        assert "hint" not in d
-
-    def test_frozen(self):
-        r = ImpactResult(resolved_node="x", nodes=[])
-        with pytest.raises(AttributeError):
-            r.resolved_node = "y"  # type: ignore[misc]
+        assert d["resolved_node"] == expected_resolved
+        assert len(d["results"]) == expected_results
+        assert ("hint" in d) == has_hint

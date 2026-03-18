@@ -1,8 +1,4 @@
-"""Comprehensive sample module for graph extraction tests.
-
-Covers all implemented graph features and known gaps.  Each section is
-labelled so tests can reference it by name.
-"""
+"""Sample module for graph extraction tests. Used by test_extractor_playground and handlers."""
 
 from __future__ import annotations
 

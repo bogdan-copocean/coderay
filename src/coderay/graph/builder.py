@@ -22,15 +22,7 @@ def build_graph(
     repo_root: str | Path,
     file_paths_and_contents: list[tuple[str, str]],
 ) -> CodeGraph:
-    """Extract a CodeGraph from the given files.
-
-    Builds module and package indexes from the file list, then extracts
-    each file with pre-resolved edge targets.  CALLS edges whose targets
-    are bare names not in the graph are pruned inline.
-
-    Returns:
-        Built CodeGraph with resolved edges.
-    """
+    """Extract CodeGraph from files; resolve and prune phantom edges."""
     excluded = build_module_filter()
     all_paths = [fp for fp, _ in file_paths_and_contents]
     module_index = build_module_index(all_paths)
@@ -62,15 +54,7 @@ def build_graph(
 
 
 def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
-    """Rewrite CALLS edges whose targets are package::Symbol to real node IDs.
-
-    When imports from package __init__ resolve to package::Symbol.method,
-    the target node does not exist (the symbol lives in a submodule).
-    Resolve by qualified name and rewrite the edge before phantom pruning.
-
-    Returns:
-        Number of edges rewritten.
-    """
+    """Rewrite package::Symbol phantom targets to real node IDs."""
     rewritten = 0
     to_rewrite: list[tuple[str, str, str]] = []  # (source, old_target, new_target)
 
@@ -102,14 +86,7 @@ def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
 
 
 def _prune_phantom_calls(graph: CodeGraph) -> int:
-    """Remove CALLS edges to unresolvable phantom targets.
-
-    These are typically stdlib/third-party methods (``append``, ``get``,
-    ``join``, etc.) that will never resolve to a project node.
-
-    Returns:
-        Number of edges pruned.
-    """
+    """Remove CALLS edges to unresolvable phantom targets."""
     to_remove = []
     for u, v, data in graph.iter_edges():
         if data.get("kind") != EdgeKind.CALLS:
@@ -130,7 +107,7 @@ def _prune_phantom_calls(graph: CodeGraph) -> int:
 
 
 def save_graph(graph: CodeGraph, index_dir: str | Path) -> Path:
-    """Persist the graph to index_dir/graph.json."""
+    """Save graph to index_dir/graph.json."""
     path = Path(index_dir) / GRAPH_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(graph.to_dict(), indent=2))
@@ -139,7 +116,7 @@ def save_graph(graph: CodeGraph, index_dir: str | Path) -> Path:
 
 
 def load_graph(index_dir: str | Path) -> CodeGraph | None:
-    """Load a previously-saved graph, or None if it doesn't exist."""
+    """Load saved graph, or None if missing."""
     path = Path(index_dir) / GRAPH_FILENAME
     if not path.is_file():
         return None
@@ -151,11 +128,8 @@ def load_graph(index_dir: str | Path) -> CodeGraph | None:
         return None
 
 
-def _read_files(
-    repo: Path,
-    paths: list[str],
-) -> list[tuple[str, str]]:
-    """Read source files from disk, skipping unreadable ones."""
+def _read_files(repo: Path, paths: list[str]) -> list[tuple[str, str]]:
+    """Read source files from disk; skip unreadable."""
     result: list[tuple[str, str]] = []
     for p in paths:
         full = repo / p
@@ -174,17 +148,7 @@ def build_and_save_graph(
     *,
     files_content: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Build or incrementally update the graph, then save.
-
-    Args:
-        repo_root: Repository root directory.
-        changed_paths: Paths that changed (incremental mode), or ``None``
-            for a full rebuild.
-        files_content: Pre-read ``(path, content)`` pairs.  When provided
-            the builder skips reading these files from disk, avoiding
-            redundant I/O when the caller (e.g. the indexer pipeline)
-            already has the contents in memory.
-    """
+    """Build or incrementally update graph, then save."""
     from coderay.state.machine import StateMachine
 
     repo = Path(repo_root)

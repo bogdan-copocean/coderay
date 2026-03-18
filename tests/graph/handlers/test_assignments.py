@@ -1,8 +1,4 @@
-"""Tests for AssignmentHandlerMixin: alias and instance tracking.
-
-Covers: simple alias (x = y), attribute alias (x = obj.attr),
-constructor/setter injection, with-statement, tuple unpacking, partial.
-"""
+"""Test AssignmentHandlerMixin: aliases, injection, with-statement, unpacking."""
 
 from pathlib import Path
 

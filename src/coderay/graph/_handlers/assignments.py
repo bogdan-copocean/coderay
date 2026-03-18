@@ -1,12 +1,4 @@
-"""Assignment and with-statement handling for graph extraction.
-
-Tracks variable bindings so later calls resolve correctly:
-- x = y → alias (y.resolve() used when x is called)
-- x = obj.attr → alias when obj resolves
-- x = factory() → instance from factory's return type
-- self.attr = param → instance from param's type hint (injection)
-- with cm() as x → instance from cm.__enter__ return type
-"""
+"""Assignment and with-statement handling for graph extraction."""
 
 from __future__ import annotations
 
@@ -16,14 +8,10 @@ TSNode = Any
 
 
 class AssignmentHandlerMixin:
-    """Handles assignments and with statements for instance/alias tracking."""
+    """Handle assignments and with statements for instance/alias tracking."""
 
     def _handle_assignment(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Track aliases and instance types for call resolution.
-
-        Handles: alias (x = y), attribute alias (x = obj.attr), factory
-        return type (x = factory()), constructor/setter injection (self.attr = param).
-        """
+        """Track aliases and instance types for call resolution."""
         children = node.children
         if len(children) < 3:
             return  # Need at least: target, "=", value
@@ -96,7 +84,7 @@ class AssignmentHandlerMixin:
                         self._file_ctx.register_instance(lhs_name, return_type)
 
     def _handle_with_statement(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Track ``with cm() as var:`` — register var with __enter__ return type."""
+        """Track with cm() as var: register var with __enter__ return type."""
         for child in node.children:
             if child.type in ("with_clause", "with_clauses"):
                 for item in child.children:
@@ -104,7 +92,7 @@ class AssignmentHandlerMixin:
                         self._process_with_item(item)
 
     def _process_with_item(self, item: TSNode) -> None:
-        """Register the ``as`` target with the context manager's __enter__ type."""
+        """Register as target with __enter__ return type."""
         value = item.child_by_field_name("value")
         if not value:
             return
@@ -139,7 +127,7 @@ class AssignmentHandlerMixin:
             self._file_ctx.register_instance(var_name, enter_return)
 
     def _handle_tuple_unpacking(self, lhs: TSNode, rhs: TSNode) -> None:
-        """Track a, b = func() — register each unpacked name from return type."""
+        """Track a, b = func(); register from return type."""
         # Collect identifiers from pattern_list
         identifiers: list[str] = []
         for child in lhs.children:
@@ -180,7 +168,7 @@ class AssignmentHandlerMixin:
                 self._file_ctx.register_alias(name, type_args[i])
 
     def _get_first_call_arg(self, call_node: TSNode) -> str | None:
-        """Extract the first argument identifier from a call (e.g. partial(foo, 1))."""
+        """Extract first call arg identifier."""
         arg_list = call_node.child_by_field_name("arguments") or next(
             (c for c in call_node.children if c.type == "argument_list"), None
         )

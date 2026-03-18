@@ -13,7 +13,7 @@ FILE_HASHES_FILENAME = "file_hashes.json"
 
 
 class MetaState(str, Enum):
-    """State of the indexer run."""
+    """Indexer run state."""
 
     IN_PROGRESS = "in_progress"
     DONE = "done"
@@ -23,7 +23,7 @@ class MetaState(str, Enum):
 
 @dataclass
 class CurrentRun:
-    """Resume info for the current indexing run."""
+    """Resume info for current run."""
 
     paths_to_process: list[str] = field(default_factory=list)
     processed_count: int = 0
@@ -32,7 +32,7 @@ class CurrentRun:
 
 @dataclass(frozen=True)
 class IndexMeta:
-    """Immutable snapshot of meta.json contents."""
+    """Immutable meta.json snapshot."""
 
     state: MetaState
     started_at: float
@@ -43,19 +43,19 @@ class IndexMeta:
     error: str | None = None
 
     def is_in_progress(self):
-        """Return True if state is IN_PROGRESS."""
+        """Return True if in progress."""
         return self.state == MetaState.IN_PROGRESS
 
     def is_incomplete(self):
-        """Return True if state is INCOMPLETE (previous run did not finish)."""
+        """Return True if previous run did not finish."""
         return self.state == MetaState.INCOMPLETE
 
 
 class StateMachine:
-    """Manages index metadata and file hashes on disk."""
+    """Manage index metadata and file hashes on disk."""
 
     def __init__(self) -> None:
-        """Initialize with index dir from application config."""
+        """Initialize from config."""
         self._index_dir = Path(get_config().index.path)
         self._meta_path = self._index_dir / META_FILENAME
         self._file_hashes_path = self._index_dir / FILE_HASHES_FILENAME
@@ -64,17 +64,17 @@ class StateMachine:
 
     @property
     def index_dir(self) -> Path:
-        """Path to the index directory."""
+        """Return index dir."""
         return self._index_dir
 
     @property
     def meta_path(self) -> Path:
-        """Path to meta.json."""
+        """Return meta.json path."""
         return self._meta_path
 
     @property
     def current_state(self) -> IndexMeta | None:
-        """Current meta state; None if meta.json is missing or invalid."""
+        """Return current meta; None if missing/invalid."""
         return self._current_state
 
     @current_state.setter
@@ -83,7 +83,7 @@ class StateMachine:
 
     @property
     def file_hashes(self) -> dict[str, str]:
-        """Mapping of relative path -> content hash."""
+        """Return path -> hash mapping."""
         return self._file_hashes
 
     @file_hashes.setter
@@ -91,7 +91,7 @@ class StateMachine:
         self._file_hashes = value
 
     def _load_meta(self) -> IndexMeta | None:
-        """Load meta from disk. Returns None if file missing or invalid."""
+        """Load meta from disk; None if missing/invalid."""
         if not self._meta_path.exists():
             return None
         try:
@@ -108,7 +108,7 @@ class StateMachine:
             return None
 
     def _load_file_hashes(self) -> dict[str, str]:
-        """Load file hashes from disk. Returns {} if missing or invalid."""
+        """Load file hashes; {} if missing/invalid."""
         if not self._file_hashes_path.exists():
             return {}
         try:
@@ -128,14 +128,14 @@ class StateMachine:
 
     @property
     def has_partial_progress(self) -> bool:
-        """True if we have a run with paths and non-zero processed count."""
+        """Return True if run has paths and processed count > 0."""
         if self._current_state is None:
             return False
         run = self._current_state.current_run
         return bool(run.paths_to_process and run.processed_count > 0)
 
     def set_incomplete(self) -> None:
-        """Mark the current run as incomplete."""
+        """Mark run as incomplete."""
         if self._current_state is None or not self.is_in_progress:
             return
         data = asdict(self._current_state)
@@ -172,7 +172,7 @@ class StateMachine:
         self._save_meta()
 
     def start(self, branch: str | None, last_commit: str | None) -> None:
-        """Start a new indexing run."""
+        """Start new indexing run."""
         now = time.time()
         self._current_state = IndexMeta(
             state=MetaState.IN_PROGRESS,
@@ -189,7 +189,7 @@ class StateMachine:
         full_rel_paths: list[str],
         processed_count: int,
     ) -> None:
-        """Save resume checkpoint with processed count."""
+        """Save resume checkpoint."""
         if self._current_state is None or not self.is_in_progress:
             return
         run = CurrentRun(
@@ -230,14 +230,14 @@ class StateMachine:
         self._save_meta()
 
     def _save_meta(self) -> None:
-        """Write current state to meta.json."""
+        """Write state to meta.json."""
         self._meta_path.parent.mkdir(parents=True, exist_ok=True)
         data = asdict(self._current_state)
         data["state"] = self._current_state.state.value
         self._meta_path.write_text(json.dumps(data, indent=2))
 
     def _save_file_hashes(self) -> None:
-        """Write file_hashes to file_hashes.json."""
+        """Write hashes to file_hashes.json."""
         self._file_hashes_path.parent.mkdir(parents=True, exist_ok=True)
         self._file_hashes_path.write_text(
             json.dumps(self._file_hashes, indent=0, sort_keys=True)

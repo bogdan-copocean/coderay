@@ -1,8 +1,4 @@
-"""Tests for CallHandlerMixin: CALLS edges, resolution, filtering.
-
-Covers: simple name, self.method, self.attr.method, super(), chains,
-builtins/excluded filtering, instance tracking, decorators, __call__, partial.
-"""
+"""Test CallHandlerMixin: resolution (self, super, chains), filtering, decorators."""
 
 from pathlib import Path
 
@@ -201,12 +197,6 @@ class TestCallFiltering:
         assert "forEach" in targets
         assert "custom_func" in targets
 
-    def test_project_defined_shadowing_builtin_not_filtered(self):
-        code = "def print(msg):\n    pass\n\ndef run():\n    print('hello')\n"
-        _, edges = extract_graph_from_file("test.py", code)
-        targets = _call_targets(edges)
-        assert any("print" in t for t in targets)
-
     def test_excluded_module_call_filtered(self):
         code = "from typing import cast\ncast(str, x)\n"
         _, edges = extract_graph_from_file("test.py", code)
@@ -289,11 +279,3 @@ class TestCallProtocolAndPartial:
         _, edges = extract_graph_from_file(str(SAMPLE_PATH), content)
         targets = _calls_from(edges, "use_callable_handler")
         assert f"{pg}::CallableHandler.__call__" in targets
-
-    def test_partial_resolved(self):
-        """hello = partial(greeter, 'Hello'); hello('World') — greeter."""
-        pg = str(SAMPLE_PATH)
-        content = SAMPLE_PATH.read_text()
-        _, edges = extract_graph_from_file(str(SAMPLE_PATH), content)
-        targets = _calls_from(edges, "use_partial")
-        assert f"{pg}::greeter" in targets

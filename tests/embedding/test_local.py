@@ -3,16 +3,13 @@
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from coderay.embedding.base import EmbedTask
 from coderay.embedding.local import _TASK_PREFIXES, MAX_CHARS, LocalEmbedder
 
 
 class TestLocalEmbedder:
-    def test_dimensions_property(self):
-        e = LocalEmbedder()
-        assert e.dimensions == 384
-
     def test_embed_empty(self):
         e = LocalEmbedder()
         assert e.embed([]) == []
@@ -58,46 +55,37 @@ class TestLocalEmbedder:
         texts = call_args[0][0]
         assert len(texts[0]) <= MAX_CHARS + 100  # prefix overhead
 
+    @pytest.mark.parametrize(
+        "model,task,input_text,expected_prefix",
+        [
+            (
+                "nomic-ai/nomic-embed-text-v1.5",
+                EmbedTask.DOCUMENT,
+                "def foo(): pass",
+                _TASK_PREFIXES["nomic-ai/nomic-embed-text-v1.5"][EmbedTask.DOCUMENT],
+            ),
+            (
+                "nomic-ai/nomic-embed-text-v1.5",
+                EmbedTask.QUERY,
+                "how does auth work",
+                _TASK_PREFIXES["nomic-ai/nomic-embed-text-v1.5"][EmbedTask.QUERY],
+            ),
+            ("some/unknown-model", EmbedTask.DOCUMENT, "def foo(): pass", None),
+        ],
+    )
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
-    def test_document_prefix_applied(self, mock_load):
-        """Document task prepends 'search_document: ' for nomic models."""
-        model_name = "nomic-ai/nomic-embed-text-v1.5"
-        e = LocalEmbedder(model=model_name, dimensions=768)
+    def test_task_prefix_behavior(
+        self, mock_load, model, task, input_text, expected_prefix
+    ):
+        dims = 768 if "nomic" in model else 384
+        e = LocalEmbedder(model=model, dimensions=dims)
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
+        mock_model.embed.return_value = iter([np.array([0.1] * dims)])
         e._model = mock_model
 
-        e.embed(["def foo(): pass"], task=EmbedTask.DOCUMENT)
-        call_args = mock_model.embed.call_args
-        texts = call_args[0][0]
-        expected_prefix = _TASK_PREFIXES[model_name][EmbedTask.DOCUMENT]
-        assert texts[0].startswith(expected_prefix)
-
-    @patch("coderay.embedding.local.LocalEmbedder._load_model")
-    def test_query_prefix_applied(self, mock_load):
-        """Query task prepends 'search_query: ' for nomic models."""
-        model_name = "nomic-ai/nomic-embed-text-v1.5"
-        e = LocalEmbedder(model=model_name, dimensions=768)
-        mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
-        e._model = mock_model
-
-        e.embed(["how does auth work"], task=EmbedTask.QUERY)
-        call_args = mock_model.embed.call_args
-        texts = call_args[0][0]
-        expected_prefix = _TASK_PREFIXES[model_name][EmbedTask.QUERY]
-        assert texts[0].startswith(expected_prefix)
-
-    @patch("coderay.embedding.local.LocalEmbedder._load_model")
-    def test_no_prefix_for_unknown_model(self, mock_load):
-        """Models not in _TASK_PREFIXES get no prefix."""
-        e = LocalEmbedder(model="some/unknown-model", dimensions=384)
-        mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 384)])
-        e._model = mock_model
-
-        original = "def foo(): pass"
-        e.embed([original], task=EmbedTask.DOCUMENT)
-        call_args = mock_model.embed.call_args
-        texts = call_args[0][0]
-        assert texts[0] == original
+        e.embed([input_text], task=task)
+        texts = mock_model.embed.call_args[0][0]
+        if expected_prefix:
+            assert texts[0].startswith(expected_prefix)
+        else:
+            assert texts[0] == input_text

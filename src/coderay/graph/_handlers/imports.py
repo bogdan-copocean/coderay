@@ -1,10 +1,4 @@
-"""Import handling for graph extraction.
-
-Creates IMPORTS edges (module -> imported symbol) and registers each
-imported name in FileContext so later calls like ``Path()`` or ``dd(int)``
-resolve to the correct target. Tree-sitter uses prev_sibling to distinguish
-module names from imported names (no positional field for "after import").
-"""
+"""Import handling: IMPORTS edges and FileContext registration."""
 
 from __future__ import annotations
 
@@ -17,15 +11,10 @@ TSNode = Any
 
 
 class ImportHandlerMixin:
-    """Handles import statements: IMPORTS edges and FileContext registration."""
+    """Handle imports: IMPORTS edges and FileContext registration."""
 
     def _handle_import(self, node: TSNode) -> None:
-        """Create IMPORTS edges and register names in FileContext.
-
-        Handles bare imports, from-imports, aliased imports, future imports.
-        Uses prev_sibling to identify module/names. Excluded modules are
-        still registered (for resolution) but produce no IMPORTS edges.
-        """
+        """Create IMPORTS edges and register names in FileContext."""
         ntype = node.type
         module: list[str] = []  # e.g. ["pathlib"] or ["collections"]
         imported: list[tuple[str, str]] = []  # (original, local) e.g. ("Path", "Path")
@@ -97,7 +86,7 @@ class ImportHandlerMixin:
                 )
 
     def _resolve_import_text(self, child: TSNode) -> str | None:
-        """Resolve the text of an import module node, handling relative paths."""
+        """Resolve import module text; handle relative paths."""
         text = self.node_text(child).strip()
         # ".foo" or "..bar" → convert to slash path for module index lookup
         if text and text[0] == ".":
@@ -105,7 +94,7 @@ class ImportHandlerMixin:
         return text or None
 
     def _collect_import_name(self, child: TSNode, names: list[tuple[str, str]]) -> None:
-        """Collect an imported name (``Y`` or ``Y as Z``) into *names*."""
+        """Collect imported name (Y or Y as Z) into names."""
         ctype = child.type
         # dotted_name/identifier = bare name; aliased_import = "X as Y"
         if ctype in ("dotted_name", "identifier"):
@@ -122,7 +111,7 @@ class ImportHandlerMixin:
         module: list[str],
         imported: list[tuple[str, str]],
     ) -> None:
-        """Collect a bare-import target (``X`` or ``X as Y``) into *imported*."""
+        """Collect bare-import target (X or X as Y) into imported."""
         ctype = child.type
         # dotted_name = "os" or "collections.defaultdict"; aliased_import = "math as m"
         if ctype == "dotted_name":
@@ -142,10 +131,7 @@ class ImportHandlerMixin:
                 imported.append((text, local))
 
     def _parse_aliased_import(self, node: TSNode) -> tuple[str | None, str | None]:
-        """Extract ``(original_name, alias)`` from an ``aliased_import`` node.
-
-        AST: aliased_import has children [dotted_name, identifier] for "X as Y".
-        """
+        """Extract (original_name, alias) from aliased_import node."""
         original: str | None = None
         alias: str | None = None
         for child in node.children:

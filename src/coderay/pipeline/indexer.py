@@ -24,7 +24,7 @@ DEFAULT_REPO_ROOT = "."
 
 @dataclass
 class IndexResult:
-    """Result of an index build or update: cached, updated, and removed counts."""
+    """Index build result: cached, updated, removed counts."""
 
     cached: int = 0
     updated: int = 0
@@ -38,14 +38,14 @@ class IndexResult:
 
 
 class Indexer:
-    """Builds and maintains the semantic index for a repository."""
+    """Build and maintain semantic index."""
 
     def __init__(
         self,
         repo_root: str | Path = DEFAULT_REPO_ROOT,
         embedder: Embedder | None = None,
     ) -> None:
-        """Initialize the indexer."""
+        """Initialize indexer."""
         self._repo_root = Path(repo_root)
         self._config = get_config()
         self._index_dir = Path(self._config.index.path)
@@ -57,27 +57,27 @@ class Indexer:
 
     @property
     def config(self) -> Config:
-        """Current config (embedder, index settings)."""
+        """Return current config."""
         return self._config
 
     @property
     def repo_root(self) -> Path:
-        """Repository root path."""
+        """Return repo root."""
         return self._repo_root
 
     @property
     def index_dir(self) -> Path:
-        """Index directory path."""
+        """Return index dir."""
         return self._index_dir
 
     @property
     def current_state(self) -> IndexMeta | None:
-        """Current index meta state; None if no run has completed."""
+        """Return current meta state; None if no run completed."""
         return self._state.current_state
 
     @timed("full_build")
     def build_full(self) -> IndexResult:
-        """Full rebuild: discover, chunk, embed, and store all source files."""
+        """Full rebuild: discover, chunk, embed, store."""
 
         current = self._state.current_state
         current_run = current.current_run if current else None
@@ -136,7 +136,7 @@ class Indexer:
         return IndexResult(updated=len(self._state.file_hashes))
 
     def update_incremental(self) -> IndexResult:
-        """Incremental update: re-index only changed, added, or deleted files."""
+        """Incremental update: re-index changed/added/deleted files."""
 
         self._state.set_incomplete()
 
@@ -178,11 +178,7 @@ class Indexer:
         rel_paths: list[str],
         full_rel_paths: list[str],
     ) -> tuple[dict[str, str], list[tuple[str, str]]]:
-        """Run the pipeline in batches and save progress for resume.
-
-        Returns:
-            Tuple of (path_hashes, accumulated_files_content).
-        """
+        """Run pipeline in batches; save progress for resume."""
         all_path_hashes: dict[str, str] = {}
         all_files_content: list[tuple[str, str]] = []
 
@@ -203,7 +199,7 @@ class Indexer:
         paths_to_add: list[Path],
         file_hashes: dict[str, str],
     ) -> IndexResult:
-        """Run pipeline over paths, update hashes and state, then finish."""
+        """Run pipeline over paths; update hashes and state."""
         rel_paths = [str(p.relative_to(self._repo_root)) for p in paths_to_add]
         self._state.start(
             branch=self._git.get_current_branch(),
@@ -228,12 +224,7 @@ class Indexer:
         self,
         rel_paths: list[str],
     ) -> tuple[dict[str, str], list[tuple[str, str]]]:
-        """Chunk, embed, and store the given files.
-
-        Returns:
-            Tuple of (path_hashes, files_content) so callers can forward
-            the already-read content to the graph builder.
-        """
+        """Chunk, embed, store files; return (path_hashes, files_content)."""
         files_content: list[tuple[str, str]] = []
 
         with timed_phase("read"):
@@ -282,7 +273,7 @@ class Indexer:
         changed_paths: list[str] | None = None,
         files_content: list[tuple[str, str]] | None = None,
     ) -> None:
-        """Rebuild and save the code graph, logging warnings on failure."""
+        """Rebuild and save code graph."""
         try:
             build_and_save_graph(
                 self._repo_root,
@@ -297,7 +288,7 @@ class Indexer:
         changed: list[str],
         removed: list[str] | None = None,
     ) -> IndexResult:
-        """Update the index for explicit file paths (used by the file watcher)."""
+        """Update index for explicit paths (used by watcher)."""
         self._state.set_incomplete()
         file_hashes = self._state.file_hashes.copy()
 
@@ -345,21 +336,21 @@ class Indexer:
         return IndexResult(removed=len(removed))
 
     def maintain(self) -> dict[str, Any]:
-        """Run store maintenance (compact and cleanup)."""
+        """Run store maintenance."""
         if not index_exists(self._index_dir):
             return {}
         return self._store.maintain()
 
     def index_exists(self) -> bool:
-        """Return True if the index exists at index_dir."""
+        """Return True if index exists."""
         return index_exists(self._index_dir)
 
     def ensure_index(self) -> IndexResult:
-        """Build full index if missing, else incremental update."""
+        """Build full index if missing; else incremental."""
         if not self.index_exists():
             return self.build_full()
         return self.update_incremental()
 
     def error(self, exc: str) -> None:
-        """Mark the current run as errored with the given exception message."""
+        """Mark run as errored."""
         self._state.set_errored(exc=exc)

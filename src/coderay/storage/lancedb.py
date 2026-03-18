@@ -22,24 +22,20 @@ _HYBRID_FAILURE_WARN_THRESHOLD = 3
 
 
 class _ScoreField(Enum):
-    """Known LanceDB score column names, keyed by search mode."""
+    """LanceDB score column names by search mode."""
 
     RELEVANCE = "_relevance_score"
     DISTANCE = "_distance"
 
 
 def index_exists(index_dir: str | Path) -> bool:
-    """True if a LanceDB index (chunks table) exists at *index_dir*."""
+    """Return True if LanceDB index exists."""
     path = Path(index_dir)
     return (path / f"{TABLE_NAME}.lance").is_dir()
 
 
 def _extract_score(row: dict[str, Any], mode: _ScoreField) -> float:
-    """Extract a higher-is-better score from a LanceDB result row.
-
-    Raises:
-        ScoreExtractionError: If the expected field is missing.
-    """
+    """Extract higher-is-better score from row."""
     field = mode.value
     if field not in row:
         raise ScoreExtractionError(
@@ -58,10 +54,10 @@ def _extract_score(row: dict[str, Any], mode: _ScoreField) -> float:
 
 
 class Store:
-    """LanceDB-backed vector store for code chunks."""
+    """LanceDB vector store for chunks."""
 
     def __init__(self) -> None:
-        """Initialize the store from the application config."""
+        """Initialize from config."""
         cfg = get_config()
         self._config = cfg
         self.db_path = Path(cfg.index.path)
@@ -75,11 +71,11 @@ class Store:
         self._hybrid_failures = 0
 
     def _ensure_dir(self) -> None:
-        """Create the database directory if it does not exist."""
+        """Create db dir if missing."""
         self.db_path.mkdir(parents=True, exist_ok=True)
 
     def _table_exists(self) -> bool:
-        """Return True when the chunks table is present."""
+        """Return True if chunks table exists."""
         if self._table_known:
             return True
         resp = self._db.list_tables()
@@ -94,11 +90,7 @@ class Store:
         chunks: list[Chunk],
         embeddings: list[list[float]],
     ) -> list[dict[str, Any]]:
-        """Convert chunks + embeddings to row dicts for LanceDB.
-
-        Raises:
-            EmbeddingDimensionError: On vector/store dimension mismatch.
-        """
+        """Convert chunks + embeddings to LanceDB rows."""
         rows = []
         for chunk, emb in zip(chunks, embeddings, strict=False):
             if len(emb) != self.dimensions:
@@ -119,17 +111,13 @@ class Store:
         return rows
 
     def _get_table(self):
-        """Return the chunks table, caching the reference after first open."""
+        """Return chunks table (cached)."""
         if self._cached_table is None:
             self._cached_table = self._db.open_table(TABLE_NAME)
         return self._cached_table
 
     def _ensure_fts_index(self, table) -> None:
-        """Create or replace the FTS index on the content column.
-
-        Uses native lance-index FTS (LanceDB default). If creation fails,
-        hybrid degrades to vector-only.
-        """
+        """Create/replace FTS index on content column."""
         try:
             table.create_fts_index(
                 "content",
@@ -148,12 +136,7 @@ class Store:
         chunks: list[Chunk],
         embeddings: list[list[float]],
     ) -> None:
-        """Insert chunks and their embeddings.
-
-        Raises:
-            EmbeddingDimensionError: On dimension mismatch.
-            ValueError: When chunks and embeddings lengths differ.
-        """
+        """Insert chunks and embeddings."""
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings length mismatch")
         if not chunks:
@@ -168,7 +151,7 @@ class Store:
         self._fts_stale = True
 
     def delete_by_paths(self, paths: list[str]) -> None:
-        """Remove all chunks whose path is in the given list."""
+        """Remove chunks by path."""
         if not paths:
             return
         if not self._table_exists():
@@ -185,7 +168,7 @@ class Store:
         path_prefix: str | None = None,
         query_text: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Run nearest-neighbor search with optional hybrid (vector + BM25) scoring."""
+        """Run vector or hybrid search."""
         if not self._table_exists():
             return []
         table = self._get_table()
@@ -227,7 +210,7 @@ class Store:
         top_k: int,
         path_prefix: str | None,
     ) -> list[dict] | None:
-        """Attempt hybrid search; return None on failure to trigger fallback."""
+        """Attempt hybrid search; None on failure."""
         if self._fts_stale:
             self._ensure_fts_index(table)
             self._fts_stale = False
@@ -275,7 +258,7 @@ class Store:
         return query.limit(top_k).to_list()
 
     def chunk_count(self) -> int:
-        """Total number of chunks in the store."""
+        """Return total chunk count."""
         if not self._table_exists():
             return 0
         return self._get_table().count_rows()
@@ -285,7 +268,7 @@ class Store:
         limit: int = 500,
         path_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List indexed chunks (no vectors)."""
+        """List chunks (no vectors)."""
         if not self._table_exists():
             return []
         table = self._get_table()
@@ -310,7 +293,7 @@ class Store:
         return arrow.to_pylist()[:limit]
 
     def chunks_by_path(self) -> dict[str, int]:
-        """Return mapping of file path to chunk count."""
+        """Return path -> chunk count mapping."""
         if not self._table_exists():
             return {}
         table = self._get_table()
@@ -326,7 +309,7 @@ class Store:
         return counts
 
     def maintain(self) -> dict[str, Any]:
-        """Run maintenance on the chunks table to reclaim space."""
+        """Run table maintenance."""
         result: dict[str, Any] = {"cleanup_done": False, "compact_done": False}
         if not self._table_exists():
             return result
@@ -354,7 +337,7 @@ class Store:
         return result
 
     def clear(self) -> None:
-        """Drop table so next insert_chunks creates a fresh one (full rebuild)."""
+        """Drop table for full rebuild."""
         if self._table_exists():
             self._db.drop_table(TABLE_NAME)
             self._table_known = False

@@ -14,7 +14,7 @@ DEFAULT_TIMEOUT = 300  # seconds to wait for lock before giving up
 
 
 def lock_path(index_dir: str | Path) -> Path:
-    """Path to the lock file inside the index directory."""
+    """Return path to lock file in index dir."""
     return Path(index_dir) / LOCK_FILENAME
 
 
@@ -23,7 +23,7 @@ def acquire_indexer_lock(
     index_dir: str | Path,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> Generator[FileLock, None, None]:
-    """Acquire exclusive file lock for index writes."""
+    """Acquire exclusive lock for index writes."""
     path = lock_path(index_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     lock = FileLock(str(path), timeout=timeout)

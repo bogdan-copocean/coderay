@@ -1,4 +1,4 @@
-"""Shared fixtures for the CodeRay test suite."""
+"""Shared fixtures for CodeRay tests."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from coderay.embedding.base import Embedder, EmbedTask
 
 
 class MockEmbedder(Embedder):
-    """Deterministic embedder returning fixed-dimension vectors for testing."""
+    """Deterministic embedder for tests."""
 
     DIMS = 4
 
@@ -53,11 +53,7 @@ def helper():
 
 TREE_SITTER_PLAYGROUND_PATH = Path(__file__).parent / "tree_sitter_playground.py"
 
-EXPECTED_TREE_SITTER_PLAYGROUND_SKELETON = '''"""Tree-sitter playground module for end-to-end parsing tests.
-
-This file is intentionally eclectic: it includes a variety of Python constructs
-that exercise chunking, skeleton extraction, and graph building.
-"""
+EXPECTED_TREE_SITTER_PLAYGROUND_SKELETON = '''"""Sample for skeleton/chunking tests."""
 from __future__ import annotations
 import asyncio
 import dataclasses
@@ -154,7 +150,7 @@ processed = service.process(payload)'''
 
 @pytest.fixture
 def expected_tree_sitter_playground_skeleton() -> str:
-    """Return the expected skeleton for tree_sitter_playground.py."""
+    """Return expected skeleton for tree_sitter_playground.py."""
     return EXPECTED_TREE_SITTER_PLAYGROUND_SKELETON
 
 
@@ -170,7 +166,7 @@ def mock_config() -> Config:
 
 @pytest.fixture
 def app_config(tmp_path: Path) -> Config:
-    """Set global config for the test (index=tmp_path/.index, dimensions=4)."""
+    """Set global config: index=tmp_path/.index, dimensions=4."""
     idx = tmp_path / ".index"
     idx.mkdir()
     cfg = Config(
@@ -184,7 +180,7 @@ def app_config(tmp_path: Path) -> Config:
 
 @pytest.fixture
 def default_config() -> Config:
-    """Reset global config to default (for tests that use get_config() default)."""
+    """Reset global config to default."""
     cfg = Config()
     _reset_config_for_testing(cfg)
     yield cfg
@@ -205,7 +201,7 @@ def sample_python_code() -> str:
 
 @pytest.fixture
 def tree_sitter_playground_source() -> tuple[str, str]:
-    """Return (path, source) for the Tree-sitter playground module."""
+    """Return (path, source) for tree_sitter_playground.py."""
     source = TREE_SITTER_PLAYGROUND_PATH.read_text(encoding="utf-8")
     return (str(TREE_SITTER_PLAYGROUND_PATH), source)
 
@@ -232,7 +228,7 @@ def sample_chunks() -> list[Chunk]:
 
 @pytest.fixture
 def fake_git_repo(tmp_path: Path) -> Path | None:
-    """Create a minimal git repo. Returns None (skips) if git init fails (sandbox)."""
+    """Create a minimal git repo. Skips if git init fails."""
     repo = tmp_path / "repo"
     repo.mkdir()
     try:

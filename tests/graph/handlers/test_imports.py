@@ -1,8 +1,6 @@
-"""Tests for ImportHandlerMixin: IMPORTS edges and FileContext registration.
+"""Test ImportHandlerMixin: bare/from/aliased/relative imports, excluded modules."""
 
-Covers: bare imports, from-imports, aliased imports, relative imports,
-excluded modules.
-"""
+import pytest
 
 from coderay.core.models import EdgeKind
 from coderay.graph.extractor import _resolve_relative_import, extract_graph_from_file
@@ -20,23 +18,18 @@ def _import_targets(edges):
 class TestResolveRelativeImport:
     """Edge cases for relative import path resolution."""
 
-    def test_single_dot_current_package(self):
-        assert _resolve_relative_import("src/a/b/file.py", ".foo") == "src/a/b/foo"
-
-    def test_double_dot_parent_package(self):
-        assert (
-            _resolve_relative_import("src/a/b/c/file.py", "..foo.bar")
-            == "src/a/b/foo/bar"
-        )
-
-    def test_triple_dot_two_levels_up(self):
-        assert _resolve_relative_import("src/a/b/c/file.py", "...foo") == "src/a/foo"
-
-    def test_dot_only_current_package(self):
-        assert _resolve_relative_import("src/a/b/file.py", ".") == "src/a/b"
-
-    def test_too_many_dots_returns_none(self):
-        assert _resolve_relative_import("file.py", "...foo") is None
+    @pytest.mark.parametrize(
+        "file_path,import_spec,expected",
+        [
+            ("src/a/b/file.py", ".foo", "src/a/b/foo"),
+            ("src/a/b/c/file.py", "..foo.bar", "src/a/b/foo/bar"),
+            ("src/a/b/c/file.py", "...foo", "src/a/foo"),
+            ("src/a/b/file.py", ".", "src/a/b"),
+            ("file.py", "...foo", None),
+        ],
+    )
+    def test_resolve_relative_import(self, file_path, import_spec, expected):
+        assert _resolve_relative_import(file_path, import_spec) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -47,15 +40,16 @@ class TestResolveRelativeImport:
 class TestBareImports:
     """_handle_import: import_statement branch."""
 
-    def test_single_bare_import_creates_edge(self):
-        _, edges = extract_graph_from_file("test.py", "import os\n")
-        assert "os" in _import_targets(edges)
-
-    def test_multiple_bare_imports_comma_separated(self):
-        _, edges = extract_graph_from_file("test.py", "import os, sys\n")
-        targets = _import_targets(edges)
-        assert "os" in targets
-        assert "sys" in targets
+    @pytest.mark.parametrize(
+        "code,expected_targets",
+        [
+            ("import os\n", {"os"}),
+            ("import os, sys\n", {"os", "sys"}),
+        ],
+    )
+    def test_bare_import_creates_edges(self, code, expected_targets):
+        _, edges = extract_graph_from_file("test.py", code)
+        assert expected_targets <= _import_targets(edges)
 
     def test_aliased_bare_import_registers_alias(self):
         """import math as m — edge target is 'math', m() resolves to math."""
@@ -75,17 +69,19 @@ class TestBareImports:
 class TestFromImports:
     """_handle_import: import_from_statement branch."""
 
-    def test_from_import_single_symbol(self):
-        _, edges = extract_graph_from_file("test.py", "from pathlib import Path\n")
-        assert "pathlib::Path" in _import_targets(edges)
-
-    def test_from_import_multiple_symbols(self):
-        _, edges = extract_graph_from_file(
-            "test.py", "from collections import defaultdict, OrderedDict\n"
-        )
-        targets = _import_targets(edges)
-        assert "collections::defaultdict" in targets
-        assert "collections::OrderedDict" in targets
+    @pytest.mark.parametrize(
+        "code,expected_targets",
+        [
+            ("from pathlib import Path\n", {"pathlib::Path"}),
+            (
+                "from collections import defaultdict, OrderedDict\n",
+                {"collections::defaultdict", "collections::OrderedDict"},
+            ),
+        ],
+    )
+    def test_from_import_creates_edges(self, code, expected_targets):
+        _, edges = extract_graph_from_file("test.py", code)
+        assert expected_targets <= _import_targets(edges)
 
     def test_aliased_from_import_uses_original_in_edge(self):
         """from collections import defaultdict as dd — target has original name."""
@@ -107,19 +103,22 @@ class TestFromImports:
 class TestRelativeImports:
     """_resolve_import_text: relative paths resolved via module index."""
 
-    def test_relative_import_single_dot_resolved(self):
-        code = "from .common import BaseRepo\n"
-        _, edges = extract_graph_from_file("src/a/b/file.py", code)
+    @pytest.mark.parametrize(
+        "file_path,code,expected_in_target",
+        [
+            ("src/a/b/file.py", "from .common import BaseRepo\n", "src/a/b/common"),
+            (
+                "src/a/b/c/file.py",
+                "from ..common.base_repo import BaseRepo\n",
+                "src/a/b/common/base_repo::BaseRepo",
+            ),
+        ],
+    )
+    def test_relative_import_resolved(self, file_path, code, expected_in_target):
+        _, edges = extract_graph_from_file(file_path, code)
         import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
         assert len(import_edges) == 1
-        assert "src/a/b/common" in import_edges[0].target
-
-    def test_relative_import_double_dot_resolved(self):
-        code = "from ..common.base_repo import BaseRepo\n"
-        _, edges = extract_graph_from_file("src/a/b/c/file.py", code)
-        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
-        assert len(import_edges) == 1
-        assert "src/a/b/common/base_repo::BaseRepo" in import_edges[0].target
+        assert expected_in_target in import_edges[0].target
 
 
 # ---------------------------------------------------------------------------
@@ -130,15 +129,17 @@ class TestRelativeImports:
 class TestExcludedModuleImports:
     """Excluded modules: register for resolution but no IMPORTS edge."""
 
-    def test_typing_import_no_edge(self):
-        _, edges = extract_graph_from_file("test.py", "from typing import Optional\n")
+    @pytest.mark.parametrize(
+        "code,excluded_symbol",
+        [
+            ("from typing import Optional\n", "typing::Optional"),
+            ("from abc import ABC\n", "abc::ABC"),
+        ],
+    )
+    def test_excluded_import_no_edge(self, code, excluded_symbol):
+        _, edges = extract_graph_from_file("test.py", code)
         targets = _import_targets(edges)
-        assert "typing::Optional" not in targets
-
-    def test_abc_import_no_edge(self):
-        _, edges = extract_graph_from_file("test.py", "from abc import ABC\n")
-        targets = _import_targets(edges)
-        assert "abc::ABC" not in targets
+        assert excluded_symbol not in targets
 
     def test_excluded_import_still_resolves_calls(self):
         """cast() from typing — no IMPORTS edge but call resolution works."""

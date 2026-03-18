@@ -8,19 +8,19 @@ logger = logging.getLogger(__name__)
 
 
 class EmbedTask(Enum):
-    """Distinguish document-time vs. query-time embedding."""
+    """Document vs query embedding."""
 
     DOCUMENT = "document"
     QUERY = "query"
 
 
 class Embedder(ABC):
-    """Abstract embedder: embed(texts) -> list of vectors."""
+    """Abstract embedder: embed(texts) -> vectors."""
 
     @property
     @abstractmethod
     def dimensions(self) -> int:
-        """Vector dimension produced by this embedder."""
+        """Return vector dimension."""
         ...
 
     @abstractmethod
@@ -30,12 +30,12 @@ class Embedder(ABC):
         *,
         task: EmbedTask = EmbedTask.DOCUMENT,
     ) -> list[list[float]]:
-        """Embed texts into vectors; one vector per input string."""
+        """Embed texts into vectors."""
         ...
 
 
 def load_embedder_from_config() -> Embedder:
-    """Build an Embedder from the application config."""
+    """Build Embedder from application config."""
 
     from coderay.core.config import get_config
     from coderay.embedding.local import LocalEmbedder
