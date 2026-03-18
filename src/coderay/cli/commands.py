@@ -98,14 +98,21 @@ def build(ctx: click.Context, full: bool, repo: Path) -> None:
 
 @cli.command()
 @click.argument("query_text", required=True)
-@click.option("--top-k", "top_k", default=10, help="Number of results")
-@click.option("--path-prefix", help="Filter by path prefix")
+@click.option("--top-k", "top_k", default=5, help="Number of results (default 5)")
+@click.option("--path-prefix", help="Filter to files under this directory")
+@click.option(
+    "--include-tests/--no-tests",
+    "include_tests",
+    default=True,
+    help="Include test files in results (default: true)",
+)
 @click.pass_context
 def search_cmd(
     ctx: click.Context,
     query_text: str,
     top_k: int,
     path_prefix: str | None,
+    include_tests: bool,
 ) -> None:
     """Semantic search the index."""
     from coderay.core.config import get_config
@@ -131,6 +138,7 @@ def search_cmd(
             current_state=current_state,
             top_k=top_k,
             path_prefix=path_prefix,
+            include_tests=include_tests,
         )
     click.echo(_color(f"Query took {tp.elapsed:.2f}s", BOLD))
 
@@ -363,6 +371,50 @@ def graph_cmd(
     if len(edges) > limit:
         click.echo(_color(f"  ... and {len(edges) - limit} more (use --limit)", CYAN))
     click.echo(_color(f"Total: {len(edges)} edges", CYAN))
+
+
+@cli.command("impact")
+@click.argument("node_id", required=True)
+@click.option(
+    "--max-depth",
+    "max_depth",
+    default=2,
+    help="How many caller/dependent levels to traverse (default 2).",
+)
+@click.pass_context
+def impact_cmd(ctx: click.Context, node_id: str, max_depth: int) -> None:
+    """List callers and dependents of a function or class (blast radius)."""
+    from coderay.core.config import get_config
+    from coderay.graph.builder import load_graph
+
+    config = get_config()
+    index_dir = Path(config.index.path)
+    if not index_exists(index_dir):
+        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
+        ctx.exit(1)
+    graph = load_graph(index_dir)
+    if graph is None:
+        click.echo(_color("No graph data. Run 'coderay build' to build it.", YELLOW))
+        ctx.exit(1)
+    result = graph.get_impact_radius(node_id, depth=max_depth)
+    out = result.to_dict()
+    resolved = out.get("resolved_node")
+    if resolved:
+        click.echo(_color(f"Resolved: {resolved}", CYAN))
+    results = out.get("results", [])
+    if not results:
+        click.echo(_color("No callers or dependents found.", YELLOW))
+        if out.get("hint"):
+            click.echo(out["hint"])
+        return
+    click.echo(_color(f"Callers/dependents ({len(results)}):", CYAN))
+    for i, r in enumerate(results, 1):
+        path = r.get("file_path", "?")
+        name = r.get("name", "?")
+        start = r.get("start_line", "")
+        end = r.get("end_line", "")
+        loc = f":{start}-{end}" if start and end else ""
+        click.echo(f"  {i}. {path}{loc}::{name}")
 
 
 @cli.command()

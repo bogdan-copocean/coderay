@@ -94,12 +94,13 @@ Run `coderay build` (or `coderay watch`) from the project root first.
 | --------------------------------------- | --------------------------------------------------------------- |
 | `coderay watch --repo . [--debounce N]` | **Recommended.** Watch for file changes, re-index automatically |
 | `coderay build [--full] --repo .`       | Build or incremental update. Use `--full` for full rebuild      |
-| `coderay search "query" [--top-k N]`    | Semantic search                                                 |
+| `coderay search "query" [--top-k N] [--path-prefix P] [--no-tests]` | Semantic search                                                 |
 | `coderay list [--by-file]`              | List indexed chunks                                             |
 | `coderay status`                        | Index state, branch, commit, chunk count                        |
 | `coderay maintain --repo .`             | Compact index, reclaim space                                    |
 | `coderay skeleton FILE [--include-imports] [--symbol NAME]` | Print file skeleton (optionally with imports, or filtered to one class/function) |
-| `coderay graph --kind calls             | imports`                                                        |
+| `coderay graph [--kind calls\|imports] [--from X] [--to Y] [--limit N]` | List call/import graph edges |
+| `coderay impact NODE_ID [--max-depth N]` | Blast radius: callers/dependents of a symbol                   |
 
 
 ## Embedding
