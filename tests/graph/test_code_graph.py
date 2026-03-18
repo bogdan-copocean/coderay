@@ -93,6 +93,211 @@ class TestCodeGraph:
         ids = {n.id for n in result.nodes}
         assert "b.py::Child" in ids
 
+    def test_impact_radius_interface_aware_includes_interface_callers(self):
+        """Querying implementation method includes callers typed against interface.
+
+        Caller uses port: Port and calls port.save(). Edge goes to Port.save.
+        Querying Impl.save (where Impl inherits Port) should find that caller.
+        """
+        g = CodeGraph()
+        port_cls = GraphNode(
+            id="ports.py::Port",
+            kind=NodeKind.CLASS,
+            file_path="ports.py",
+            start_line=1,
+            end_line=5,
+            name="Port",
+            qualified_name="Port",
+        )
+        port_method = GraphNode(
+            id="ports.py::Port.save",
+            kind=NodeKind.FUNCTION,
+            file_path="ports.py",
+            start_line=2,
+            end_line=4,
+            name="save",
+            qualified_name="Port.save",
+        )
+        impl_cls = GraphNode(
+            id="impl.py::Impl",
+            kind=NodeKind.CLASS,
+            file_path="impl.py",
+            start_line=1,
+            end_line=5,
+            name="Impl",
+            qualified_name="Impl",
+        )
+        impl_method = GraphNode(
+            id="impl.py::Impl.save",
+            kind=NodeKind.FUNCTION,
+            file_path="impl.py",
+            start_line=2,
+            end_line=4,
+            name="save",
+            qualified_name="Impl.save",
+        )
+        caller = GraphNode(
+            id="app.py::UseCase.execute",
+            kind=NodeKind.FUNCTION,
+            file_path="app.py",
+            start_line=1,
+            end_line=5,
+            name="execute",
+            qualified_name="UseCase.execute",
+        )
+        for n in [port_cls, port_method, impl_cls, impl_method, caller]:
+            g.add_node(n)
+        g.add_edge(_make_edge("impl.py::Impl", "ports.py::Port", EdgeKind.INHERITS))
+        g.add_edge(_make_edge("app.py::UseCase.execute", "ports.py::Port.save", EdgeKind.CALLS))
+
+        result = g.get_impact_radius("impl.py::Impl.save", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "app.py::UseCase.execute" in ids
+
+    def test_impact_radius_inherits_with_string_kind(self):
+        """INHERITS edge with kind as string (e.g. from JSON) is still detected."""
+        g = CodeGraph()
+        base = _make_node("a.py::Base", NodeKind.CLASS, "Base")
+        child = _make_node("b.py::Child", NodeKind.CLASS, "Child")
+        g.add_node(base)
+        g.add_node(child)
+        g._g.add_edge("b.py::Child", "a.py::Base", kind="inherits")
+
+        result = g.get_impact_radius("a.py::Base", depth=1)
+        ids = {n.id for n in result.nodes}
+        assert "b.py::Child" in ids
+
+    def test_impact_radius_interface_aware_nested_parent_id(self):
+        """Parent ID path::Module.Outer.Inner extracts Inner for fallback."""
+        g = CodeGraph()
+        inner_cls = GraphNode(
+            id="ports.py::Module.Outer.Inner",
+            kind=NodeKind.CLASS,
+            file_path="ports.py",
+            start_line=1,
+            end_line=5,
+            name="Inner",
+            qualified_name="Module.Outer.Inner",
+        )
+        inner_method = GraphNode(
+            id="ports.py::Module.Outer.Inner.save",
+            kind=NodeKind.FUNCTION,
+            file_path="ports.py",
+            start_line=2,
+            end_line=4,
+            name="save",
+            qualified_name="Module.Outer.Inner.save",
+        )
+        impl_cls = GraphNode(
+            id="impl.py::Impl",
+            kind=NodeKind.CLASS,
+            file_path="impl.py",
+            start_line=1,
+            end_line=5,
+            name="Impl",
+            qualified_name="Impl",
+        )
+        impl_method = GraphNode(
+            id="impl.py::Impl.save",
+            kind=NodeKind.FUNCTION,
+            file_path="impl.py",
+            start_line=2,
+            end_line=4,
+            name="save",
+            qualified_name="Impl.save",
+        )
+        caller = GraphNode(
+            id="app.py::UseCase.execute",
+            kind=NodeKind.FUNCTION,
+            file_path="app.py",
+            start_line=1,
+            end_line=5,
+            name="execute",
+            qualified_name="UseCase.execute",
+        )
+        for n in [inner_cls, inner_method, impl_cls, impl_method, caller]:
+            g.add_node(n)
+        g.add_edge(
+            _make_edge("impl.py::Impl", "ports.py::Module.Outer.Inner", EdgeKind.INHERITS)
+        )
+        g.add_edge(
+            _make_edge(
+                "app.py::UseCase.execute",
+                "ports.py::Module.Outer.Inner.save",
+                EdgeKind.CALLS,
+            )
+        )
+
+        result = g.get_impact_radius("impl.py::Impl.save", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "app.py::UseCase.execute" in ids
+
+    def test_impact_radius_interface_aware_ambiguous_fallback_skipped(self):
+        """When resolve_symbol is ambiguous for parent method, skip fallback gracefully."""
+        g = CodeGraph()
+        parent_cls = GraphNode(
+            id="path::ports.Port",
+            kind=NodeKind.CLASS,
+            file_path="path/ports.py",
+            start_line=1,
+            end_line=5,
+            name="Port",
+            qualified_name="ports.Port",
+        )
+        port_a = GraphNode(
+            id="a.py::Port.save",
+            kind=NodeKind.FUNCTION,
+            file_path="a.py",
+            start_line=1,
+            end_line=3,
+            name="save",
+            qualified_name="Port.save",
+        )
+        port_b = GraphNode(
+            id="b.py::Port.save",
+            kind=NodeKind.FUNCTION,
+            file_path="b.py",
+            start_line=1,
+            end_line=3,
+            name="save",
+            qualified_name="Port.save",
+        )
+        impl_cls = GraphNode(
+            id="impl.py::Impl",
+            kind=NodeKind.CLASS,
+            file_path="impl.py",
+            start_line=1,
+            end_line=5,
+            name="Impl",
+            qualified_name="Impl",
+        )
+        impl_method = GraphNode(
+            id="impl.py::Impl.save",
+            kind=NodeKind.FUNCTION,
+            file_path="impl.py",
+            start_line=2,
+            end_line=4,
+            name="save",
+            qualified_name="Impl.save",
+        )
+        caller_direct = GraphNode(
+            id="app.py::direct_caller",
+            kind=NodeKind.FUNCTION,
+            file_path="app.py",
+            start_line=1,
+            end_line=5,
+            name="direct_caller",
+            qualified_name="direct_caller",
+        )
+        for n in [parent_cls, port_a, port_b, impl_cls, impl_method, caller_direct]:
+            g.add_node(n)
+        g.add_edge(_make_edge("impl.py::Impl", "path::ports.Port", EdgeKind.INHERITS))
+        g.add_edge(_make_edge("app.py::direct_caller", "impl.py::Impl.save", EdgeKind.CALLS))
+
+        result = g.get_impact_radius("impl.py::Impl.save", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "app.py::direct_caller" in ids
+
     def test_impact_radius_not_found_returns_hint(self):
         g = CodeGraph()
         g.add_node(_make_node("a.py::foo", NodeKind.FUNCTION, "foo"))

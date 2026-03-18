@@ -159,6 +159,42 @@ class CodeGraph:
         {EdgeKind.CALLS, EdgeKind.IMPORTS, EdgeKind.INHERITS}
     )
 
+    def _normalize_edge_kind(self, raw: Any) -> EdgeKind | None:
+        """Return EdgeKind or None if raw is not a valid kind.
+
+        Handles both EdgeKind enum and string (e.g. from JSON), so
+        graphs with string edge kinds still work correctly.
+
+        Returns:
+            EdgeKind if raw is valid, None otherwise.
+        """
+        if raw is None:
+            return None
+        if isinstance(raw, EdgeKind):
+            return raw
+        if isinstance(raw, str) and raw in [e.value for e in EdgeKind]:
+            return EdgeKind(raw)
+        return None
+
+    def _parent_class_name(self, parent_node_id: str) -> str:
+        """Extract the class name from a parent node ID.
+
+        Used when INHERITS target format differs from method node format
+        (e.g. path::ports.StoragePort vs path::StoragePort.save).
+
+        Args:
+            parent_node_id: Full node ID, e.g. path::Module.Outer.Inner.
+
+        Returns:
+            Last component after :: and ., e.g. Inner.
+        """
+        qualifier = (
+            parent_node_id.split("::", 1)[-1]
+            if "::" in parent_node_id
+            else parent_node_id
+        )
+        return qualifier.split(".")[-1] if "." in qualifier else qualifier
+
     def get_impact_radius(self, symbol: str, depth: int = 2) -> ImpactResult:
         """Find all nodes that could be affected if ``symbol`` changes.
 
@@ -170,6 +206,10 @@ class CodeGraph:
         resolved node's ``name`` or ``qualified_name`` — these are
         unresolved DI-style calls (e.g. ``self.dep.process()``)
         that couldn't be resolved at extraction time.
+
+        Interface-aware: when querying an implementation method, also
+        traverses from the parent interface's method so callers typed
+        against the interface are included.
 
         Args:
             symbol: Fully qualified node ID or resolvable name.
@@ -187,12 +227,14 @@ class CodeGraph:
         if resolved not in self._g:
             return self._not_found_result(symbol)
 
+        seeds = self._impact_seeds(resolved)
         visited: set[str] = set()
-        queue: deque[tuple[str, int]] = deque(
-            (pred, 1)
-            for pred in self._g.predecessors(resolved)
-            if self._is_impact_edge(pred, resolved)
-        )
+        queue: deque[tuple[str, int]] = deque()
+        for seed in seeds:
+            if seed in self._g:
+                for pred in self._g.predecessors(seed):
+                    if self._is_impact_edge(pred, seed):
+                        queue.append((pred, 1))
 
         # Also find callers via unresolved bare-name edges
         bare_targets = self._bare_name_targets(resolved)
@@ -200,7 +242,8 @@ class CodeGraph:
             if bare in self._g:
                 for pred in self._g.predecessors(bare):
                     edge_data = self._g.edges[pred, bare]
-                    if edge_data.get("kind") in self._IMPACT_EDGE_KINDS:
+                    kind = self._normalize_edge_kind(edge_data.get("kind"))
+                    if kind in self._IMPACT_EDGE_KINDS:
                         queue.append((pred, 1))
 
         while queue:
@@ -241,10 +284,49 @@ class CodeGraph:
                 targets.append(candidate)
         return targets
 
+    def _impact_seeds(self, node_id: str) -> list[str]:
+        """Return node_id plus same method on parent classes (interface-aware).
+
+        When querying an implementation method, callers may call through
+        the interface (e.g. svc.save() where svc: StoragePort).
+        Those edges point to the
+        interface method. Including parent methods as seeds ensures
+        we find those callers.
+        """
+        seeds = [node_id]
+        if "::" not in node_id:
+            return seeds
+        file_part, qualifier = node_id.split("::", 1)
+        if "." not in qualifier:
+            return seeds
+        class_qualifier, method_name = qualifier.rsplit(".", 1)
+        class_node_id = f"{file_part}::{class_qualifier}"
+        if class_node_id not in self._g:
+            return seeds
+        for _, parent in self._g.out_edges(class_node_id):
+            edge_kind = self._normalize_edge_kind(
+                self._g.edges[class_node_id, parent].get("kind")
+            )
+            if edge_kind != EdgeKind.INHERITS:
+                continue
+            parent_method = f"{parent}.{method_name}"
+            if parent_method in self._g:
+                seeds.append(parent_method)
+            else:
+                parent_class_name = self._parent_class_name(parent)
+                fallback = self.resolve_symbol(f"{parent_class_name}.{method_name}")
+                if fallback and fallback not in seeds:
+                    seeds.append(fallback)
+        return seeds
+
     def _is_impact_edge(self, source: str, target: str) -> bool:
         """Check whether the edge is a dependency (not containment)."""
-        kind = self._g.edges[source, target].get("kind")
-        return kind in self._IMPACT_EDGE_KINDS
+        if not self._g.has_edge(source, target):
+            return False
+        kind = self._normalize_edge_kind(
+            self._g.edges[source, target].get("kind")
+        )
+        return kind in self._IMPACT_EDGE_KINDS if kind else False
 
     def _not_found_result(self, symbol: str) -> ImpactResult:
         """Build an ImpactResult with diagnostic hints for a missing node."""
@@ -317,7 +399,7 @@ class CodeGraph:
         if module_id in self._g:
             for pred in self._g.predecessors(module_id):
                 edge_data = self._g.edges[pred, module_id]
-                if edge_data.get("kind") == EdgeKind.IMPORTS:
+                if self._normalize_edge_kind(edge_data.get("kind")) == EdgeKind.IMPORTS:
                     importer_count += 1
 
         if importer_count > 0:
@@ -348,7 +430,7 @@ class CodeGraph:
     def to_dict(self) -> dict[str, Any]:
         """Serialise the graph to a JSON-compatible dict."""
         nodes = []
-        for nid, data in self._g.nodes(data=True):
+        for _, data in self._g.nodes(data=True):
             gn: GraphNode | None = data.get("data") if data else None
             if gn:
                 nodes.append(
