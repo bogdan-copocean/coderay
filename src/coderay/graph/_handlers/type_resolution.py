@@ -22,16 +22,16 @@ class TypeResolutionMixin:
         if not type_text:
             return []
         text = type_text.strip()
-        # Forward ref: "RepositoryPort" (string annotation)
+        # Strip quotes from forward references: "RepositoryPort" → RepositoryPort
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
-        # Self: resolve to enclosing class when inside a method
+        # Self → enclosing class (e.g. def clone(self) -> Self)
         if text == "Self" and enclosing_func_node:
             class_qualified = self._find_enclosing_class_from_node(enclosing_func_node)
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}"]
             return []
-        # Union: A | B — split and resolve each
+        # Union: "RepoA | RepoB" → resolve each upper-cased part, skip None
         parts = [p.strip() for p in text.split("|")]
         result: list[str] = []
         for part in parts:

@@ -20,13 +20,17 @@ class PythonImportHandler:
         ntype = node.type
         module: list[str] = []
         imported: list[tuple[str, str]] = []
+        # scope_stack → caller: lazy imports inside a function scope to that function
         caller_id = parser._caller_id_from_scope(scope_stack or [])
 
+        # Walk child tokens to extract module path and imported names.
+        # Three forms: "from X import Y", "import X", "from __future__ import Y"
         for child in node.children:
             prev = child.prev_sibling
             prev_type = prev.type if prev else None
 
             if ntype == "import_from_statement":
+                # "from X import Y" — token after "from" is the module path
                 if prev_type == "from":
                     text = self._resolve_import_text(child, parser)
                     if text:
@@ -37,6 +41,7 @@ class PythonImportHandler:
                 self._collect_import_name(child, imported, parser)
 
             elif ntype == "import_statement":
+                # "import os, json" — each dotted_name after "import" or ","
                 if prev_type == "import" or prev_type == ",":
                     self._collect_bare_import(child, module, imported, parser)
 
@@ -46,6 +51,8 @@ class PythonImportHandler:
                     continue
                 self._collect_import_name(child, imported, parser)
 
+        # Bare imports emit their own edges (one per dotted name);
+        # from-imports emit edges per imported symbol.
         if ntype != "import_statement":
             self._emit_from_import_edges(module, imported, ntype, parser, caller_id)
         if ntype == "import_statement":

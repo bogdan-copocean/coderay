@@ -148,13 +148,11 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if node matches symbol.
-
-        Supports dotted symbols like ``Class.method`` — at depth 0 match the
-        class name, at depth 1 match only the specified method.
-        """
+        """Return True if node matches the symbol filter."""
         if self._symbol is None:
             return True
+        # "Class.method" → depth 0 matches "Class", depth 1 matches "method"
+        # "Class" alone → depth 0 matches "Class", depth 1 matches everything
         parts = self._symbol.split(".", 1)
         class_part = parts[0]
         method_part = parts[1] if len(parts) > 1 else None
@@ -192,6 +190,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         if node.id in self._seen:
             return
 
+        # Uninteresting nodes: pass through, but capture top-level constants/docstrings
         if ntype not in interesting:
             skel_cfg = lang_cfg.skeleton
             if depth == 0 and ntype in skel_cfg.top_level_expr_types:
@@ -210,6 +209,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 lines.append(indent + self.node_text(node).strip())
             return
 
+        # Decorated nodes: emit decorator lines, then recurse into the inner def/class
         if ntype in lang_cfg.decorator_scope_types:
             inner = self._decorated_inner(node)
             if inner is not None and not self._matches_symbol(inner, depth):
@@ -229,6 +229,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
+        # Functions: signature + docstring + ellipsis, no body traversal
         if ntype in lang_cfg.function_scope_types:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
@@ -240,6 +241,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
+        # Classes: signature + docstring, then recurse into body at depth+1
         if ntype in (
             lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
         ):

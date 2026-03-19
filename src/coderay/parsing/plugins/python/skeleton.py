@@ -134,13 +134,11 @@ class _PythonSkeletonParser(BaseTreeSitterParser):
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if node matches symbol filter.
-
-        Supports dotted symbols like ``Class.method`` — at depth 0 match the
-        class name, at depth 1 match only the specified method.
-        """
+        """Return True if node matches the symbol filter."""
         if self._symbol is None:
             return True
+        # "Class.method" → depth 0 matches "Class", depth 1 matches "method"
+        # "Class" alone → depth 0 matches "Class", depth 1 matches everything
         parts = self._symbol.split(".", 1)
         class_part = parts[0]
         method_part = parts[1] if len(parts) > 1 else None
@@ -172,6 +170,7 @@ class _PythonSkeletonParser(BaseTreeSitterParser):
         if node.id in self._seen:
             return
 
+        # Uninteresting nodes: pass through, but capture top-level constants/docstrings
         if ntype not in interesting:
             if depth == 0 and ntype in _TOP_LEVEL_EXPR_TYPES:
                 if self._symbol is None:
@@ -189,6 +188,7 @@ class _PythonSkeletonParser(BaseTreeSitterParser):
                 lines.append(indent + self.node_text(node).strip())
             return
 
+        # Decorated nodes: emit decorator lines, then recurse into the inner def/class
         if ntype in _DECORATOR_SCOPE_TYPES:
             inner = self._decorated_inner(node)
             if inner is not None and not self._matches_symbol(inner, depth):
@@ -205,6 +205,7 @@ class _PythonSkeletonParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
+        # Functions: signature + docstring + ellipsis, no body traversal
         if ntype in _FUNCTION_SCOPE_TYPES:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
@@ -216,6 +217,7 @@ class _PythonSkeletonParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
+        # Classes: signature + docstring, then recurse into body at depth+1
         if ntype in _CLASS_SCOPE_TYPES:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)

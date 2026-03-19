@@ -14,5 +14,7 @@ class ImportHandlerMixin:
         self, node: TSNode, *, scope_stack: list[str] | None = None
     ) -> None:
         """Create IMPORTS edges and register names in FileContext."""
+        # Each language (Python, JS/TS) has its own import grammar;
+        # the handler factory returns the appropriate one from LangConstants.
         handler = self._lc.import_handler_factory()
         handler.handle(node, self, scope_stack=scope_stack or [])
