@@ -168,9 +168,7 @@ class TestLazyImportScoping:
 
     def test_lazy_from_import_scoped_to_function(self):
         code = (
-            "def dispatch():\n"
-            "    from workers.tasks import run_task\n"
-            "    run_task()\n"
+            "def dispatch():\n    from workers.tasks import run_task\n    run_task()\n"
         )
         _, edges = extract_graph_from_file("svc.py", code)
         import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]

@@ -20,8 +20,17 @@ _PYTHON_BUILTINS: frozenset[str] = frozenset(
 )
 
 _BUILTIN_TYPES: tuple[type, ...] = (
-    list, dict, set, tuple, str, bytes, frozenset,
-    io.IOBase, io.RawIOBase, io.BufferedIOBase, io.TextIOBase,
+    list,
+    dict,
+    set,
+    tuple,
+    str,
+    bytes,
+    frozenset,
+    io.IOBase,
+    io.RawIOBase,
+    io.BufferedIOBase,
+    io.TextIOBase,
 )
 _PYTHON_BUILTIN_METHODS: frozenset[str] = frozenset(
     name
@@ -36,13 +45,38 @@ _PYTHON_BUILTIN_METHODS: frozenset[str] = frozenset(
 
 _JS_BUILTINS: frozenset[str] = frozenset(
     {
-        "fetch", "console", "JSON", "Promise", "Map", "Set", "Array",
-        "Object", "Number", "String", "Boolean", "Symbol", "BigInt",
-        "Math", "Date", "RegExp", "Error", "parseInt", "parseFloat",
-        "isNaN", "isFinite", "eval", "encodeURI", "decodeURI",
-        "encodeURIComponent", "decodeURIComponent", "setTimeout",
-        "setInterval", "clearTimeout", "clearInterval",
-        "requestAnimationFrame", "cancelAnimationFrame",
+        "fetch",
+        "console",
+        "JSON",
+        "Promise",
+        "Map",
+        "Set",
+        "Array",
+        "Object",
+        "Number",
+        "String",
+        "Boolean",
+        "Symbol",
+        "BigInt",
+        "Math",
+        "Date",
+        "RegExp",
+        "Error",
+        "parseInt",
+        "parseFloat",
+        "isNaN",
+        "isFinite",
+        "eval",
+        "encodeURI",
+        "decodeURI",
+        "encodeURIComponent",
+        "decodeURIComponent",
+        "setTimeout",
+        "setInterval",
+        "clearTimeout",
+        "clearInterval",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
     }
 )
 

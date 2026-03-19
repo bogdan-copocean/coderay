@@ -151,9 +151,7 @@ class TestExtractSkeleton:
 
     def test_plain_class_symbol_returns_all_methods(self):
         """Without the method part, all methods are included."""
-        skeleton = extract_skeleton(
-            "test.py", SAMPLE_PYTHON, symbol="UserService"
-        )
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="UserService")
         assert "def create_user" in skeleton
         assert "def delete_user" in skeleton
 
@@ -162,17 +160,13 @@ class TestExtractSkeleton:
     # ------------------------------------------------------------------
 
     def test_unknown_symbol_returns_hint(self):
-        skeleton = extract_skeleton(
-            "test.py", SAMPLE_PYTHON, symbol="DoesNotExist"
-        )
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="DoesNotExist")
         assert "not found" in skeleton.lower()
         assert "UserService" in skeleton
         assert "helper_function" in skeleton
 
     def test_unknown_dotted_symbol_returns_hint(self):
-        skeleton = extract_skeleton(
-            "test.py", SAMPLE_PYTHON, symbol="FakeClass.method"
-        )
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="FakeClass.method")
         assert "not found" in skeleton.lower()
 
     def test_javascript_skeleton(self):

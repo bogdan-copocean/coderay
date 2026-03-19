@@ -274,9 +274,8 @@ class GraphTreeSitterParser(
         self._module_index = module_index or {}
         self._file_ctx = FileContext(module_index=self._module_index)
         # Resolve from registry when not provided explicitly
-        self._lang_constants = (
-            lang_constants
-            or get_lang_constants(context.lang_cfg.name)
+        self._lang_constants = lang_constants or get_lang_constants(
+            context.lang_cfg.name
         )
 
     @property
