@@ -109,6 +109,14 @@ class CodeGraph:
         """Return True if name has resolution candidates."""
         return bool(self._symbol_index.get(name) or self._qualified_index.get(name))
 
+    def has_ambiguous_symbol(self, name: str) -> bool:
+        """Return True if name resolves to multiple candidates."""
+        sym = self._symbol_index.get(name, set())
+        if len(sym) > 1:
+            return True
+        qual = self._qualified_index.get(name, set())
+        return len(qual) > 1
+
     def all_file_paths(self) -> set[str]:
         """Return all file paths in graph."""
         return set(self._file_index.keys())
@@ -205,8 +213,12 @@ class CodeGraph:
                     if pred not in visited and self._is_impact_edge(pred, nid):
                         queue.append((pred, hop + 1))
 
+        resolved_node = self.get_node(resolved)
+        own_module = resolved_node.file_path if resolved_node else None
         nodes = [
-            self.get_node(nid) for nid in visited if self.get_node(nid) is not None
+            self.get_node(nid)
+            for nid in visited
+            if self.get_node(nid) is not None and nid != own_module
         ]
 
         hint = self._zero_callers_hint(resolved) if not nodes else None

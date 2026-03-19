@@ -13,6 +13,24 @@ from dataclasses import dataclass
 _PYTHON_BUILTINS: frozenset[str] = frozenset(
     name for name in dir(builtins) if not name.startswith("_")
 )
+
+_PYTHON_BUILTIN_METHODS: frozenset[str] = frozenset(
+    {
+        # list
+        "append", "extend", "insert", "remove", "pop", "clear", "index",
+        "count", "sort", "reverse", "copy",
+        # dict
+        "get", "keys", "values", "items", "update", "setdefault",
+        # set
+        "add", "discard", "union", "intersection", "difference",
+        # str
+        "join", "split", "strip", "lstrip", "rstrip", "replace",
+        "startswith", "endswith", "upper", "lower", "title", "find",
+        "encode", "decode", "format",
+        # io
+        "read", "write", "close", "flush", "seek",
+    }
+)
 _JS_BUILTINS: frozenset[str] = frozenset(
     {
         "fetch",
@@ -89,7 +107,7 @@ def python_lang_constants() -> LangConstants:
         assignment_types=("assignment",),
         class_body_types=("block",),
         typed_param_types=("typed_parameter",),
-        builtins=_PYTHON_BUILTINS,
+        builtins=_PYTHON_BUILTINS | _PYTHON_BUILTIN_METHODS,
         self_prefixes=("self.",),
         super_prefixes=("super().", "super."),
         has_decorator=True,
