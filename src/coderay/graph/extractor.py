@@ -16,12 +16,9 @@ from coderay.graph._handlers import (
 )
 from coderay.graph._utils import is_init_file, resolve_relative_import
 from coderay.graph.identifiers import file_path_to_module_names
-from coderay.graph.lang_constants import (
-    _PYTHON_BUILTINS,
-    LangConstants,
-    get_lang_constants,
-)
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
+from coderay.parsing.builtins import PYTHON_BUILTINS
+from coderay.parsing.languages import GraphConfig
 
 # Re-export for tests that assert on internal helpers
 _resolve_relative_import = resolve_relative_import
@@ -30,7 +27,7 @@ __all__ = [
     "FileContext",
     "GraphTreeSitterParser",
     "ModuleIndex",
-    "_PYTHON_BUILTINS",
+    "PYTHON_BUILTINS",
     "_resolve_relative_import",
     "build_module_filter",
     "build_module_index",
@@ -226,10 +223,6 @@ def extract_graph_from_file(
     if ctx is None:
         return [], []
 
-    lc = get_lang_constants(ctx.lang_cfg.name)
-    if lc is None:
-        return [], []
-
     if excluded_modules is None:
         excluded_modules = build_module_filter()
 
@@ -237,7 +230,6 @@ def extract_graph_from_file(
         ctx,
         excluded_modules=excluded_modules,
         module_index=module_index or {},
-        lang_constants=lc,
     )
     return parser.extract()
 
@@ -263,7 +255,6 @@ class GraphTreeSitterParser(
         *,
         excluded_modules: frozenset[str],
         module_index: ModuleIndex | None = None,
-        lang_constants: LangConstants | None = None,
     ) -> None:
         """Initialize the parser with file context and module filter."""
         super().__init__(context)
@@ -273,18 +264,11 @@ class GraphTreeSitterParser(
         self._edges: list[GraphEdge] = []
         self._module_index = module_index or {}
         self._file_ctx = FileContext(module_index=self._module_index)
-        # Resolve from registry when not provided explicitly
-        self._lang_constants = lang_constants or get_lang_constants(
-            context.lang_cfg.name
-        )
 
     @property
-    def _lc(self) -> LangConstants:
-        """Effective language constants."""
-        assert self._lang_constants is not None, (
-            f"No LangConstants for {self._ctx.lang_cfg.name}"
-        )
-        return self._lang_constants
+    def _gc(self) -> GraphConfig:
+        """Graph sub-config from the language config."""
+        return self._ctx.lang_cfg.graph
 
     def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
         """Walk the syntax tree and return all graph nodes and edges."""
@@ -307,25 +291,26 @@ class GraphTreeSitterParser(
     def _dfs(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Recursively walk the AST, dispatching to type-specific handlers."""
         ntype = node.type
-        lc = self._lc
+        cfg = self._ctx.lang_cfg
+        gc = self._gc
 
         # Dispatch on AST node type. Scope-creating nodes (function/class)
         # return early -- they recurse into their own body with updated scope.
-        if ntype in lc.import_types:
+        if ntype in cfg.import_types:
             self._handle_import(node, scope_stack=scope_stack)
-        elif ntype in lc.function_scope_types:
+        elif ntype in cfg.function_scope_types:
             self._handle_function_def(node, scope_stack=scope_stack)
             return  # handler recurses with [*scope, func_name]
-        elif ntype in (lc.class_scope_types + lc.extra_class_scope_types):
+        elif ntype in cfg.class_scope_types or ntype in gc.extra_class_scope_types:
             self._handle_class_def(node, scope_stack=scope_stack)
             return  # handler recurses with [*scope, class_name]
-        elif ntype in lc.call_types:
+        elif ntype in gc.call_types:
             self._handle_call(node, scope_stack=scope_stack)
-        elif lc.has_decorator and ntype == "decorator":
+        elif ntype in gc.decorator_types:
             self._handle_decorator(node, scope_stack=scope_stack)
-        elif ntype in lc.assignment_types:
+        elif ntype in gc.assignment_types:
             self._handle_assignment(node, scope_stack=scope_stack)
-        elif lc.has_with_statement and ntype == "with_statement":
+        elif ntype in gc.with_types:
             self._handle_with_statement(node, scope_stack=scope_stack)
 
         # Non-scope nodes: continue DFS into children at same scope level

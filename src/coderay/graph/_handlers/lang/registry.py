@@ -1,4 +1,4 @@
-"""Registry mapping language names to handler instances."""
+"""Registry mapping language names to import handler instances."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ TSNode = Any
 class _NoOpImportHandler:
     """No-op handler for languages without import support."""
 
-    def handle(self, node: TSNode, parser: Any) -> None:
+    def handle(self, node: TSNode, parser: Any, **kwargs: Any) -> None:
         """No-op; language does not have graph import support."""
 
 
@@ -21,7 +21,6 @@ _IMPORT_HANDLERS: dict[str, object] = {
     "python": PythonImportHandler(),
     "javascript": JsTsImportHandler(),
     "typescript": JsTsImportHandler(),
-    "go": _NoOpImportHandler(),
 }
 
 

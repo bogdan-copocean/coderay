@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Language configuration for Tree-sitter based analyzers.
 
-This module centralizes language-specific configuration used by all Tree-sitter
-consumers (chunking, skeleton extraction, graph building, etc.).
+Single source of truth for all language-specific AST node types, behavior
+flags, and sub-configs consumed by chunking, skeleton extraction, and
+graph building.
 """
+
+from __future__ import annotations
 
 import logging
 from collections.abc import Callable
@@ -12,7 +13,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from coderay.parsing.builtins import JS_TS_BUILTINS, PYTHON_ALL_BUILTINS
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Sub-configs: each consumer (skeleton, chunker, graph) reads its own slice.
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -35,22 +43,38 @@ class ChunkerConfig:
 
 @dataclass
 class GraphConfig:
-    """Graph-specific configuration."""
+    """Graph-extraction-specific AST types and behavior flags.
+
+    Shared fields (import_types, function_scope_types, class_scope_types)
+    live on the base language config; this holds the *extras* that only
+    the graph extractor needs.
+    """
 
     call_types: tuple[str, ...]
-    extra_class_scope_types: tuple[str, ...] = ()
     assignment_types: tuple[str, ...] = ("assignment",)
     class_body_types: tuple[str, ...] = ("block",)
-    import_source_field: str | None = None
     typed_param_types: tuple[str, ...] = ("typed_parameter",)
+    extra_class_scope_types: tuple[str, ...] = ()
+    builtins: frozenset[str] = field(default_factory=frozenset)
+    # "self." for Python, "this." for JS/TS, "" when N/A
+    self_prefix: str = ""
+    super_prefixes: tuple[str, ...] = ("super().", "super.")
+    # Tuple-based dispatch: empty tuple = feature disabled for this language.
+    decorator_types: tuple[str, ...] = ()
+    with_types: tuple[str, ...] = ()
+    tracks_property_types: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Protocol — structural contract for all language configs.
+# ---------------------------------------------------------------------------
 
 
 class LanguageConfigProtocol(Protocol):
-    """Protocol for Tree-sitter language configuration.
+    """Structural contract for language configs.
 
-    Every language provides the shared AST node types needed by skeleton
-    extraction and chunking. Graph extraction uses a separate registry
-    (``get_lang_constants``).
+    Every language provides shared AST node types and domain-specific
+    sub-configs for skeleton, chunker, and graph extraction.
     """
 
     name: str
@@ -63,6 +87,12 @@ class LanguageConfigProtocol(Protocol):
     decorator_scope_types: tuple[str, ...]
     skeleton: SkeletonConfig
     chunker: ChunkerConfig
+    graph: GraphConfig
+
+
+# ---------------------------------------------------------------------------
+# Language function loaders (lazy imports to avoid heavy deps at import time).
+# ---------------------------------------------------------------------------
 
 
 def _python_language():
@@ -85,10 +115,9 @@ def _typescript_language():
     return tsts.language()
 
 
-def _go_language():
-    import tree_sitter_go as tsgo
-
-    return tsgo.language()
+# ---------------------------------------------------------------------------
+# Concrete language configs.
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -119,6 +148,16 @@ class PythonConfig:
                 "class_definition",
                 "decorated_definition",
             ),
+        ),
+    )
+    graph: GraphConfig = field(
+        default_factory=lambda: GraphConfig(
+            call_types=("call",),
+            builtins=PYTHON_ALL_BUILTINS,
+            self_prefix="self.",
+            decorator_types=("decorator",),
+            with_types=("with_statement",),
+            tracks_property_types=True,
         ),
     )
 
@@ -153,6 +192,22 @@ def _js_ts_chunker() -> ChunkerConfig:
     )
 
 
+def _js_ts_graph() -> GraphConfig:
+    return GraphConfig(
+        call_types=("call_expression",),
+        assignment_types=("assignment_expression", "variable_declarator"),
+        class_body_types=("block", "class_body"),
+        typed_param_types=(
+            "typed_parameter",
+            "required_parameter",
+            "optional_parameter",
+        ),
+        extra_class_scope_types=("interface_declaration",),
+        builtins=JS_TS_BUILTINS,
+        self_prefix="this.",
+    )
+
+
 _JS_TS_IMPORT_TYPES: tuple[str, ...] = ("import_statement",)
 _JS_TS_FUNCTION_SCOPE_TYPES: tuple[str, ...] = (
     "function_declaration",
@@ -176,6 +231,7 @@ class JavaScriptConfig:
     decorator_scope_types: tuple[str, ...] = ()
     skeleton: SkeletonConfig = field(default_factory=_js_ts_skeleton)
     chunker: ChunkerConfig = field(default_factory=_js_ts_chunker)
+    graph: GraphConfig = field(default_factory=_js_ts_graph)
 
 
 @dataclass
@@ -192,45 +248,17 @@ class TypeScriptConfig:
     decorator_scope_types: tuple[str, ...] = ()
     skeleton: SkeletonConfig = field(default_factory=_js_ts_skeleton)
     chunker: ChunkerConfig = field(default_factory=_js_ts_chunker)
+    graph: GraphConfig = field(default_factory=_js_ts_graph)
 
 
-@dataclass
-class GoConfig:
-    name: str = "go"
-    extensions: tuple[str, ...] = (".go",)
-    language_fn: Callable[[], Any] = _go_language
-    import_types: tuple[str, ...] = ("import_declaration",)
-    function_scope_types: tuple[str, ...] = (
-        "function_declaration",
-        "method_declaration",
-    )
-    class_scope_types: tuple[str, ...] = ()
-    decorator_scope_types: tuple[str, ...] = ()
-    skeleton: SkeletonConfig = field(
-        default_factory=lambda: SkeletonConfig(
-            extra_class_like_types=("type_declaration",),
-        ),
-    )
-    chunker: ChunkerConfig = field(
-        default_factory=lambda: ChunkerConfig(
-            chunk_types=(
-                "function_declaration",
-                "method_declaration",
-                "type_declaration",
-            ),
-        ),
-    )
-    graph: GraphConfig = field(
-        default_factory=lambda: GraphConfig(call_types=("call_expression",)),
-    )
-    init_filenames: tuple[str, ...] = ()
-
+# ---------------------------------------------------------------------------
+# Registry and lookups.
+# ---------------------------------------------------------------------------
 
 LANGUAGE_REGISTRY: dict[str, LanguageConfigProtocol] = {
     "python": PythonConfig(),
     "javascript": JavaScriptConfig(),
     "typescript": TypeScriptConfig(),
-    "go": GoConfig(),
 }
 
 _EXTENSION_MAP: dict[str, str] = {}
