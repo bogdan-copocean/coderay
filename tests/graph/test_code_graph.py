@@ -858,3 +858,66 @@ class TestCodeGraph:
         result = g.get_impact_radius("svc.py::UserService.delete_user_async", depth=2)
         ids = {n.id for n in result.nodes}
         assert "views.py::handle_delete" in ids
+
+    # ------------------------------------------------------------------
+    # B3: own-module exclusion from impact_radius results
+    # ------------------------------------------------------------------
+
+    def test_impact_radius_excludes_own_module(self):
+        """The queried symbol's own module node must not appear in results."""
+        g = CodeGraph()
+        module = GraphNode(
+            id="svc.py",
+            kind=NodeKind.MODULE,
+            file_path="svc.py",
+            start_line=1,
+            end_line=50,
+            name="svc.py",
+            qualified_name="svc.py",
+        )
+        method = GraphNode(
+            id="svc.py::Service.run",
+            kind=NodeKind.FUNCTION,
+            file_path="svc.py",
+            start_line=5,
+            end_line=10,
+            name="run",
+            qualified_name="Service.run",
+        )
+        caller = GraphNode(
+            id="app.py::main",
+            kind=NodeKind.FUNCTION,
+            file_path="app.py",
+            start_line=1,
+            end_line=5,
+            name="main",
+            qualified_name="main",
+        )
+        for n in [module, method, caller]:
+            g.add_node(n)
+        g.add_edge(_make_edge("app.py::main", "svc.py::Service.run", EdgeKind.CALLS))
+        g.add_edge(_make_edge("app.py::main", "svc.py", EdgeKind.IMPORTS))
+
+        result = g.get_impact_radius("svc.py::Service.run", depth=2)
+        ids = {n.id for n in result.nodes}
+        assert "app.py::main" in ids
+        assert "svc.py" not in ids, "own module should be excluded"
+
+    # ------------------------------------------------------------------
+    # has_ambiguous_symbol
+    # ------------------------------------------------------------------
+
+    def test_has_ambiguous_symbol_true(self):
+        g = CodeGraph()
+        g.add_node(_make_node("a.py::foo", NodeKind.FUNCTION, "foo", file_path="a.py"))
+        g.add_node(_make_node("b.py::foo", NodeKind.FUNCTION, "foo", file_path="b.py"))
+        assert g.has_ambiguous_symbol("foo") is True
+
+    def test_has_ambiguous_symbol_false_for_unique(self):
+        g = CodeGraph()
+        g.add_node(_make_node("a.py::unique_fn", NodeKind.FUNCTION, "unique_fn"))
+        assert g.has_ambiguous_symbol("unique_fn") is False
+
+    def test_has_ambiguous_symbol_false_for_missing(self):
+        g = CodeGraph()
+        assert g.has_ambiguous_symbol("nonexistent") is False

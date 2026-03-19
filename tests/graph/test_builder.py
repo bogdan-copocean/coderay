@@ -177,3 +177,40 @@ class TestCrossFileResolution:
         )
         ids = {n.id for n in result.nodes}
         assert "src/app/caller.py::handle" in ids
+
+
+class TestPhantomPruning:
+    """Ambiguous bare-name CALLS to phantoms are pruned."""
+
+    def test_ambiguous_bare_name_calls_pruned(self):
+        """CALLS edges to bare-name phantom with multiple candidates are removed."""
+        file_a = (
+            "class RepoA:\n"
+            "    def save(self, data):\n"
+            "        pass\n"
+        )
+        file_b = (
+            "class RepoB:\n"
+            "    def save(self, data):\n"
+            "        pass\n"
+        )
+        file_c = (
+            "def handler(repo):\n"
+            "    repo.save({})\n"
+        )
+        graph = build_graph(
+            ".",
+            [
+                ("src/repo_a.py", file_a),
+                ("src/repo_b.py", file_b),
+                ("src/handler.py", file_c),
+            ],
+        )
+        edges = graph.to_dict()["edges"]
+        phantom_save_edges = [
+            e for e in edges
+            if e["kind"] == "calls" and e["target"] == "save"
+        ]
+        assert len(phantom_save_edges) == 0, (
+            "ambiguous bare-name 'save' CALLS should be pruned"
+        )
