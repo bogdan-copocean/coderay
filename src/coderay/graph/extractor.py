@@ -14,10 +14,13 @@ from coderay.graph._handlers import (
     ImportHandlerMixin,
     TypeResolutionMixin,
 )
-from coderay.graph.lang_constants import _PYTHON_BUILTINS
 from coderay.graph._utils import is_init_file, resolve_relative_import
 from coderay.graph.identifiers import file_path_to_module_names
-from coderay.graph.lang_constants import LangConstants, from_lang_cfg
+from coderay.graph.lang_constants import (
+    _PYTHON_BUILTINS,
+    LangConstants,
+    get_lang_constants,
+)
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
 
 # Re-export for tests that assert on internal helpers
@@ -217,37 +220,24 @@ def extract_graph_from_file(
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     """Parse a source file and extract all graph nodes and edges.
 
-    Args:
-        file_path: Path of the source file.
-        content: Source code contents.
-        excluded_modules: Pre-computed module filter.
-        module_index: Maps dotted module names to file paths.
-
-    Returns:
-        Tuple of (nodes, edges). Returns ``([], [])`` if the language
-        is unsupported or parsing fails.
+    Returns ``([], [])`` if the language is unsupported or parsing fails.
     """
-    from coderay.parsing.plugins.registry import get_graph_extractor
-
     ctx = parse_file(file_path, content)
     if ctx is None:
+        return [], []
+
+    lc = get_lang_constants(ctx.lang_cfg.name)
+    if lc is None:
         return [], []
 
     if excluded_modules is None:
         excluded_modules = build_module_filter()
 
-    extractor = get_graph_extractor(ctx.lang_cfg.name)
-    if extractor is not None:
-        return extractor.extract(
-            ctx,
-            module_index=module_index or {},
-            excluded_modules=excluded_modules,
-        )
-
     parser = GraphTreeSitterParser(
         ctx,
         excluded_modules=excluded_modules,
         module_index=module_index or {},
+        lang_constants=lc,
     )
     return parser.extract()
 
@@ -260,12 +250,11 @@ class GraphTreeSitterParser(
     CallHandlerMixin,
     BaseTreeSitterParser,
 ):
-    """One-shot tree-sitter based graph extractor for a single source file.
+    """One-shot tree-sitter graph extractor for a single source file.
 
     Composes handler mixins for imports, definitions, type resolution,
     assignments, and calls. The DFS dispatches to the appropriate handler
-    based on node type. Uses LangConstants when provided; otherwise derives
-    from lang_cfg (for Go fallback).
+    based on AST node type.
     """
 
     def __init__(
@@ -284,14 +273,19 @@ class GraphTreeSitterParser(
         self._edges: list[GraphEdge] = []
         self._module_index = module_index or {}
         self._file_ctx = FileContext(module_index=self._module_index)
-        self._lang_constants = lang_constants
+        # Resolve from registry when not provided explicitly
+        self._lang_constants = (
+            lang_constants
+            or get_lang_constants(context.lang_cfg.name)
+        )
 
     @property
     def _lc(self) -> LangConstants:
-        """Effective language constants; from param or derived from lang_cfg."""
-        if self._lang_constants is not None:
-            return self._lang_constants
-        return from_lang_cfg(self._ctx.lang_cfg)
+        """Effective language constants."""
+        assert self._lang_constants is not None, (
+            f"No LangConstants for {self._ctx.lang_cfg.name}"
+        )
+        return self._lang_constants
 
     def extract(self) -> tuple[list[GraphNode], list[GraphEdge]]:
         """Walk the syntax tree and return all graph nodes and edges."""

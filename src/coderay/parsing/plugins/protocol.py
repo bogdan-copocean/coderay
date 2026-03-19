@@ -1,11 +1,11 @@
-"""Protocols for language plugins."""
+"""Protocols for language plugins (chunker, skeleton)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from coderay.core.models import Chunk, GraphEdge, GraphNode
+    from coderay.core.models import Chunk
     from coderay.parsing.base import ParserContext
 
 
@@ -28,18 +28,4 @@ class SkeletonProtocol(Protocol):
         symbol: str | None = None,
     ) -> str:
         """Return skeleton text."""
-        ...
-
-
-class GraphExtractorProtocol(Protocol):
-    """Extract graph nodes and edges from a source file."""
-
-    def extract(
-        self,
-        ctx: "ParserContext",
-        *,
-        module_index: dict[str, str],
-        excluded_modules: frozenset[str],
-    ) -> tuple[list["GraphNode"], list["GraphEdge"]]:
-        """Return (nodes, edges) for the parsed file."""
         ...
