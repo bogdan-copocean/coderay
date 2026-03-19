@@ -48,17 +48,21 @@ class GraphConfig:
 class LanguageConfigProtocol(Protocol):
     """Protocol for Tree-sitter language configuration.
 
-    Plugin languages (Python, JS, TS) have minimal config; graph, skeleton,
-    chunker are None. Fallback languages (Go) have full config.
+    Every language provides the shared AST node types needed by skeleton
+    extraction and chunking. Graph extraction uses a separate registry
+    (``get_lang_constants``).
     """
 
     name: str
     extensions: tuple[str, ...]
     language_fn: Callable[[], Any]
     init_filenames: tuple[str, ...]
-    graph: GraphConfig | None
-    skeleton: SkeletonConfig | None
-    chunker: ChunkerConfig | None
+    import_types: tuple[str, ...]
+    function_scope_types: tuple[str, ...]
+    class_scope_types: tuple[str, ...]
+    decorator_scope_types: tuple[str, ...]
+    skeleton: SkeletonConfig
+    chunker: ChunkerConfig
 
 
 def _python_language():
@@ -89,41 +93,105 @@ def _go_language():
 
 @dataclass
 class PythonConfig:
-    """Minimal config for Python; plugins provide chunking, skeleton, graph."""
+    """Python language configuration."""
 
     name: str = "python"
     extensions: tuple[str, ...] = (".py", ".pyi")
     language_fn: Callable[[], Any] = _python_language
     init_filenames: tuple[str, ...] = ("__init__",)
-    graph: GraphConfig | None = None
-    skeleton: SkeletonConfig | None = None
-    chunker: ChunkerConfig | None = None
+    import_types: tuple[str, ...] = (
+        "import_statement",
+        "import_from_statement",
+        "future_import_statement",
+    )
+    function_scope_types: tuple[str, ...] = ("function_definition",)
+    class_scope_types: tuple[str, ...] = ("class_definition",)
+    decorator_scope_types: tuple[str, ...] = ("decorated_definition",)
+    skeleton: SkeletonConfig = field(
+        default_factory=lambda: SkeletonConfig(
+            body_block_types=("block",),
+        ),
+    )
+    chunker: ChunkerConfig = field(
+        default_factory=lambda: ChunkerConfig(
+            chunk_types=(
+                "function_definition",
+                "class_definition",
+                "decorated_definition",
+            ),
+        ),
+    )
+
+
+# JS and TS share AST structure; only extensions and language_fn differ.
+
+
+def _js_ts_skeleton() -> SkeletonConfig:
+    return SkeletonConfig(
+        extra_class_like_types=(
+            "interface_declaration",
+            "type_alias_declaration",
+            "type_declaration",
+        ),
+        top_level_expr_types=("expression_statement", "lexical_declaration"),
+        body_block_types=("statement_block",),
+    )
+
+
+def _js_ts_chunker() -> ChunkerConfig:
+    return ChunkerConfig(
+        chunk_types=(
+            "function_declaration",
+            "class_declaration",
+            "method_definition",
+            "arrow_function",
+            "export_statement",
+            "lexical_declaration",
+            "interface_declaration",
+            "type_alias_declaration",
+        ),
+    )
+
+
+_JS_TS_IMPORT_TYPES: tuple[str, ...] = ("import_statement",)
+_JS_TS_FUNCTION_SCOPE_TYPES: tuple[str, ...] = (
+    "function_declaration",
+    "method_definition",
+    "arrow_function",
+)
+_JS_TS_CLASS_SCOPE_TYPES: tuple[str, ...] = ("class_declaration",)
 
 
 @dataclass
 class JavaScriptConfig:
-    """Minimal config for JavaScript; plugins provide chunking, skeleton, graph."""
+    """JavaScript language configuration."""
 
     name: str = "javascript"
     extensions: tuple[str, ...] = (".js", ".jsx", ".mjs", ".cjs")
     language_fn: Callable[[], Any] = _javascript_language
     init_filenames: tuple[str, ...] = ("index",)
-    graph: GraphConfig | None = None
-    skeleton: SkeletonConfig | None = None
-    chunker: ChunkerConfig | None = None
+    import_types: tuple[str, ...] = _JS_TS_IMPORT_TYPES
+    function_scope_types: tuple[str, ...] = _JS_TS_FUNCTION_SCOPE_TYPES
+    class_scope_types: tuple[str, ...] = _JS_TS_CLASS_SCOPE_TYPES
+    decorator_scope_types: tuple[str, ...] = ()
+    skeleton: SkeletonConfig = field(default_factory=_js_ts_skeleton)
+    chunker: ChunkerConfig = field(default_factory=_js_ts_chunker)
 
 
 @dataclass
 class TypeScriptConfig:
-    """Minimal config for TypeScript; plugins provide chunking, skeleton, graph."""
+    """TypeScript language configuration."""
 
     name: str = "typescript"
     extensions: tuple[str, ...] = (".ts", ".tsx")
     language_fn: Callable[[], Any] = _typescript_language
     init_filenames: tuple[str, ...] = ("index",)
-    graph: GraphConfig | None = None
-    skeleton: SkeletonConfig | None = None
-    chunker: ChunkerConfig | None = None
+    import_types: tuple[str, ...] = _JS_TS_IMPORT_TYPES
+    function_scope_types: tuple[str, ...] = _JS_TS_FUNCTION_SCOPE_TYPES
+    class_scope_types: tuple[str, ...] = _JS_TS_CLASS_SCOPE_TYPES
+    decorator_scope_types: tuple[str, ...] = ()
+    skeleton: SkeletonConfig = field(default_factory=_js_ts_skeleton)
+    chunker: ChunkerConfig = field(default_factory=_js_ts_chunker)
 
 
 @dataclass

@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 from coderay.parsing.base import BaseTreeSitterParser, parse_file
-from coderay.parsing.plugins.registry import get_skeleton
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +21,6 @@ def extract_skeleton(
     ctx = parse_file(path, content)
     if ctx is None:
         return content
-
-    skeleton_plugin = get_skeleton(ctx.lang_cfg.name)
-    if skeleton_plugin is not None:
-        return skeleton_plugin.extract(
-            ctx, include_imports=include_imports, symbol=symbol
-        )
 
     parser = SkeletonTreeSitterParser(
         ctx, include_imports=include_imports, symbol=symbol
