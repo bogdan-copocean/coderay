@@ -200,9 +200,7 @@ class CodeGraph:
                 if phantom in self._g:
                     for pred in self._g.predecessors(phantom):
                         edge_data = self._g.edges[pred, phantom]
-                        kind = self._normalize_edge_kind(
-                            edge_data.get("kind")
-                        )
+                        kind = self._normalize_edge_kind(edge_data.get("kind"))
                         if kind in self._IMPACT_EDGE_KINDS:
                             queue.append((pred, 1))
 

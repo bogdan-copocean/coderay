@@ -69,14 +69,13 @@ class CallHandlerMixin:
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
         """Resolve super().method (Python) or super.method (JS) to parent method."""
-        if raw.startswith("super()."):
-            method = raw[len("super().") :]
-        elif raw.startswith("super."):
-            method = raw[len("super.") :]
-        else:
-            return None
-        parent_target = self._resolve_super_call(scope_stack, method)
-        return [parent_target] if parent_target else [method]
+        # e.g. super_prefixes = ("super().", "super.")
+        for prefix in self._gc.super_prefixes:
+            if raw.startswith(prefix):
+                method = raw[len(prefix) :]
+                target = self._resolve_super_call(scope_stack, method)
+                return [target] if target else [method]
+        return None
 
     def _resolve_self_targets(
         self, raw: str, scope_stack: list[str]
@@ -177,8 +176,7 @@ class CallHandlerMixin:
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
         class_types = (
-            self._ctx.lang_cfg.class_scope_types
-            + self._gc.extra_class_scope_types
+            self._ctx.lang_cfg.class_scope_types + self._gc.extra_class_scope_types
         )
 
         def find_class(node: TSNode) -> TSNode | None:

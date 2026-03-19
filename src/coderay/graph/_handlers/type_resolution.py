@@ -105,8 +105,7 @@ class TypeResolutionMixin:
         """Find method definition in class."""
         tree = self.get_tree()
         class_types = (
-            self._ctx.lang_cfg.class_scope_types
-            + self._gc.extra_class_scope_types
+            self._ctx.lang_cfg.class_scope_types + self._gc.extra_class_scope_types
         )
         body_types = self._gc.class_body_types
 
