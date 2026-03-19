@@ -9,7 +9,11 @@ import lancedb
 from lancedb.rerankers import RRFReranker
 
 from coderay.core.config import get_config
-from coderay.core.errors import EmbeddingDimensionError, ScoreExtractionError
+from coderay.core.errors import (
+    EmbeddingDimensionError,
+    ScoreExtractionError,
+    SearchError,
+)
 from coderay.core.models import Chunk
 
 logger = logging.getLogger(__name__)
@@ -167,24 +171,43 @@ class Store:
         top_k: int = 10,
         path_prefix: str | None = None,
         query_text: str | None = None,
+        include_tests: bool = True,
     ) -> list[dict[str, Any]]:
         """Run vector or hybrid search."""
+
+        # heuristics: arbitrary choices
+        if len(query_text) <= 1 or len(query_text.strip().split(" ")) <= 3:
+            raise SearchError("Too few tokens to embed; use ripgrep instead")
+
         if not self._table_exists():
             return []
         table = self._get_table()
 
-        use_hybrid = bool(query_text)
+        # TODO: hybrid search seems to return poor results; needs rework
+        # defaults to vector search
+        use_hybrid = False
         rows = None
 
         if use_hybrid:
             rows = self._try_hybrid_search(
-                table, query_embedding, query_text, top_k, path_prefix
+                table=table,
+                query_embedding=query_embedding,
+                query_text=query_text,
+                top_k=top_k,
+                path_prefix=path_prefix,
+                include_tests=include_tests,
             )
             if rows is None:
                 use_hybrid = False
 
         if rows is None:
-            rows = self._vector_search(table, query_embedding, top_k, path_prefix)
+            rows = self._vector_search(
+                table=table,
+                query_embedding=query_embedding,
+                top_k=top_k,
+                path_prefix=path_prefix,
+                include_tests=include_tests,
+            )
 
         if use_hybrid:
             self._hybrid_failures = 0
@@ -198,6 +221,7 @@ class Store:
             row["score"] = round(float(_extract_score(row, score_mode)), 4)
             row["search_mode"] = search_mode
             row.pop("vector", None)
+            row.pop("content", None)
             results.append(row)
 
         return results
@@ -209,6 +233,7 @@ class Store:
         query_text: str,
         top_k: int,
         path_prefix: str | None,
+        include_tests: bool = True,
     ) -> list[dict] | None:
         """Attempt hybrid search; None on failure."""
         if self._fts_stale:
@@ -224,6 +249,8 @@ class Store:
             if path_prefix:
                 prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
                 query = query.where(f"path LIKE '{prefix}%'")
+            if not include_tests:
+                query = query.where("path NOT ILIKE '%test%' ")
             return query.limit(top_k).to_list()
         except Exception:
             self._hybrid_failures += 1
@@ -249,12 +276,16 @@ class Store:
         query_embedding: list[float],
         top_k: int,
         path_prefix: str | None,
+        include_tests: bool = True,
     ) -> list[dict]:
         """Execute vector-only search."""
         query = table.search(query_embedding).distance_type(self.metric)
         if path_prefix:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
             query = query.where(f"path LIKE '{prefix}%'")
+        if not include_tests:
+            query = query.where("path NOT LIKE '%test%'")
+
         return query.limit(top_k).to_list()
 
     def chunk_count(self) -> int:

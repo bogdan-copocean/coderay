@@ -14,10 +14,7 @@ from watchdog.events import (
     FileMovedEvent,
 )
 
-from coderay.pipeline.watcher import (
-    FileWatcher,
-    _DebouncedHandler,
-)
+from coderay.pipeline.watcher import FileWatcher, _DebouncedHandler
 
 # ── fixtures ─────────────────────────────────────────────────────────
 

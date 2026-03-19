@@ -18,7 +18,7 @@ class ParserContext:
     lang_cfg: Any
 
 
-def parse_file(path: str | Path, content: str) -> ParserContext | None:
+def get_parse_context(path: str | Path, content: str) -> ParserContext | None:
     """Resolve language by path and build parser context; None if unsupported."""
     from coderay.parsing.languages import get_language_for_file
 

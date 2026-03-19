@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from coderay.parsing.base import BaseTreeSitterParser, parse_file
+from coderay.parsing.base import BaseTreeSitterParser, get_parse_context
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def extract_skeleton(
     symbol: str | None = None,
 ) -> str:
     """Extract skeleton (signatures, no bodies)."""
-    ctx = parse_file(path, content)
+    ctx = get_parse_context(path, content)
     if ctx is None:
         return content
 
@@ -167,6 +167,10 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _dfs(self, node, lines: list[str], depth: int) -> None:
+
+        if node.id in self._seen:
+            return
+
         indent = "    " * depth
         ntype = node.type
         lang_cfg = self._ctx.lang_cfg
@@ -179,9 +183,6 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             *lang_cfg.skeleton.extra_class_like_types,
             *lang_cfg.decorator_scope_types,
         )
-
-        if node.id in self._seen:
-            return
 
         # Uninteresting nodes: pass through, but capture top-level constants/docstrings
         if ntype not in interesting:

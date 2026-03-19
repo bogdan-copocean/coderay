@@ -96,6 +96,7 @@ class Retrieval:
                 top_k=top_k,
                 path_prefix=path_prefix,
                 query_text=query,
+                include_tests=include_tests,
             )
 
         boosted = self._booster.boost(raw_results)
