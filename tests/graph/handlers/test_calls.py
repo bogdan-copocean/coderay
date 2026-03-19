@@ -193,7 +193,7 @@ class TestCallFiltering:
         )
         _, edges = extract_graph_from_file("test.py", code)
         targets = _call_targets(edges)
-        assert "append" in targets
+        assert "append" not in targets, "builtin-type method should be excluded"
         assert "forEach" in targets
         assert "custom_func" in targets
 
@@ -202,6 +202,37 @@ class TestCallFiltering:
         _, edges = extract_graph_from_file("test.py", code)
         targets = _call_targets(edges)
         assert "typing::cast" not in targets
+
+    def test_builtin_type_methods_excluded_when_unresolved(self):
+        """Common builtin-type method names are excluded when unresolved."""
+        code = (
+            "def process(data):\n"
+            "    data.get('key')\n"
+            "    data.keys()\n"
+            "    items = []\n"
+            "    items.extend(data.values())\n"
+            "    result = ''.join(items)\n"
+        )
+        _, edges = extract_graph_from_file("test.py", code)
+        targets = _call_targets(edges)
+        for builtin_method in ("get", "keys", "extend", "values", "join"):
+            assert builtin_method not in targets, (
+                f"'{builtin_method}' should be excluded as builtin-type method"
+            )
+
+    def test_resolved_method_call_with_builtin_name_kept(self):
+        """Resolved calls like MyClass.get() survive builtin filter."""
+        code = (
+            "class Cache:\n"
+            "    def get(self, key):\n"
+            "        pass\n"
+            "def lookup(c):\n"
+            "    c = Cache()\n"
+            "    c.get('x')\n"
+        )
+        _, edges = extract_graph_from_file("test.py", code)
+        targets = _call_targets(edges)
+        assert "test.py::Cache.get" in targets
 
 
 # ---------------------------------------------------------------------------

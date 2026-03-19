@@ -70,7 +70,7 @@ class DefinitionHandlerMixin:
 
     def _is_property(self, func_node: TSNode) -> bool:
         """Return True if function has @property decorator (Python only)."""
-        if not self._lc.has_property:
+        if not self._gc.tracks_property_types:
             return False
         parent = func_node.parent
         if parent is None or parent.type != "decorated_definition":

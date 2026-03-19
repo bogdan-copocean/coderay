@@ -5,7 +5,6 @@ from pathlib import Path
 
 from coderay.core.models import Chunk
 from coderay.parsing.base import BaseTreeSitterParser, parse_file
-from coderay.parsing.plugins.registry import get_chunker
 
 logger = logging.getLogger(__name__)
 
@@ -13,15 +12,20 @@ MODULE_SYMBOL = "<module>"
 
 
 class ChunkingTreeSitterParser(BaseTreeSitterParser):
-    """Tree-sitter chunker (fallback for languages without a plugin)."""
+    """Chunk a source file into semantic units using tree-sitter.
+
+    Reads ``lang_cfg.chunker.chunk_types`` to decide which AST nodes
+    become chunks. Works for all supported languages.
+    """
 
     def collect_chunks(self) -> list[Chunk]:
         """Collect chunks for file and language."""
         tree = self.get_tree()
         root = tree.root_node
+        chunk_types = self._ctx.lang_cfg.chunker.chunk_types
         chunks: list[Chunk] = []
 
-        if preamble_lines := self._collect_preamble_lines(root):
+        if preamble_lines := self._collect_preamble_lines(root, chunk_types):
             chunks.append(
                 Chunk(
                     path=self.file_path,
@@ -32,27 +36,22 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
                 )
             )
 
+        # DFS: top-level chunk nodes become chunks; nested ones are skipped
+        # (their parent chunk already contains them).
         def _dfs(node) -> None:
-            if node.type in self._ctx.lang_cfg.chunker.chunk_types:
+            if node.type in chunk_types:
                 parent = node.parent
-                if (
-                    parent is not None
-                    and parent.type in self._ctx.lang_cfg.chunker.chunk_types
-                ):
+                if parent is not None and parent.type in chunk_types:
                     for child in node.children:
                         _dfs(child)
                     return
-                start_line = node.start_point[0] + 1
-                end_line = node.end_point[0] + 1
-                text = self.node_text(node)
-                symbol = self.identifier_from_node(node) or f"<{node.type}>"
                 chunks.append(
                     Chunk(
                         path=self.file_path,
-                        start_line=start_line,
-                        end_line=end_line,
-                        symbol=symbol,
-                        content=text,
+                        start_line=node.start_point[0] + 1,
+                        end_line=node.end_point[0] + 1,
+                        symbol=(self.identifier_from_node(node) or f"<{node.type}>"),
+                        content=self.node_text(node),
                     )
                 )
             for child in node.children:
@@ -62,11 +61,11 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         logger.debug("Chunked %s: %d chunks", self.file_path, len(chunks))
         return chunks
 
-    def _collect_preamble_lines(self, root) -> list[str]:
+    def _collect_preamble_lines(self, root, chunk_types: tuple[str, ...]) -> list[str]:
         """Collect top-level lines outside chunk definitions."""
         lines: list[str] = []
         for child in root.children:
-            if child.type in self._ctx.lang_cfg.chunker.chunk_types:
+            if child.type in chunk_types:
                 continue
             text = self.node_text(child).strip()
             if text:
@@ -80,9 +79,6 @@ def chunk_file(path: str | Path, content: str) -> list[Chunk]:
     if ctx is None:
         logger.warning("No language config for %s", path)
         return []
-    chunker = get_chunker(ctx.lang_cfg.name)
-    if chunker is not None:
-        return chunker.chunk(ctx)
     parser = ChunkingTreeSitterParser(ctx)
     try:
         return parser.collect_chunks()

@@ -16,7 +16,6 @@ class TestLanguageRegistry:
             ("python", ".py"),
             ("javascript", ".js"),
             ("typescript", ".ts"),
-            ("go", ".go"),
         ],
     )
     def test_language_registered(self, lang, ext):
@@ -25,12 +24,6 @@ class TestLanguageRegistry:
         cfg = LANGUAGE_REGISTRY[lang]
         assert ext in cfg.extensions
         assert hasattr(cfg, "init_filenames")
-
-    def test_go_has_fallback_config(self):
-        """Go uses fallback parsers; requires chunker, skeleton, graph."""
-        cfg = LANGUAGE_REGISTRY["go"]
-        assert cfg.chunker is not None
-        assert "function_declaration" in cfg.chunker.chunk_types
 
 
 class TestGetLanguageForFile:
@@ -41,7 +34,6 @@ class TestGetLanguageForFile:
             ("app/index.js", "javascript"),
             ("app/index.ts", "typescript"),
             ("components/Button.tsx", "typescript"),
-            ("cmd/main.go", "go"),
             ("types.pyi", "python"),
         ],
     )
@@ -58,7 +50,7 @@ class TestGetLanguageForFile:
 class TestGetSupportedExtensions:
     @pytest.mark.parametrize(
         "ext",
-        [".py", ".js", ".ts", ".go", ".jsx", ".tsx", ".mjs", ".pyi"],
+        [".py", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".pyi"],
     )
     def test_includes_extensions(self, ext):
         assert ext in get_supported_extensions()

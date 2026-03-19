@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge
@@ -10,11 +9,6 @@ from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
-
-# Re-exported for tests
-_PYTHON_BUILTINS: frozenset[str] = frozenset(
-    name for name in dir(builtins) if not name.startswith("_")
-)
 
 
 class CallHandlerMixin:
@@ -55,6 +49,11 @@ class CallHandlerMixin:
 
     def _resolve_callee_targets(self, raw: str, scope_stack: list[str]) -> list[str]:
         """Resolve callee to qualified targets."""
+        # Priority: super().method > self.method > bare name > obj.method chain
+        # e.g. "super().save"  → parent class method
+        #      "self.client"   → tracked instance method
+        #      "process"       → local def / import / unresolved bare name
+        #      "svc.run"       → instance tracking or import-based resolution
         result = self._resolve_super_targets(raw, scope_stack)
         if result is not None:
             return result
@@ -70,20 +69,20 @@ class CallHandlerMixin:
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
         """Resolve super().method (Python) or super.method (JS) to parent method."""
-        if raw.startswith("super()."):
-            method = raw[len("super().") :]
-        elif raw.startswith("super."):
-            method = raw[len("super.") :]
-        else:
-            return None
-        parent_target = self._resolve_super_call(scope_stack, method)
-        return [parent_target] if parent_target else [method]
+        # e.g. super_prefixes = ("super().", "super.")
+        for prefix in self._gc.super_prefixes:
+            if raw.startswith(prefix):
+                method = raw[len(prefix) :]
+                target = self._resolve_super_call(scope_stack, method)
+                return [target] if target else [method]
+        return None
 
     def _resolve_self_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
         """Resolve self.method() or this.method() via instance/class attrs."""
-        if not self._lc.self_prefixes or not raw.startswith(self._lc.self_prefixes):
+        self_prefix = self._gc.self_prefix
+        if not self_prefix or not raw.startswith(self_prefix):
             return None
         suffix = raw.split(".", 1)[1]
         parts = suffix.split(".")
@@ -94,7 +93,7 @@ class CallHandlerMixin:
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}.{method}"]
 
-        prefix = next((p for p in self._lc.self_prefixes if raw.startswith(p)), "self.")
+        prefix = self_prefix
         instance_key = prefix + ".".join(parts[:-1])
         class_ref = self._file_ctx.resolve_instance(instance_key)
         if not class_ref:
@@ -146,14 +145,17 @@ class CallHandlerMixin:
 
     def _is_excluded(self, resolved: str, raw: str) -> bool:
         """Return True if callee is excluded (builtins, typing, etc.)."""
+        # Skip calls into excluded modules (builtins, typing, ...)
         if "::" in resolved:
             module_part = resolved.split("::")[0]
             if module_part in self._excluded_modules:
                 return True
+        # Only filter builtin names when completely unresolved (resolved == bare).
+        # Resolved calls like "mymodule::append" pass through.
         bare = raw.rsplit(".", 1)[-1]
         if resolved != bare:
             return False
-        return bare in self._lc.builtins
+        return bare in self._gc.builtins
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
         """Resolve super().method() to parent method."""
@@ -173,7 +175,9 @@ class CallHandlerMixin:
         """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
-        class_types = self._lc.class_scope_types + self._lc.extra_class_scope_types
+        class_types = (
+            self._ctx.lang_cfg.class_scope_types + self._gc.extra_class_scope_types
+        )
 
         def find_class(node: TSNode) -> TSNode | None:
             if node.type in class_types:
@@ -209,7 +213,7 @@ class CallHandlerMixin:
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
-        if parent is None or parent.type not in self._lc.assignment_types:
+        if parent is None or parent.type not in self._gc.assignment_types:
             return
 
         lhs = (
@@ -224,9 +228,8 @@ class CallHandlerMixin:
             var_name = self.node_text(lhs)
         elif lhs.type == "attribute":
             var_name = self.node_text(lhs)
-            if not self._lc.self_prefixes or not var_name.startswith(
-                self._lc.self_prefixes
-            ):
+            self_prefix = self._gc.self_prefix
+            if not self_prefix or not var_name.startswith(self_prefix):
                 return  # Only track self.attr = X(), not other.attr = X()
         else:
             return
@@ -243,7 +246,7 @@ class CallHandlerMixin:
         if is_known_class or is_likely_class:
             self._file_ctx.register_instance(var_name, resolved or callee_base)
             # Also register for class (enables service.client.get resolution)
-            if self._lc.self_prefixes and var_name.startswith(self._lc.self_prefixes):
+            if self._gc.self_prefix and var_name.startswith(self._gc.self_prefix):
                 func_node = self._get_enclosing_function_node(call_node)
                 if func_node:
                     class_qualified = self._find_enclosing_class_from_node(func_node)

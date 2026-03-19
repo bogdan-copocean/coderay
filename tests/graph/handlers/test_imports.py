@@ -156,3 +156,74 @@ class TestExcludedModuleImports:
     def test_non_excluded_import_creates_edge(self):
         _, edges = extract_graph_from_file("test.py", "from flask import Flask\n")
         assert "flask::Flask" in _import_targets(edges)
+
+
+# ---------------------------------------------------------------------------
+# B1: Lazy imports inside functions scope to the enclosing function
+# ---------------------------------------------------------------------------
+
+
+class TestLazyImportScoping:
+    """Imports inside a function body produce function-scoped IMPORTS edges."""
+
+    def test_lazy_from_import_scoped_to_function(self):
+        code = (
+            "def dispatch():\n    from workers.tasks import run_task\n    run_task()\n"
+        )
+        _, edges = extract_graph_from_file("svc.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        sources = {e.source for e in import_edges}
+        assert "svc.py::dispatch" in sources
+        assert "svc.py" not in sources, "lazy import should not scope to module"
+
+    def test_lazy_bare_import_scoped_to_function(self):
+        code = "def load():\n    import json\n    json.loads('{}')\n"
+        _, edges = extract_graph_from_file("util.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        sources = {e.source for e in import_edges}
+        assert "util.py::load" in sources
+        assert "util.py" not in sources
+
+    def test_top_level_import_still_scoped_to_module(self):
+        code = "from os import path\n"
+        _, edges = extract_graph_from_file("mod.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        sources = {e.source for e in import_edges}
+        assert "mod.py" in sources
+
+    def test_lazy_import_in_method_scoped_to_method(self):
+        code = (
+            "class Handler:\n"
+            "    def process(self):\n"
+            "        from lib.engine import Engine\n"
+            "        Engine().run()\n"
+        )
+        _, edges = extract_graph_from_file("handler.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        sources = {e.source for e in import_edges}
+        assert "handler.py::Handler.process" in sources
+        assert "handler.py" not in sources
+
+
+# ---------------------------------------------------------------------------
+# Edge explosion: bare import produces exactly one edge
+# ---------------------------------------------------------------------------
+
+
+class TestBareImportDeduplication:
+    """bare `import X` must not create duplicate from-import-style edges."""
+
+    def test_bare_import_single_edge(self):
+        code = "import os\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        assert len(import_edges) == 1, (
+            f"expected 1 IMPORTS edge for bare import, got {len(import_edges)}: "
+            f"{[(e.source, e.target) for e in import_edges]}"
+        )
+
+    def test_bare_import_multi_single_edge_each(self):
+        code = "import os, sys\n"
+        _, edges = extract_graph_from_file("test.py", code)
+        import_edges = [e for e in edges if e.kind == EdgeKind.IMPORTS]
+        assert len(import_edges) == 2, "one edge per bare import name"

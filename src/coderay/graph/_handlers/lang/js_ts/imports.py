@@ -13,7 +13,9 @@ TSNode = Any
 class JsTsImportHandler:
     """Handle JS/TS import_statement: import { x } from './foo', import * as X from 'pkg'."""
 
-    def handle(self, node: TSNode, parser: Any) -> None:
+    def handle(
+        self, node: TSNode, parser: Any, *, scope_stack: list[str] | None = None
+    ) -> None:
         """Process JS/TS import node."""
         source_node = node.child_by_field_name("source")
         if not source_node:

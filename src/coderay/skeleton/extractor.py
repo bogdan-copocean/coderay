@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 from coderay.parsing.base import BaseTreeSitterParser, parse_file
-from coderay.parsing.plugins.registry import get_skeleton
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +22,6 @@ def extract_skeleton(
     if ctx is None:
         return content
 
-    skeleton_plugin = get_skeleton(ctx.lang_cfg.name)
-    if skeleton_plugin is not None:
-        return skeleton_plugin.extract(
-            ctx, include_imports=include_imports, symbol=symbol
-        )
-
     parser = SkeletonTreeSitterParser(
         ctx, include_imports=include_imports, symbol=symbol
     )
@@ -37,7 +30,34 @@ def extract_skeleton(
     except Exception:  # pragma: no cover - defensive fallback
         logger.exception("Skeleton extraction failed")
         return content
+
+    if symbol and not lines:
+        return _symbol_not_found_hint(ctx, symbol)
     return "\n".join(lines)
+
+
+def _symbol_not_found_hint(ctx, symbol: str) -> str:
+    """Return a diagnostic listing the top-level symbols in *ctx*."""
+    lang_cfg = ctx.lang_cfg
+    helper = BaseTreeSitterParser(ctx)
+    tree = helper.get_tree()
+    names: list[str] = []
+    for child in tree.root_node.children:
+        node = child
+        if node.type in lang_cfg.decorator_scope_types:
+            for inner in node.named_children:
+                if inner.type in (
+                    *lang_cfg.function_scope_types,
+                    *lang_cfg.class_scope_types,
+                ):
+                    node = inner
+                    break
+        name_node = node.child_by_field_name("name")
+        if name_node is not None:
+            raw = name_node.text
+            names.append(raw.decode() if isinstance(raw, bytes) else raw)
+    available = ", ".join(sorted(set(names))) if names else "(none)"
+    return f"# Symbol '{symbol}' not found. Available symbols: {available}"
 
 
 class SkeletonTreeSitterParser(BaseTreeSitterParser):
@@ -121,14 +141,19 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if node matches symbol."""
+        """Return True if node matches the symbol filter."""
         if self._symbol is None:
             return True
-        if depth > 0:
-            return True
-        name = self._node_name(node)
-        target = self._symbol.split(".")[0] if "." in self._symbol else self._symbol
-        return name == target
+        # "Class.method" → depth 0 matches "Class", depth 1 matches "method"
+        # "Class" alone → depth 0 matches "Class", depth 1 matches everything
+        parts = self._symbol.split(".", 1)
+        class_part = parts[0]
+        method_part = parts[1] if len(parts) > 1 else None
+        if depth == 0:
+            return self._node_name(node) == class_part
+        if method_part is not None and depth == 1:
+            return self._node_name(node) == method_part
+        return method_part is None
 
     def _decorated_inner(self, node):
         """Return inner class/function from decorated node."""
@@ -158,6 +183,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         if node.id in self._seen:
             return
 
+        # Uninteresting nodes: pass through, but capture top-level constants/docstrings
         if ntype not in interesting:
             skel_cfg = lang_cfg.skeleton
             if depth == 0 and ntype in skel_cfg.top_level_expr_types:
@@ -176,6 +202,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 lines.append(indent + self.node_text(node).strip())
             return
 
+        # Decorated nodes: emit decorator lines, then recurse into the inner def/class
         if ntype in lang_cfg.decorator_scope_types:
             inner = self._decorated_inner(node)
             if inner is not None and not self._matches_symbol(inner, depth):
@@ -195,6 +222,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
+        # Functions: signature + docstring + ellipsis, no body traversal
         if ntype in lang_cfg.function_scope_types:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
@@ -206,6 +234,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             self._seen.add(node.id)
             return
 
+        # Classes: signature + docstring, then recurse into body at depth+1
         if ntype in (
             lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
         ):

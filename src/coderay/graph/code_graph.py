@@ -109,6 +109,14 @@ class CodeGraph:
         """Return True if name has resolution candidates."""
         return bool(self._symbol_index.get(name) or self._qualified_index.get(name))
 
+    def has_ambiguous_symbol(self, name: str) -> bool:
+        """Return True if name resolves to multiple candidates."""
+        sym = self._symbol_index.get(name, set())
+        if len(sym) > 1:
+            return True
+        qual = self._qualified_index.get(name, set())
+        return len(qual) > 1
+
     def all_file_paths(self) -> set[str]:
         """Return all file paths in graph."""
         return set(self._file_index.keys())
@@ -185,15 +193,16 @@ class CodeGraph:
                     if self._is_impact_edge(pred, seed):
                         queue.append((pred, 1))
 
-        # Also find callers via unresolved bare-name edges
-        bare_targets = self._bare_name_targets(resolved)
-        for bare in bare_targets:
-            if bare in self._g:
-                for pred in self._g.predecessors(bare):
-                    edge_data = self._g.edges[pred, bare]
-                    kind = self._normalize_edge_kind(edge_data.get("kind"))
-                    if kind in self._IMPACT_EDGE_KINDS:
-                        queue.append((pred, 1))
+        # Also find callers via phantom aliases (bare names, dotted-module
+        # forms) for every seed — not just the resolved node.
+        for seed in seeds:
+            for phantom in self._bare_name_targets(seed):
+                if phantom in self._g:
+                    for pred in self._g.predecessors(phantom):
+                        edge_data = self._g.edges[pred, phantom]
+                        kind = self._normalize_edge_kind(edge_data.get("kind"))
+                        if kind in self._IMPACT_EDGE_KINDS:
+                            queue.append((pred, 1))
 
         while queue:
             nid, hop = queue.popleft()
@@ -205,8 +214,12 @@ class CodeGraph:
                     if pred not in visited and self._is_impact_edge(pred, nid):
                         queue.append((pred, hop + 1))
 
+        resolved_node = self.get_node(resolved)
+        own_module = resolved_node.file_path if resolved_node else None
         nodes = [
-            self.get_node(nid) for nid in visited if self.get_node(nid) is not None
+            self.get_node(nid)
+            for nid in visited
+            if self.get_node(nid) is not None and nid != own_module
         ]
 
         hint = self._zero_callers_hint(resolved) if not nodes else None
@@ -218,7 +231,15 @@ class CodeGraph:
         )
 
     def _bare_name_targets(self, node_id: str) -> list[str]:
-        """Return bare-name phantom nodes matching real node."""
+        """Return phantom nodes that are aliases of the real *node_id*.
+
+        Covers three forms:
+        1. Qualified name: ``Class.method`` (already in graph as phantom)
+        2. Bare name: ``method`` (unambiguous single candidate)
+        3. Dotted-module phantom: ``some.module::Class.method`` — created
+           when callers import from a package ``__init__`` and the call
+           resolves to the dotted-module form instead of the file path.
+        """
         node = self.get_node(node_id)
         if node is None:
             return []
@@ -228,6 +249,19 @@ class CodeGraph:
         sym_candidates = self._symbol_index.get(node.name, set())
         if len(sym_candidates) == 1 and node.name in self._g:
             targets.append(node.name)
+        # Dotted-module phantoms: "mod.pkg::Class.method" where the symbol
+        # part matches this node's qualified_name but the module prefix
+        # differs from the file path.  These appear when callers import
+        # from a package __init__ that re-exports the symbol.
+        qname = node.qualified_name
+        suffix = f"::{qname}"
+        for candidate in self._g.nodes:
+            if candidate == node_id or candidate in targets:
+                continue
+            if self._g.nodes[candidate].get("data") is not None:
+                continue  # real node, not a phantom
+            if candidate.endswith(suffix):
+                targets.append(candidate)
         return targets
 
     def _impact_seeds(self, node_id: str) -> list[str]:

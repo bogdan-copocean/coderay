@@ -22,16 +22,16 @@ class TypeResolutionMixin:
         if not type_text:
             return []
         text = type_text.strip()
-        # Forward ref: "RepositoryPort" (string annotation)
+        # Strip quotes from forward references: "RepositoryPort" → RepositoryPort
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
-        # Self: resolve to enclosing class when inside a method
+        # Self → enclosing class (e.g. def clone(self) -> Self)
         if text == "Self" and enclosing_func_node:
             class_qualified = self._find_enclosing_class_from_node(enclosing_func_node)
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}"]
             return []
-        # Union: A | B — split and resolve each
+        # Union: "RepoA | RepoB" → resolve each upper-cased part, skip None
         parts = [p.strip() for p in text.split("|")]
         result: list[str] = []
         for part in parts:
@@ -48,7 +48,7 @@ class TypeResolutionMixin:
         current = node.parent
         class_names: list[str] = []
         while current:
-            if current.type in self._lc.class_scope_types:
+            if current.type in self._ctx.lang_cfg.class_scope_types:
                 name_node = current.child_by_field_name("name") or (
                     current.named_children[0] if current.named_children else None
                 )
@@ -104,8 +104,10 @@ class TypeResolutionMixin:
     def _find_method_in_class(self, class_name: str, method_name: str) -> TSNode | None:
         """Find method definition in class."""
         tree = self.get_tree()
-        class_types = self._lc.class_scope_types + self._lc.extra_class_scope_types
-        body_types = self._lc.class_body_types
+        class_types = (
+            self._ctx.lang_cfg.class_scope_types + self._gc.extra_class_scope_types
+        )
+        body_types = self._gc.class_body_types
 
         def find_class(n: TSNode) -> TSNode | None:
             if n.type in class_types:
@@ -141,7 +143,6 @@ class TypeResolutionMixin:
 
     def _find_top_level_function(self, func_name: str) -> TSNode | None:
         """Find top-level function by name (incl. export-wrapped, arrow in const)."""
-        func_types = self._lc.function_scope_types
 
         def search(n: TSNode) -> TSNode | None:
             if n.type in ("function_declaration", "function_definition"):
@@ -188,7 +189,7 @@ class TypeResolutionMixin:
         """Walk up tree to find enclosing function definition."""
         current = node.parent
         while current:
-            if current.type in self._lc.function_scope_types:
+            if current.type in self._ctx.lang_cfg.function_scope_types:
                 return current
             current = current.parent
         return None
@@ -198,7 +199,7 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
-        param_types = self._lc.typed_param_types
+        param_types = self._gc.typed_param_types
         result: list[tuple[str, list[str]]] = []
         for child in params.children:
             if child.type in param_types:
@@ -214,7 +215,7 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return None
-        param_types = self._lc.typed_param_types
+        param_types = self._gc.typed_param_types
         for child in params.children:
             if child.type in param_types:
                 extracted = self._extract_type_from_typed_param(child)

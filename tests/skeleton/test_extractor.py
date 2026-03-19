@@ -108,8 +108,8 @@ class TestExtractSkeleton:
             ("helper_function", ["def helper_function"], ["class UserService"]),
             (
                 "NonExistent",
-                [],
-                ["class UserService", "def helper_function", "MY_CONST"],
+                ["Symbol 'NonExistent' not found"],
+                ["class UserService:", "def helper_function", "MY_CONST = 42"],
             ),
         ],
     )
@@ -126,6 +126,48 @@ class TestExtractSkeleton:
         )
         assert "import os" not in skeleton
         assert "class UserService:" in skeleton
+
+    # ------------------------------------------------------------------
+    # B4: dotted Class.method symbol returns only the named method
+    # ------------------------------------------------------------------
+
+    def test_dotted_symbol_returns_single_method(self):
+        """Class.method symbol scopes skeleton to that one method."""
+        skeleton = extract_skeleton(
+            "test.py", SAMPLE_PYTHON, symbol="UserService.create_user"
+        )
+        assert "class UserService:" in skeleton
+        assert "def create_user" in skeleton
+        assert "def delete_user" not in skeleton
+        assert "def helper_function" not in skeleton
+
+    def test_dotted_symbol_preserves_class_docstring(self):
+        skeleton = extract_skeleton(
+            "test.py", SAMPLE_PYTHON, symbol="UserService.delete_user"
+        )
+        assert "Manages user operations" in skeleton
+        assert "def delete_user" in skeleton
+        assert "def create_user" not in skeleton
+
+    def test_plain_class_symbol_returns_all_methods(self):
+        """Without the method part, all methods are included."""
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="UserService")
+        assert "def create_user" in skeleton
+        assert "def delete_user" in skeleton
+
+    # ------------------------------------------------------------------
+    # B5: unknown symbol returns diagnostic hint
+    # ------------------------------------------------------------------
+
+    def test_unknown_symbol_returns_hint(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="DoesNotExist")
+        assert "not found" in skeleton.lower()
+        assert "UserService" in skeleton
+        assert "helper_function" in skeleton
+
+    def test_unknown_dotted_symbol_returns_hint(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="FakeClass.method")
+        assert "not found" in skeleton.lower()
 
     def test_javascript_skeleton(self):
         """Extract JS class and function signatures with ellipsis."""
