@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 from typing import Any
 
 from coderay.core.models import EdgeKind, GraphEdge
@@ -10,11 +9,6 @@ from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
-
-# Re-exported for tests
-_PYTHON_BUILTINS: frozenset[str] = frozenset(
-    name for name in dir(builtins) if not name.startswith("_")
-)
 
 
 class CallHandlerMixin:
@@ -55,6 +49,11 @@ class CallHandlerMixin:
 
     def _resolve_callee_targets(self, raw: str, scope_stack: list[str]) -> list[str]:
         """Resolve callee to qualified targets."""
+        # Priority: super().method > self.method > bare name > obj.method chain
+        # e.g. "super().save"  → parent class method
+        #      "self.client"   → tracked instance method
+        #      "process"       → local def / import / unresolved bare name
+        #      "svc.run"       → instance tracking or import-based resolution
         result = self._resolve_super_targets(raw, scope_stack)
         if result is not None:
             return result
@@ -146,10 +145,13 @@ class CallHandlerMixin:
 
     def _is_excluded(self, resolved: str, raw: str) -> bool:
         """Return True if callee is excluded (builtins, typing, etc.)."""
+        # Skip calls into excluded modules (builtins, typing, ...)
         if "::" in resolved:
             module_part = resolved.split("::")[0]
             if module_part in self._excluded_modules:
                 return True
+        # Only filter builtin names when completely unresolved (resolved == bare).
+        # Resolved calls like "mymodule::append" pass through.
         bare = raw.rsplit(".", 1)[-1]
         if resolved != bare:
             return False

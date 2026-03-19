@@ -14,7 +14,7 @@ from coderay.graph._handlers import (
     ImportHandlerMixin,
     TypeResolutionMixin,
 )
-from coderay.graph._handlers.calls import _PYTHON_BUILTINS
+from coderay.graph.lang_constants import _PYTHON_BUILTINS
 from coderay.graph._utils import is_init_file, resolve_relative_import
 from coderay.graph.identifiers import file_path_to_module_names
 from coderay.graph.lang_constants import LangConstants, from_lang_cfg
@@ -316,14 +316,16 @@ class GraphTreeSitterParser(
         ntype = node.type
         lc = self._lc
 
+        # Dispatch on AST node type. Scope-creating nodes (function/class)
+        # return early -- they recurse into their own body with updated scope.
         if ntype in lc.import_types:
             self._handle_import(node, scope_stack=scope_stack)
         elif ntype in lc.function_scope_types:
             self._handle_function_def(node, scope_stack=scope_stack)
-            return
+            return  # handler recurses with [*scope, func_name]
         elif ntype in (lc.class_scope_types + lc.extra_class_scope_types):
             self._handle_class_def(node, scope_stack=scope_stack)
-            return
+            return  # handler recurses with [*scope, class_name]
         elif ntype in lc.call_types:
             self._handle_call(node, scope_stack=scope_stack)
         elif lc.has_decorator and ntype == "decorator":
@@ -333,5 +335,6 @@ class GraphTreeSitterParser(
         elif lc.has_with_statement and ntype == "with_statement":
             self._handle_with_statement(node, scope_stack=scope_stack)
 
+        # Non-scope nodes: continue DFS into children at same scope level
         for child in node.children:
             self._dfs(child, scope_stack=scope_stack)

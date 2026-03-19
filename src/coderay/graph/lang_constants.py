@@ -7,29 +7,27 @@ language branching in handlers.
 from __future__ import annotations
 
 import builtins
+import io
 from collections.abc import Callable
 from dataclasses import dataclass
 
+# Builtin function/type names (print, len, int, ...) -- anything unresolved
+# matching these is noise, not a real CALLS edge.
 _PYTHON_BUILTINS: frozenset[str] = frozenset(
     name for name in dir(builtins) if not name.startswith("_")
 )
 
+# Common methods on builtin types (list.append, dict.get, str.split, ...).
+# Introspected at import time so the set stays current with the Python version.
+_BUILTIN_TYPES: tuple[type, ...] = (
+    list, dict, set, tuple, str, bytes, frozenset,
+    io.IOBase, io.RawIOBase, io.BufferedIOBase, io.TextIOBase,
+)
 _PYTHON_BUILTIN_METHODS: frozenset[str] = frozenset(
-    {
-        # list
-        "append", "extend", "insert", "remove", "pop", "clear", "index",
-        "count", "sort", "reverse", "copy",
-        # dict
-        "get", "keys", "values", "items", "update", "setdefault",
-        # set
-        "add", "discard", "union", "intersection", "difference",
-        # str
-        "join", "split", "strip", "lstrip", "rstrip", "replace",
-        "startswith", "endswith", "upper", "lower", "title", "find",
-        "encode", "decode", "format",
-        # io
-        "read", "write", "close", "flush", "seek",
-    }
+    name
+    for cls in _BUILTIN_TYPES
+    for name in dir(cls)
+    if not name.startswith("_") and callable(getattr(cls, name, None))
 )
 _JS_BUILTINS: frozenset[str] = frozenset(
     {
