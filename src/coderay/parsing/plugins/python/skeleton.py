@@ -36,10 +36,32 @@ class PythonSkeleton:
         )
         try:
             lines = parser.collect_lines()
+            if symbol and not lines:
+                return _symbol_not_found_hint(ctx, symbol)
             return "\n".join(lines)
         except Exception:  # pragma: no cover
             logger.exception("Skeleton extraction failed")
             return ctx.content
+
+
+def _symbol_not_found_hint(ctx, symbol: str) -> str:
+    """Return a diagnostic listing the top-level symbols in *ctx*."""
+    helper = BaseTreeSitterParser(ctx)
+    tree = helper.get_tree()
+    names: list[str] = []
+    for child in tree.root_node.children:
+        node = child
+        if node.type in _DECORATOR_SCOPE_TYPES:
+            for inner in node.named_children:
+                if inner.type in (*_FUNCTION_SCOPE_TYPES, *_CLASS_SCOPE_TYPES):
+                    node = inner
+                    break
+        name_node = node.child_by_field_name("name")
+        if name_node is not None:
+            raw = name_node.text
+            names.append(raw.decode() if isinstance(raw, bytes) else raw)
+    available = ", ".join(sorted(set(names))) if names else "(none)"
+    return f"# Symbol '{symbol}' not found. Available symbols: {available}"
 
 
 class _PythonSkeletonParser(BaseTreeSitterParser):
@@ -112,14 +134,21 @@ class _PythonSkeletonParser(BaseTreeSitterParser):
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if node matches symbol filter."""
+        """Return True if node matches symbol filter.
+
+        Supports dotted symbols like ``Class.method`` — at depth 0 match the
+        class name, at depth 1 match only the specified method.
+        """
         if self._symbol is None:
             return True
-        if depth > 0:
-            return True
-        name = self._node_name(node)
-        target = self._symbol.split(".")[0] if "." in self._symbol else self._symbol
-        return name == target
+        parts = self._symbol.split(".", 1)
+        class_part = parts[0]
+        method_part = parts[1] if len(parts) > 1 else None
+        if depth == 0:
+            return self._node_name(node) == class_part
+        if method_part is not None and depth == 1:
+            return self._node_name(node) == method_part
+        return method_part is None
 
     def _decorated_inner(self, node):
         """Return inner class/function from decorated node."""
