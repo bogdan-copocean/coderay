@@ -1,0 +1,7 @@
+# Allowlist: wipe auto-detected VCS files, then add back only what ships.
+global-exclude *
+
+graft src
+include pyproject.toml README.md LICENSE MANIFEST.in
+
+global-exclude __pycache__ *.py[cod] *.egg-info
