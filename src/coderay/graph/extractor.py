@@ -317,7 +317,7 @@ class GraphTreeSitterParser(
         lc = self._lc
 
         if ntype in lc.import_types:
-            self._handle_import(node)
+            self._handle_import(node, scope_stack=scope_stack)
         elif ntype in lc.function_scope_types:
             self._handle_function_def(node, scope_stack=scope_stack)
             return

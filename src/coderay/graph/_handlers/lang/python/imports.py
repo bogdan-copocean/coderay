@@ -13,11 +13,14 @@ TSNode = Any
 class PythonImportHandler:
     """Handle Python import_from_statement, import_statement, future_import_statement."""
 
-    def handle(self, node: TSNode, parser: Any) -> None:
+    def handle(
+        self, node: TSNode, parser: Any, *, scope_stack: list[str] | None = None
+    ) -> None:
         """Process Python import node."""
         ntype = node.type
         module: list[str] = []
         imported: list[tuple[str, str]] = []
+        caller_id = parser._caller_id_from_scope(scope_stack or [])
 
         for child in node.children:
             prev = child.prev_sibling
@@ -43,9 +46,10 @@ class PythonImportHandler:
                     continue
                 self._collect_import_name(child, imported, parser)
 
-        self._emit_from_import_edges(module, imported, ntype, parser)
+        if ntype != "import_statement":
+            self._emit_from_import_edges(module, imported, ntype, parser, caller_id)
         if ntype == "import_statement":
-            self._emit_bare_import_edges(imported, parser)
+            self._emit_bare_import_edges(imported, parser, caller_id)
 
     def _resolve_import_text(self, child: TSNode, parser: Any) -> str | None:
         text = parser.node_text(child).strip()
@@ -108,9 +112,11 @@ class PythonImportHandler:
         imported: list[tuple[str, str]],
         ntype: str,
         parser: Any,
+        caller_id: str | None = None,
     ) -> None:
         if not module or not imported:
             return
+        source = caller_id or parser._module_id
         mod_name = module[0]
         is_excluded = mod_name in parser._excluded_modules
         for original, local in imported:
@@ -123,15 +129,19 @@ class PythonImportHandler:
             edge_target = resolved_target if resolved_target else qualified
             parser._edges.append(
                 GraphEdge(
-                    source=parser._module_id,
+                    source=source,
                     target=edge_target,
                     kind=EdgeKind.IMPORTS,
                 )
             )
 
     def _emit_bare_import_edges(
-        self, imported: list[tuple[str, str]], parser: Any
+        self,
+        imported: list[tuple[str, str]],
+        parser: Any,
+        caller_id: str | None = None,
     ) -> None:
+        source = caller_id or parser._module_id
         for mod_text, local in imported:
             parser._file_ctx.register_import(local, mod_text)
             if mod_text in parser._excluded_modules:
@@ -140,7 +150,7 @@ class PythonImportHandler:
             edge_target = resolved_target if resolved_target else mod_text
             parser._edges.append(
                 GraphEdge(
-                    source=parser._module_id,
+                    source=source,
                     target=edge_target,
                     kind=EdgeKind.IMPORTS,
                 )
