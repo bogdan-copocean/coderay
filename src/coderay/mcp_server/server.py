@@ -82,7 +82,8 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
         "Search code by meaning. Returns chunks ranked by relevance, "
         "each with path, line range, symbol, score, content, and a "
         "relevance tier ('high', 'medium', or 'low'). "
-        "Best for 'how/where' questions; use grep for exact symbols."
+        "Best for 'how/where' questions; use grep for exact symbols or keywords."
+        "Any phrase with less than 3 words will return an error."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
@@ -90,7 +91,9 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 def semantic_search(
     query: Annotated[
         str,
-        Field(description="Natural language question about the code"),
+        Field(
+            description="Natural language question about the code (no keyword search)."
+        ),
     ],
     top_k: int = 5,
     path_prefix: Annotated[
