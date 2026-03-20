@@ -31,13 +31,24 @@ class TypeResolutionMixin:
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}"]
             return []
-        # Union: "RepoA | RepoB" → resolve each upper-cased part, skip None
+        # Union: "RepoA | RepoB" or "mod.ClassName" → resolve each part, skip non-types
         parts = [p.strip() for p in text.split("|")]
         result: list[str] = []
         for part in parts:
-            if not part or not part[0].isupper():
+            if not part:
                 continue
             if part in ("None", "NoneType"):
+                continue
+            # Dotted annotation: "mod.ClassName" — resolve the module alias
+            # then qualify with the class name (e.g. mod -> src/mod.py, + ::ClassName)
+            if "." in part and not part[0].isupper():
+                alias, _, attr = part.partition(".")
+                if attr and attr[0].isupper():
+                    resolved_alias = self._file_ctx.resolve(alias)
+                    if resolved_alias:
+                        result.append(f"{resolved_alias}::{attr}")
+                continue
+            if not part[0].isupper():
                 continue
             resolved = self._file_ctx.resolve(part)
             result.append(resolved or f"{self.file_path}::{part}")
