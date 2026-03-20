@@ -16,7 +16,7 @@ from coderay.graph._handlers import (
 )
 from coderay.graph._utils import is_init_file, resolve_relative_import
 from coderay.graph.identifiers import file_path_to_module_names
-from coderay.parsing.base import BaseTreeSitterParser, ParserContext, parse_file
+from coderay.parsing.base import BaseTreeSitterParser, ParserContext, get_parse_context
 from coderay.parsing.builtins import PYTHON_BUILTINS
 from coderay.parsing.languages import GraphConfig
 
@@ -219,7 +219,7 @@ def extract_graph_from_file(
 
     Returns ``([], [])`` if the language is unsupported or parsing fails.
     """
-    ctx = parse_file(file_path, content)
+    ctx = get_parse_context(file_path, content)
     if ctx is None:
         return [], []
 

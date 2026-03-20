@@ -14,10 +14,6 @@ class Chunk:
     symbol: str
     content: str
 
-    def line_range(self) -> tuple[int, int]:
-        """Return (start_line, end_line)."""
-        return (self.start_line, self.end_line)
-
 
 class NodeKind(str, Enum):
     """Node kind: module, class, or function."""

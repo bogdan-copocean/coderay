@@ -18,6 +18,10 @@ class UserService:
         db.insert(name, email)
         logger.info("User created")
 
+        def my_closure(text: str) -> None:
+            """Print received value to stdout."""
+            print(text)
+
     def delete_user(self, user_id: int) -> bool:
         """Delete a user by ID."""
         return db.delete(user_id)
@@ -66,6 +70,10 @@ class TestExtractSkeleton:
         assert "..." in skeleton
         assert "db.insert" not in skeleton
         assert "logger.info" not in skeleton
+
+    def test_extracts_closure(self):
+        skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)
+        assert "def my_closure" in skeleton
 
     def test_docstrings_preserved(self):
         skeleton = extract_skeleton("test.py", SAMPLE_PYTHON)

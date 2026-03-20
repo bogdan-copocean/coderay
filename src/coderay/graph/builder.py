@@ -54,7 +54,13 @@ def build_graph(
 
 
 def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
-    """Rewrite package::Symbol phantom targets to real node IDs."""
+    """Rewrite package::Symbol phantom targets to real node IDs.
+
+    Best effort to relink phantom nodes before pruning the Graph.
+
+    Helpful for symbols linked to each other but defined in distinc places.
+    For example, ports and adapters pattern links.
+    """
     rewritten = 0
     to_rewrite: list[tuple[str, str, str]] = []  # (source, old_target, new_target)
 
@@ -91,7 +97,7 @@ def _prune_phantom_calls(graph: CodeGraph) -> int:
     Prunes two categories:
     1. Phantoms with zero resolution candidates (no matching symbol).
     2. Ambiguous bare-name phantoms (no ``::`` or ``.`` in target) where
-       multiple candidates exist — these are unresolvable and create noise.
+       multiple candidates exist — these are unresolvable and create noise (e.g. "get")
     """
     to_remove = []
     for u, v, data in graph.iter_edges():

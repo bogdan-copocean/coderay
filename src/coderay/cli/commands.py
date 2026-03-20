@@ -152,7 +152,10 @@ def search_cmd(
             preview += "..."
         click.echo("")
         click.echo(
-            _color(f"  {i}. {r.path}:{r.start_line}-{r.end_line} ({r.symbol})", GREEN)
+            _color(
+                f"  {i}. {r.path}:{r.start_line}-{r.end_line} ({r.symbol} score: {r.score:.3f})",
+                GREEN,
+            )
         )
         click.echo(f"     {preview}")
 

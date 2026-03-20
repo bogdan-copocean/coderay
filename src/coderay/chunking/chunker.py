@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from coderay.core.models import Chunk
-from coderay.parsing.base import BaseTreeSitterParser, parse_file
+from coderay.parsing.base import BaseTreeSitterParser, get_parse_context
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         chunk_types = self._ctx.lang_cfg.chunker.chunk_types
         chunks: list[Chunk] = []
 
-        if preamble_lines := self._collect_preamble_lines(root, chunk_types):
+        if preamble_lines := self._collect_preamble_lines(root=root):
             chunks.append(
                 Chunk(
                     path=self.file_path,
@@ -61,11 +61,11 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
         logger.debug("Chunked %s: %d chunks", self.file_path, len(chunks))
         return chunks
 
-    def _collect_preamble_lines(self, root, chunk_types: tuple[str, ...]) -> list[str]:
+    def _collect_preamble_lines(self, root) -> list[str]:
         """Collect top-level lines outside chunk definitions."""
         lines: list[str] = []
         for child in root.children:
-            if child.type in chunk_types:
+            if child.type in self._ctx.lang_cfg.chunker.chunk_types:
                 continue
             text = self.node_text(child).strip()
             if text:
@@ -75,7 +75,7 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
 
 def chunk_file(path: str | Path, content: str) -> list[Chunk]:
     """Chunk file into semantic units (functions, classes, preamble)."""
-    ctx = parse_file(path, content)
+    ctx = get_parse_context(path, content)
     if ctx is None:
         logger.warning("No language config for %s", path)
         return []
