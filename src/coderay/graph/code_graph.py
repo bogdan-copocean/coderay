@@ -209,7 +209,14 @@ class CodeGraph:
             if nid in visited:
                 continue
             visited.add(nid)
-            if hop < depth and nid in self._g:
+            node_data = self.get_node(nid)
+            # Module nodes collect all importers as predecessors — expanding
+            # them would pull in files unrelated to the queried function.
+            if (
+                hop < depth
+                and nid in self._g
+                and (node_data is None or node_data.kind != NodeKind.MODULE)
+            ):
                 for pred in self._g.predecessors(nid):
                     if pred not in visited and self._is_impact_edge(pred, nid):
                         queue.append((pred, hop + 1))
@@ -220,6 +227,16 @@ class CodeGraph:
             self.get_node(nid)
             for nid in visited
             if self.get_node(nid) is not None and nid != own_module
+        ]
+
+        # A module node is a strict superset of its function/class nodes;
+        # drop it when the file is already represented by a more specific node.
+        files_with_non_module = {
+            n.file_path for n in nodes if n.kind != NodeKind.MODULE
+        }
+        nodes = [
+            n for n in nodes
+            if n.kind != NodeKind.MODULE or n.file_path not in files_with_non_module
         ]
 
         hint = self._zero_callers_hint(resolved) if not nodes else None

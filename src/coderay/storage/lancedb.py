@@ -221,7 +221,6 @@ class Store:
             row["score"] = round(float(_extract_score(row, score_mode)), 4)
             row["search_mode"] = search_mode
             row.pop("vector", None)
-            row.pop("content", None)
             results.append(row)
 
         return results

@@ -115,9 +115,14 @@ class Repository(Generic[T]):
 def decorator(fn: Callable[..., T]) -> Callable[..., T]:
     """Example decorator that logs and forwards calls."""
     ...
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        """Log the call and forward to the wrapped function."""
+        ...
 def tracing(fn: Callable[..., T]) -> Callable[..., T]:
     """Second decorator to exercise stacked decorated_definition nodes."""
     ...
+    def inner(*args: Any, **kwargs: Any) -> T:
+        ...
 @decorator
 def decorated_function(a: int, b: int) -> int:
     """Decorated function used to test decorated_definition nodes."""
@@ -142,6 +147,8 @@ def complex_expression_example(x: int) -> list[int]:
 def local_imports_example(numbers: list[int]) -> dict[str, int]:
     """Use local imports to exercise import detection inside function bodies."""
     ...
+    import json
+    from itertools import chain as ch
 root = Path(".")
 service = FileService(root)
 payload = {"value": 1}

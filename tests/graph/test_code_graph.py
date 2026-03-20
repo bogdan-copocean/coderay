@@ -6,7 +6,7 @@ from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, No
 from coderay.graph.code_graph import CodeGraph
 
 
-def _make_node(id, kind=NodeKind.MODULE, name=None, file_path=None):
+def _make_node(id, kind=NodeKind.FUNCTION, name=None, file_path=None):
     return GraphNode(
         id=id,
         kind=kind,

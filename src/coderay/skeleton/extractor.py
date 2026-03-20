@@ -141,19 +141,36 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _matches_symbol(self, node, depth: int) -> bool:
-        """Return True if node matches the symbol filter."""
+        """Return True if node is on the symbol path at this depth.
+
+        One dotted segment is consumed per depth level: "a.b.c" matches
+        "a" at depth=0, "b" at depth=1, "c" at depth=2. Once the path is
+        exhausted (depth >= len(parts)) all children are allowed through so
+        the target's body is still traversed.
+        """
         if self._symbol is None:
             return True
-        # "Class.method" → depth 0 matches "Class", depth 1 matches "method"
-        # "Class" alone → depth 0 matches "Class", depth 1 matches everything
-        parts = self._symbol.split(".", 1)
-        class_part = parts[0]
-        method_part = parts[1] if len(parts) > 1 else None
-        if depth == 0:
-            return self._node_name(node) == class_part
-        if method_part is not None and depth == 1:
-            return self._node_name(node) == method_part
-        return method_part is None
+        parts = self._symbol.split(".")
+        if depth >= len(parts):
+            return True
+        return self._node_name(node) == parts[depth]
+
+    def _is_symbol_target(self, node, depth: int) -> bool:
+        """Return True if this node should emit its signature.
+
+        At the terminal segment always emit. For intermediate nodes, emit
+        class headers (useful context for Class.method) but suppress
+        function headers (closure wrappers add no value when targeting inner).
+        """
+        if self._symbol is None:
+            return True
+        parts = self._symbol.split(".")
+        if depth >= len(parts) - 1:
+            return True
+        lang_cfg = self._ctx.lang_cfg
+        return node.type in (
+            lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
+        )
 
     def _decorated_inner(self, node):
         """Return inner class/function from decorated node."""
@@ -211,7 +228,8 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 return
             for child in node.named_children:
                 if child.type == "decorator":
-                    lines.append(indent + self.node_text(child).strip())
+                    if inner is not None and self._is_symbol_target(inner, depth):
+                        lines.append(indent + self.node_text(child).strip())
                     self._seen.add(child.id)
                     continue
                 if child.type in (
@@ -228,10 +246,11 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return
-            lines.append(indent + self._get_signature_line(node))
-            if docstr := self._get_docstring(node):
-                lines.append(indent + "    " + docstr)
-            lines.append(indent + "    " + ELLIPSIS)
+            if self._is_symbol_target(node, depth):
+                lines.append(indent + self._get_signature_line(node))
+                if docstr := self._get_docstring(node):
+                    lines.append(indent + "    " + docstr)
+                lines.append(indent + "    " + ELLIPSIS)
             self._seen.add(node.id)
             for child in node.children:
                 self._dfs(child, lines, depth + 1)
@@ -244,9 +263,10 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return
-            lines.append(indent + self._get_signature_line(node))
-            if docstr := self._get_docstring(node):
-                lines.append(indent + "    " + docstr)
+            if self._is_symbol_target(node, depth):
+                lines.append(indent + self._get_signature_line(node))
+                if docstr := self._get_docstring(node):
+                    lines.append(indent + "    " + docstr)
             self._seen.add(node.id)
             for child in node.children:
                 self._dfs(child, lines, depth + 1)
