@@ -175,8 +175,8 @@ class Store:
     ) -> list[dict[str, Any]]:
         """Run vector or hybrid search."""
 
-        # heuristics: arbitrary choices
-        if len(query_text) <= 1 or len(query_text.strip().split(" ")) <= 3:
+        # heuristics: arbitrary choice
+        if isinstance(query_text, str) and len(query_text.strip().split(" ")) <= 3:
             raise SearchError("Too few tokens to embed; use ripgrep instead")
 
         if not self._table_exists():
