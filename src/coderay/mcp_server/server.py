@@ -82,8 +82,8 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
         "Search code by meaning. Returns chunks ranked by relevance, "
         "each with path, line range, symbol, score, content, and a "
         "relevance tier ('high', 'medium', or 'low'). "
-        "Best for 'how/where' questions; use grep for exact symbols or keywords."
-        "Any phrase with less than 3 words will return an error."
+        "Best for 'how/where' questions; use grep for exact symbols or keywords. "
+        "Queries with 3 or fewer words will return an error; use at least 4 meaningful words."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
@@ -183,8 +183,9 @@ def get_file_skeleton(
         "Reverse dependency traversal: lists callers and dependents "
         "of a function or class from the code graph. "
         "Static analysis only — blind spots include DI containers "
-        "(e.g. inject.instance()), dynamic dispatch, and untyped "
-        "factory returns. Supplement with grep for these patterns."
+        "(e.g. inject.instance(), @inject.autoparams under stacked decorators), "
+        "dynamic dispatch, and untyped factory returns. "
+        "Supplement with grep for these patterns."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"analysis"},
