@@ -233,6 +233,8 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 lines.append(indent + "    " + docstr)
             lines.append(indent + "    " + ELLIPSIS)
             self._seen.add(node.id)
+            for child in node.children:
+                self._dfs(child, lines, depth + 1)
             return
 
         # Classes: signature + docstring, then recurse into body at depth+1
