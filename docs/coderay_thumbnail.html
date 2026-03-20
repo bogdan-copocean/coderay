@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://bogdan-copocean.github.io/coderay/">
+    <meta property="og:title" content="CodeRay">
+    <meta property="og:description" content="An Offline Semantic Code Indexer & MCP Server for AI Agents.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/bogdan-copocean/coderay/main/docs/coderay.png">
+
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Newsreader:ital,wght@0,400;0,700;1,400;1,700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .topology-grid {
+            background-image: radial-gradient(circle, #8a8aff 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.15;
+        }
+    </style>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#f8bd3d",
+                        "on-tertiary-fixed-variant": "#5d4200",
+                        "on-secondary-fixed-variant": "#42426e",
+                        "surface-container-highest": "#e2e2e4",
+                        "on-background": "#1a1c1d",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed": "#ffdea5",
+                        "on-primary-fixed": "#0b006b",
+                        "outline-variant": "#c7c5d5",
+                        "primary-fixed": "#e2dfff",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#1d1591",
+                        "surface-dim": "#d9dadc",
+                        "on-secondary-fixed": "#17163f",
+                        "on-primary-fixed-variant": "#3835a8",
+                        "primary-container": "#8a8aff",
+                        "on-tertiary-container": "#402c00",
+                        "on-secondary": "#ffffff",
+                        "tertiary": "#7b5800",
+                        "outline": "#777584",
+                        "inverse-primary": "#c2c1ff",
+                        "background": "#f9f9fb",
+                        "surface-tint": "#514fc1",
+                        "secondary-fixed": "#e2dfff",
+                        "secondary-container": "#cbcafe",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#464553",
+                        "surface-container-high": "#e8e8ea",
+                        "on-tertiary-fixed": "#261900",
+                        "surface-container-low": "#f3f3f5",
+                        "secondary-fixed-dim": "#c3c2f5",
+                        "primary-fixed-dim": "#c2c1ff",
+                        "surface-container": "#eeeef0",
+                        "surface-variant": "#e2e2e4",
+                        "error": "#ba1a1a",
+                        "primary": "#514fc1",
+                        "on-surface": "#1a1c1d",
+                        "surface-bright": "#f9f9fb",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f9f9fb",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#545480",
+                        "inverse-surface": "#2f3132",
+                        "tertiary-container": "#c38e00",
+                        "secondary": "#5a5a87",
+                        "inverse-on-surface": "#f0f0f2"
+                    },
+                    fontFamily: {
+                        "headline": ["Newsreader"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+</head>
+
+<body class="bg-surface font-body text-on-surface antialiased overflow-hidden">
+    <!-- LinkedIn Thumbnail Canvas (16:9 Aspect Ratio Simulation) -->
+    <main
+        class="relative w-full aspect-[16/9] bg-surface flex items-center justify-center p-12 lg:p-24 overflow-hidden">
+        <!-- Background Topology Layer -->
+        <div class="absolute inset-0 topology-grid pointer-events-none"></div>
+        <div class="absolute top-[-10%] right-[-5%] w-[40%] h-[60%] bg-primary-container/10 blur-[120px] rounded-full">
+        </div>
+        <div
+            class="absolute bottom-[-20%] left-[-10%] w-[50%] h-[70%] bg-secondary-container/5 blur-[150px] rounded-full">
+        </div>
+        <!-- Content Layout: Asymmetric Editorial Grid -->
+        <div class="relative z-10 w-full h-full grid grid-cols-12 gap-8 items-center">
+            <!-- Left Side: Brand & Identity -->
+            <div class="col-span-7 flex flex-col justify-center space-y-6">
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="w-12 h-[1px] bg-primary"></div>
+                    <span class="font-label text-xs uppercase tracking-[0.2em] text-primary font-semibold">AGENTIC
+                        FIRST</span>
+                </div>
+                <h1
+                    class="font-headline italic text-7xl md:text-8xl lg:text-9xl text-on-surface tracking-tighter leading-none">
+                    CodeRay
+                </h1>
+                <p class="font-body text-xl md:text-2xl text-on-surface-variant max-w-md leading-relaxed font-light">
+                    Semantic memory for your <span class="text-on-surface font-medium italic">AI coding agents.</span>
+                </p>
+                <div class="pt-8 flex items-center gap-6">
+                    <div class="flex items-center space-x-2 text-on-surface/40">
+                        <span class="material-symbols-outlined text-[18px]">saved_search</span>
+                        <span class="font-mono text-sm">intent-discovery</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-on-surface/40">
+                        <span class="material-symbols-outlined text-[18px]">schema</span>
+                        <span class="font-mono text-sm">skeleton-extraction</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-on-surface/40">
+                        <span class="material-symbols-outlined text-[18px]">hub</span>
+                        <span class="font-mono text-sm">impact-analysis</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Right Side: Visual Metaphor (Terminal Snippet) -->
+            <div class="col-span-5 relative flex justify-end">
+                <!-- Clinical Code Block -->
+                <div
+                    class="glass-panel w-full max-w-md rounded-xl p-1 shadow-[0px_24px_48px_rgba(26,28,29,0.06)] border border-outline-variant/20 overflow-hidden transform rotate-1 translate-y-4">
+                    <div class="bg-surface-container-lowest rounded-lg p-6 flex flex-col space-y-4">
+                        <div class="flex space-x-1.5 pb-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-outline-variant/30"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-outline-variant/30"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-outline-variant/30"></div>
+                        </div>
+                        <div class="font-mono text-sm space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-primary-container font-bold">$</span>
+                                <span class="text-on-surface">coderay</span>
+                                <span class="text-primary font-medium">build</span>
+                                <span class="text-on-surface-variant">--full</span>
+                            </div>
+                            <div class="text-on-surface-variant/40 leading-relaxed">
+                                <div>[1/4] Scanning workspace topology...</div>
+                                <div>[2/4] Parsing workspace ASTs...</div>
+                                <div>[3/4] Constructing build-dependency graph...</div>
+                                <div class="text-primary animate-pulse">● Synapsing semantic vectors..</div>
+                            </div>
+                            <div class="pt-4 flex items-center gap-3">
+                                <span class="h-[2px] w-24 bg-primary-container/20"></span>
+                                <span
+                                    class="text-[10px] text-primary font-bold uppercase tracking-widest">Processing</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Floating Topology Node Decoration -->
+                <div class="absolute -top-12 -right-8 w-40 h-40 opacity-20 pointer-events-none">
+                    <svg class="w-full h-full text-primary" viewbox="0 0 100 100">
+                        <circle cx="50" cy="50" fill="currentColor" r="2"></circle>
+                        <circle cx="20" cy="30" fill="currentColor" r="1.5"></circle>
+                        <circle cx="80" cy="20" fill="currentColor" r="1.5"></circle>
+                        <circle cx="70" cy="70" fill="currentColor" r="2"></circle>
+                        <circle cx="30" cy="80" fill="currentColor" r="1.5"></circle>
+                        <path d="M50 50 L20 30 M50 50 L80 20 M50 50 L70 70 M50 50 L30 80 M20 30 L30 80 M80 20 L70 70"
+                            fill="none" stroke="currentColor" stroke-width="0.5"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <!-- Bottom Accents -->
+        <div class="absolute bottom-12 right-12 flex items-center gap-4 text-on-surface-variant/30">
+            <span class="font-label text-[10px] tracking-[0.3em] uppercase">Engineered for the Agentic Era</span>
+            <div class="w-8 h-[1px] bg-outline-variant/30"></div>
+        </div>
+    </main>
+</body>
+
+</html>
