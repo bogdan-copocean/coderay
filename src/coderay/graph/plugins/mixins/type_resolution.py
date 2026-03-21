@@ -1,4 +1,4 @@
-"""Type hint resolution for DI patterns."""
+"""Type hint resolution for DI (shared)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 TSNode = Any
 
 
-class TypeResolutionMixin:
+class TypeResolutionFactMixin:
     """Resolve type annotations for DI."""
 
     def _resolve_type_text(self, type_text: str | None) -> str | None:
@@ -18,20 +18,17 @@ class TypeResolutionMixin:
     def _resolve_type_texts(
         self, type_text: str | None, *, enclosing_func_node: TSNode | None = None
     ) -> list[str]:
-        """Resolve type annotation to qualified class refs (union, Self, forward refs)."""
+        """Resolve type annotation to qualified class refs."""
         if not type_text:
             return []
         text = type_text.strip()
-        # Strip quotes from forward references: "RepositoryPort" → RepositoryPort
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
-        # Self → enclosing class (e.g. def clone(self) -> Self)
         if text == "Self" and enclosing_func_node:
             class_qualified = self._find_enclosing_class_from_node(enclosing_func_node)
             if class_qualified:
                 return [f"{self.file_path}::{class_qualified}"]
             return []
-        # Union: "RepoA | RepoB" or "mod.ClassName" → resolve each part, skip non-types
         parts = [p.strip() for p in text.split("|")]
         result: list[str] = []
         for part in parts:
@@ -39,8 +36,6 @@ class TypeResolutionMixin:
                 continue
             if part in ("None", "NoneType"):
                 continue
-            # Dotted annotation: "mod.ClassName" — resolve the module alias
-            # then qualify with the class name (e.g. mod -> src/mod.py, + ::ClassName)
             if "." in part and not part[0].isupper():
                 alias, _, attr = part.partition(".")
                 if attr and attr[0].isupper():
@@ -84,7 +79,6 @@ class TypeResolutionMixin:
             return None
         pname = self.node_text(name_node)
         type_node = param_node.child_by_field_name("type")
-        # Some grammars nest type under a "type" child
         if type_node is None:
             for c in param_node.children:
                 if c.type == "type":
@@ -92,7 +86,6 @@ class TypeResolutionMixin:
                     break
         if not type_node:
             return None
-        # For Self in params, need enclosing class; param -> parameters -> function
         enclosing = None
         parent = param_node.parent
         if parent and parent.parent:
@@ -104,7 +97,6 @@ class TypeResolutionMixin:
 
     def _get_function_return_type(self, callee_name: str) -> str | None:
         """Resolve function/method return type from annotation."""
-        # "create_client" = top-level; "ApiClient.create" = classmethod
         if "." in callee_name:
             class_name, method_name = callee_name.split(".", 1)
             func_node = self._find_method_in_class(class_name, method_name)
@@ -116,9 +108,9 @@ class TypeResolutionMixin:
         """Find method definition in class."""
         tree = self.get_tree()
         class_types = (
-            self._ctx.lang_cfg.class_scope_types + self._gc.extra_class_scope_types
+            self._ctx.lang_cfg.class_scope_types + self._desc.extra_class_scope_types
         )
-        body_types = self._gc.class_body_types
+        body_types = self._desc.class_body_types
 
         def find_class(n: TSNode) -> TSNode | None:
             if n.type in class_types:
@@ -153,7 +145,7 @@ class TypeResolutionMixin:
         return None
 
     def _find_top_level_function(self, func_name: str) -> TSNode | None:
-        """Find top-level function by name (incl. export-wrapped, arrow in const)."""
+        """Find top-level function by name."""
 
         def search(n: TSNode) -> TSNode | None:
             if n.type in ("function_declaration", "function_definition"):
@@ -210,7 +202,7 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
-        param_types = self._gc.typed_param_types
+        param_types = self._desc.typed_param_types
         result: list[tuple[str, list[str]]] = []
         for child in params.children:
             if child.type in param_types:
@@ -226,7 +218,7 @@ class TypeResolutionMixin:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return None
-        param_types = self._gc.typed_param_types
+        param_types = self._desc.typed_param_types
         for child in params.children:
             if child.type in param_types:
                 extracted = self._extract_type_from_typed_param(child)
@@ -237,7 +229,6 @@ class TypeResolutionMixin:
 
     def _extract_tuple_type_args(self, type_node: TSNode) -> list[str]:
         """Extract type args from tuple[X, Y, ...] via AST."""
-        # Unwrap: return_type field points to type node, whose child is generic_type
         if type_node.type == "type" and type_node.named_children:
             type_node = type_node.named_children[0]
         if type_node.type != "generic_type":

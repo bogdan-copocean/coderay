@@ -1,4 +1,4 @@
-"""Assignment and with-statement handling for graph extraction."""
+"""Assignment and with-statement lowering (shared)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from typing import Any
 TSNode = Any
 
 
-class AssignmentHandlerMixin:
+class AssignmentFactMixin:
     """Handle assignments and with statements for instance/alias tracking."""
 
     def _get_assignment_sides(
         self, node: TSNode
     ) -> tuple[TSNode | None, TSNode | None]:
-        """Return (lhs, rhs) for assignment-like nodes; (None, None) if not applicable."""
+        """Return (lhs, rhs) for assignment-like nodes."""
         if node.type == "variable_declarator":
             lhs = node.child_by_field_name("name")
             rhs = node.child_by_field_name("value")
@@ -33,7 +33,6 @@ class AssignmentHandlerMixin:
         if lhs is None or rhs is None:
             return
 
-        # Constructor/setter injection: self.storage = storage (storage: StoragePort)
         if lhs.type == "attribute" and rhs.type == "identifier":
             lhs_text = self.node_text(lhs)
             if lhs_text.startswith(("self.", "this.")):
@@ -53,7 +52,6 @@ class AssignmentHandlerMixin:
                             )
             return
 
-        # Tuple unpacking: a, b = get_pair()
         if lhs.type in ("pattern_list", "tuple_pattern", "list_pattern"):
             self._handle_tuple_unpacking(lhs, rhs)
             return
@@ -64,13 +62,11 @@ class AssignmentHandlerMixin:
         lhs_name = self.node_text(lhs)
 
         if rhs.type == "identifier":
-            # Simple alias: my_func = imported_func
             rhs_name = self.node_text(rhs)
             resolved = self._file_ctx.resolve(rhs_name)
             if resolved:
                 self._file_ctx.register_alias(lhs_name, resolved)
         elif rhs.type == "attribute":
-            # x = obj.attr: alias when obj resolves (e.g. path_func = Path)
             rhs_text = self.node_text(rhs)
             parts = rhs_text.split(".")
             if len(parts) == 2:
@@ -80,8 +76,7 @@ class AssignmentHandlerMixin:
                     self._file_ctx.register_alias(
                         lhs_name, f"{prefix_resolved}::{attr}"
                     )
-        elif rhs.type in self._gc.call_types:
-            # functools.partial: p = partial(foo, 1); p() → alias to foo
+        elif rhs.type in self._desc.call_types:
             callee_node = rhs.child_by_field_name("function")
             if callee_node:
                 callee_name = self.node_text(callee_node).strip()
@@ -110,17 +105,15 @@ class AssignmentHandlerMixin:
         value = item.child_by_field_name("value")
         if not value:
             return
-        # with x as y: value is as_pattern with alias; with x(): value is call
         if value.type == "as_pattern":
             target_node = value.child_by_field_name("alias")
             call_node = next(
-                (c for c in value.named_children if c.type in self._gc.call_types),
+                (c for c in value.named_children if c.type in self._desc.call_types),
                 None,
             )
         else:
-            # with x(): no "as" target — we don't register
             target_node = value if value.type == "as_pattern_target" else None
-            call_node = value if value.type in self._gc.call_types else None
+            call_node = value if value.type in self._desc.call_types else None
         if not call_node or not target_node:
             return
         var_name = self.node_text(target_node)
@@ -136,7 +129,6 @@ class AssignmentHandlerMixin:
 
     def _handle_tuple_unpacking(self, lhs: TSNode, rhs: TSNode) -> None:
         """Track a, b = func(); register from return type."""
-        # Collect identifiers from pattern_list
         identifiers: list[str] = []
         for child in lhs.children:
             if child.type == "identifier":
@@ -146,8 +138,7 @@ class AssignmentHandlerMixin:
         if not identifiers:
             return
 
-        # RHS must be a call
-        if rhs.type not in self._gc.call_types:
+        if rhs.type not in self._desc.call_types:
             return
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:
@@ -156,7 +147,6 @@ class AssignmentHandlerMixin:
         if not callee_name:
             return
 
-        # Get raw type text from function definition
         func_node = (
             self._find_method_in_class(*callee_name.split(".", 1))
             if "." in callee_name

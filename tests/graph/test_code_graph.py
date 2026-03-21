@@ -3,7 +3,7 @@
 import pytest
 
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
-from coderay.graph.code_graph import CodeGraph
+from coderay.graph.code_graph import GRAPH_SCHEMA_VERSION, CodeGraph
 
 
 def _make_node(id, kind=NodeKind.FUNCTION, name=None, file_path=None):
@@ -921,3 +921,31 @@ class TestCodeGraph:
     def test_has_ambiguous_symbol_false_for_missing(self):
         g = CodeGraph()
         assert g.has_ambiguous_symbol("nonexistent") is False
+
+
+class TestGraphSchemaVersion:
+    """graph.json schema_version field."""
+
+    def test_to_dict_includes_schema_version(self):
+        g = CodeGraph()
+        g.add_node(_make_node("a.py", NodeKind.MODULE, "a.py", file_path="a.py"))
+        d = g.to_dict()
+        assert d["schema_version"] == GRAPH_SCHEMA_VERSION
+
+    def test_from_dict_legacy_without_schema_key(self):
+        d = {
+            "nodes": [
+                {
+                    "id": "a.py",
+                    "kind": "module",
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 2,
+                    "name": "a.py",
+                    "qualified_name": "a.py",
+                }
+            ],
+            "edges": [],
+        }
+        g = CodeGraph.from_dict(d)
+        assert g.get_node("a.py") is not None

@@ -1,60 +1,54 @@
-"""Definition handling: DEFINES, INHERITS edges, scope."""
+"""Class/function definition lowering (shared)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from coderay.core.models import EdgeKind, GraphEdge, GraphNode, NodeKind
+from coderay.core.models import NodeKind
 from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
+from coderay.graph.facts import InheritsEdge, SymbolDefinition
 
 TSNode = Any
 
 
-class DefinitionHandlerMixin:
-    """Handle class/function definitions: DEFINES, INHERITS, scope."""
+class DefinitionFactMixin:
+    """Handle class/function definitions: symbols and INHERITS facts."""
 
     def _handle_function_def(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create FUNCTION node and DEFINES edge; recurse into body."""
+        """Record function symbol; recurse into body."""
         name = self.identifier_from_node(node)
         if not name:
             return
 
-        # scope_stack = [] for top-level, ["ClassName"] for methods
         qualified = ".".join([*scope_stack, name])
-        node_id = f"{self.file_path}::{qualified}"
-
-        self._nodes.append(
-            GraphNode(
-                id=node_id,
-                kind=NodeKind.FUNCTION,
-                file_path=self.file_path,
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
-                name=name,
-                qualified_name=qualified,
-            )
-        )
         definer = self._module_id
         if scope_stack:
             definer = f"{self.file_path}::{'.'.join(scope_stack)}"
-        self._edges.append(
-            GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
-        )
 
-        # Register so calls like my_func() or ClassName.method() resolve
+        self._facts.append(
+            SymbolDefinition(
+                file_path=self.file_path,
+                scope_stack=tuple(scope_stack),
+                name=name,
+                kind=NodeKind.FUNCTION,
+                start_line=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+                definer_id=definer,
+            )
+        )
+        node_id = f"{self.file_path}::{qualified}"
+
         if not scope_stack:
             self._file_ctx.register_definition(name, node_id)
         else:
             self._file_ctx.register_definition(qualified, node_id)
 
-        # Param injection: processor: DataProcessor → processor.process() resolves
         for param_name, type_refs in self._get_typed_parameters(node):
             if len(type_refs) == 1:
                 self._file_ctx.register_instance(param_name, type_refs[0])
             else:
                 self._file_ctx.register_instance_union(param_name, type_refs)
 
-        # Property injection: @property def repo() -> Repo → self.repo.save() resolves
         if self._is_property(node) and scope_stack:
             class_qualified = ".".join(scope_stack)
             return_type = self._get_return_type_from_func_node(node)
@@ -63,14 +57,13 @@ class DefinitionHandlerMixin:
                     class_qualified, name, return_type
                 )
 
-        # Recurse into body; new scope so nested defs get correct qualified names
         new_scope = [*scope_stack, name]
         for child in node.children:
             self._dfs(child, scope_stack=new_scope)
 
     def _is_property(self, func_node: TSNode) -> bool:
-        """Return True if function has @property decorator (Python only)."""
-        if not self._gc.tracks_property_types:
+        """Return True if function has @property decorator."""
+        if not self._desc.tracks_property_types:
             return False
         parent = func_node.parent
         if parent is None or parent.type != "decorated_definition":
@@ -83,30 +76,27 @@ class DefinitionHandlerMixin:
         return False
 
     def _handle_class_def(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create CLASS node, DEFINES + INHERITS edges; recurse into body."""
+        """Record class symbol and base INHERITS facts; recurse into body."""
         name = self.identifier_from_node(node)
         if not name:
             return
 
         qualified = ".".join([*scope_stack, name])
-        node_id = f"{self.file_path}::{qualified}"
-
-        self._nodes.append(
-            GraphNode(
-                id=node_id,
-                kind=NodeKind.CLASS,
-                file_path=self.file_path,
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
-                name=name,
-                qualified_name=qualified,
-            )
-        )
         definer = self._module_id
         if scope_stack:
             definer = f"{self.file_path}::{'.'.join(scope_stack)}"
-        self._edges.append(
-            GraphEdge(source=definer, target=node_id, kind=EdgeKind.DEFINES)
+        node_id = f"{self.file_path}::{qualified}"
+
+        self._facts.append(
+            SymbolDefinition(
+                file_path=self.file_path,
+                scope_stack=tuple(scope_stack),
+                name=name,
+                kind=NodeKind.CLASS,
+                start_line=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+                definer_id=definer,
+            )
         )
 
         for child in node.children:
@@ -114,13 +104,7 @@ class DefinitionHandlerMixin:
                 continue
             for base_name in self._get_base_classes_from_arg_list(child):
                 resolved = self._resolve_base_class(base_name)
-                self._edges.append(
-                    GraphEdge(
-                        source=node_id,
-                        target=resolved,
-                        kind=EdgeKind.INHERITS,
-                    )
-                )
+                self._facts.append(InheritsEdge(source_id=node_id, target=resolved))
 
         self._file_ctx.register_definition(name, node_id, is_class=True)
 
