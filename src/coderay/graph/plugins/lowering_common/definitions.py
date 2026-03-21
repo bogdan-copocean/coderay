@@ -43,37 +43,17 @@ class DefinitionFactMixin:
         else:
             self._file_ctx.register_definition(qualified, node_id)
 
-        for param_name, type_refs in self._get_typed_parameters(node):
-            if len(type_refs) == 1:
-                self._file_ctx.register_instance(param_name, type_refs[0])
-            else:
-                self._file_ctx.register_instance_union(param_name, type_refs)
-
-        if self._is_property(node) and scope_stack:
-            class_qualified = ".".join(scope_stack)
-            return_type = self._get_return_type_from_func_node(node)
-            if return_type:
-                self._file_ctx.register_class_attribute(
-                    class_qualified, name, return_type
-                )
+        self._after_function_definition_registered(node, scope_stack=scope_stack)
 
         new_scope = [*scope_stack, name]
         for child in node.children:
             self._dfs(child, scope_stack=new_scope)
 
-    def _is_property(self, func_node: TSNode) -> bool:
-        """Return True if function has @property decorator."""
-        if not self._desc.tracks_property_types:
-            return False
-        parent = func_node.parent
-        if parent is None or parent.type != "decorated_definition":
-            return False
-        for child in parent.children:
-            if child.type == "decorator":
-                text = self.node_text(child).strip()
-                if text.endswith("property"):
-                    return True
-        return False
+    def _after_function_definition_registered(
+        self, node: TSNode, *, scope_stack: list[str]
+    ) -> None:
+        """Hook after function symbol is registered; language plugins may override."""
+        del node, scope_stack
 
     def _handle_class_def(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Record class symbol and base INHERITS facts; recurse into body."""

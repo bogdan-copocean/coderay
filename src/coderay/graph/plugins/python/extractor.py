@@ -6,17 +6,15 @@ from typing import Any
 
 from coderay.graph.facts import Fact, ImportsEdge, ModuleInfo
 from coderay.graph.file_context import FileContext
-from coderay.graph.plugins.mixins import (
-    AssignmentFactMixin,
-    CallFactMixin,
-    DefinitionFactMixin,
-    TypeResolutionFactMixin,
-)
+from coderay.graph.plugins.lowering_common import CallFactMixin
+from coderay.graph.plugins.python.assignment_mixin import PythonAssignmentMixin
+from coderay.graph.plugins.python.definition_mixin import PythonDefinitionMixin
 from coderay.graph.plugins.python.descriptor import (
     PYTHON_GRAPH_DESCRIPTOR,
     PythonGraphDescriptor,
 )
 from coderay.graph.plugins.python.import_handler import PythonImportHandler
+from coderay.graph.plugins.python.type_resolution_mixin import PythonTypeResolutionMixin
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext
 
 TSNode = Any
@@ -34,9 +32,9 @@ class PythonImportMixin:
 
 class PythonGraphExtractor(
     PythonImportMixin,
-    TypeResolutionFactMixin,
-    DefinitionFactMixin,
-    AssignmentFactMixin,
+    PythonTypeResolutionMixin,
+    PythonDefinitionMixin,
+    PythonAssignmentMixin,
     CallFactMixin,
     BaseTreeSitterParser,
 ):

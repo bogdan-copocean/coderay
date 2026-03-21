@@ -23,9 +23,6 @@ class JsTsGraphDescriptor:
     builtins: frozenset[str] = field(default_factory=lambda: JS_TS_BUILTINS)
     self_prefix: str = "this."
     super_prefixes: tuple[str, ...] = ("super().", "super.")
-    decorator_types: tuple[str, ...] = ()
-    with_types: tuple[str, ...] = ()
-    tracks_property_types: bool = False
 
 
 JS_TS_GRAPH_DESCRIPTOR = JsTsGraphDescriptor()

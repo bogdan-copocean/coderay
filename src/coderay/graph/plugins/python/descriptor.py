@@ -21,7 +21,6 @@ class PythonGraphDescriptor:
     super_prefixes: tuple[str, ...] = ("super().", "super.")
     decorator_types: tuple[str, ...] = ("decorator",)
     with_types: tuple[str, ...] = ("with_statement",)
-    tracks_property_types: bool = True
 
 
 PYTHON_GRAPH_DESCRIPTOR = PythonGraphDescriptor()

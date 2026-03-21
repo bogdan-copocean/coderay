@@ -11,12 +11,12 @@ from coderay.graph.plugins.js_ts.descriptor import (
     JsTsGraphDescriptor,
 )
 from coderay.graph.plugins.js_ts.import_handler import JsTsImportHandler
-from coderay.graph.plugins.mixins import (
-    AssignmentFactMixin,
+from coderay.graph.plugins.lowering_common import (
+    AssignmentCoreMixin,
     CallFactMixin,
     DefinitionFactMixin,
-    TypeResolutionFactMixin,
 )
+from coderay.graph.plugins.js_ts.type_resolution_mixin import JsTsTypeResolutionMixin
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext
 
 TSNode = Any
@@ -33,9 +33,9 @@ class JsTsImportMixin:
 
 class JsTsGraphExtractor(
     JsTsImportMixin,
-    TypeResolutionFactMixin,
+    JsTsTypeResolutionMixin,
     DefinitionFactMixin,
-    AssignmentFactMixin,
+    AssignmentCoreMixin,
     CallFactMixin,
     BaseTreeSitterParser,
 ):
@@ -88,12 +88,8 @@ class JsTsGraphExtractor(
             return
         elif ntype in desc.call_types:
             self._handle_call(node, scope_stack=scope_stack)
-        elif ntype in desc.decorator_types:
-            self._handle_decorator(node, scope_stack=scope_stack)
         elif ntype in desc.assignment_types:
             self._handle_assignment(node, scope_stack=scope_stack)
-        elif ntype in desc.with_types:
-            self._handle_with_statement(node, scope_stack=scope_stack)
 
         for child in node.children:
             self._dfs(child, scope_stack=scope_stack)
