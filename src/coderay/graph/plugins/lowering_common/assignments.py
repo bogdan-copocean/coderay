@@ -97,4 +97,3 @@ class AssignmentCoreMixin:
     def _handle_with_statement(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Override in Python plugin for context managers."""
         del node, scope_stack
-

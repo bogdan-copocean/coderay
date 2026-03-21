@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from coderay.graph.plugins.lowering_common.type_resolution import TypeResolutionCoreMixin
+from coderay.graph.plugins.lowering_common.type_resolution import (
+    TypeResolutionCoreMixin,
+)
 
 TSNode = Any
 
