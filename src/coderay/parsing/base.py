@@ -10,6 +10,16 @@ from tree_sitter import Parser, Tree
 
 
 @dataclass
+class ParseResult:
+    """File parse outcome: language id, path, syntax tree, source bytes."""
+
+    language_id: str
+    file_path: str
+    tree: Tree
+    source_bytes: bytes
+
+
+@dataclass
 class ParserContext:
     """Hold parsing state for a file and language."""
 

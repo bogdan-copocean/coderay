@@ -1,8 +1,8 @@
 """Language configuration for Tree-sitter based analyzers.
 
 Single source of truth for all language-specific AST node types, behavior
-flags, and sub-configs consumed by chunking, skeleton extraction, and
-graph building.
+flags, and sub-configs consumed by chunking and skeleton extraction. Graph
+lowering uses ``coderay.graph.plugins`` descriptors.
 """
 
 from __future__ import annotations
@@ -13,13 +13,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from coderay.parsing.builtins import JS_TS_BUILTINS, PYTHON_ALL_BUILTINS
-
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Sub-configs: each consumer (skeleton, chunker, graph) reads its own slice.
+# Sub-configs: each consumer (skeleton, chunker) reads its own slice.
 # ---------------------------------------------------------------------------
 
 
@@ -41,30 +39,6 @@ class ChunkerConfig:
     chunk_types: tuple[str, ...]
 
 
-@dataclass
-class GraphConfig:
-    """Graph-extraction-specific AST types and behavior flags.
-
-    Shared fields (import_types, function_scope_types, class_scope_types)
-    live on the base language config; this holds the *extras* that only
-    the graph extractor needs.
-    """
-
-    call_types: tuple[str, ...]
-    assignment_types: tuple[str, ...] = ("assignment",)
-    class_body_types: tuple[str, ...] = ("block",)
-    typed_param_types: tuple[str, ...] = ("typed_parameter",)
-    extra_class_scope_types: tuple[str, ...] = ()
-    builtins: frozenset[str] = field(default_factory=frozenset)
-    # "self." for Python, "this." for JS/TS, "" when N/A
-    self_prefix: str = ""
-    super_prefixes: tuple[str, ...] = ("super().", "super.")
-    # Tuple-based dispatch: empty tuple = feature disabled for this language.
-    decorator_types: tuple[str, ...] = ()
-    with_types: tuple[str, ...] = ()
-    tracks_property_types: bool = False
-
-
 # ---------------------------------------------------------------------------
 # Protocol — structural contract for all language configs.
 # ---------------------------------------------------------------------------
@@ -74,7 +48,8 @@ class LanguageConfigProtocol(Protocol):
     """Structural contract for language configs.
 
     Every language provides shared AST node types and domain-specific
-    sub-configs for skeleton, chunker, and graph extraction.
+    sub-configs for skeleton and chunker. Graph extraction uses
+    ``coderay.graph.plugins`` descriptors, not fields on this config.
     """
 
     name: str
@@ -87,7 +62,6 @@ class LanguageConfigProtocol(Protocol):
     decorator_scope_types: tuple[str, ...]
     skeleton: SkeletonConfig
     chunker: ChunkerConfig
-    graph: GraphConfig
 
 
 # ---------------------------------------------------------------------------
@@ -150,16 +124,6 @@ class PythonConfig:
             ),
         ),
     )
-    graph: GraphConfig = field(
-        default_factory=lambda: GraphConfig(
-            call_types=("call",),
-            builtins=PYTHON_ALL_BUILTINS,
-            self_prefix="self.",
-            decorator_types=("decorator",),
-            with_types=("with_statement",),
-            tracks_property_types=True,
-        ),
-    )
 
 
 # JS and TS share AST structure; only extensions and language_fn differ.
@@ -192,22 +156,6 @@ def _js_ts_chunker() -> ChunkerConfig:
     )
 
 
-def _js_ts_graph() -> GraphConfig:
-    return GraphConfig(
-        call_types=("call_expression",),
-        assignment_types=("assignment_expression", "variable_declarator"),
-        class_body_types=("block", "class_body"),
-        typed_param_types=(
-            "typed_parameter",
-            "required_parameter",
-            "optional_parameter",
-        ),
-        extra_class_scope_types=("interface_declaration",),
-        builtins=JS_TS_BUILTINS,
-        self_prefix="this.",
-    )
-
-
 _JS_TS_IMPORT_TYPES: tuple[str, ...] = ("import_statement",)
 _JS_TS_FUNCTION_SCOPE_TYPES: tuple[str, ...] = (
     "function_declaration",
@@ -231,7 +179,6 @@ class JavaScriptConfig:
     decorator_scope_types: tuple[str, ...] = ()
     skeleton: SkeletonConfig = field(default_factory=_js_ts_skeleton)
     chunker: ChunkerConfig = field(default_factory=_js_ts_chunker)
-    graph: GraphConfig = field(default_factory=_js_ts_graph)
 
 
 @dataclass
@@ -248,7 +195,6 @@ class TypeScriptConfig:
     decorator_scope_types: tuple[str, ...] = ()
     skeleton: SkeletonConfig = field(default_factory=_js_ts_skeleton)
     chunker: ChunkerConfig = field(default_factory=_js_ts_chunker)
-    graph: GraphConfig = field(default_factory=_js_ts_graph)
 
 
 # ---------------------------------------------------------------------------
