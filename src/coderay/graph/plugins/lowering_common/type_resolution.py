@@ -54,7 +54,7 @@ class TypeResolutionCoreMixin:
         current = node.parent
         class_names: list[str] = []
         while current:
-            if current.type in self._ctx.lang_cfg.class_scope_types:
+            if current.type in self._ctx.lang_cfg.cst.class_scope_types:
                 name_node = current.child_by_field_name("name") or (
                     current.named_children[0] if current.named_children else None
                 )
@@ -120,7 +120,7 @@ class TypeResolutionCoreMixin:
         """Walk up tree to find enclosing function definition."""
         current = node.parent
         while current:
-            if current.type in self._ctx.lang_cfg.function_scope_types:
+            if current.type in self._ctx.lang_cfg.cst.function_scope_types:
                 return current
             current = current.parent
         return None

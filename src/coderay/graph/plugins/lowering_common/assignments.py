@@ -72,7 +72,7 @@ class AssignmentCoreMixin:
                     self._file_ctx.register_alias(
                         lhs_name, f"{prefix_resolved}::{attr}"
                     )
-        elif rhs.type in self._desc.call_types:
+        elif rhs.type in self._ctx.lang_cfg.cst.call_types:
             self._register_assignment_from_call(lhs_name, rhs, node, scope_stack)
 
     def _register_assignment_from_call(

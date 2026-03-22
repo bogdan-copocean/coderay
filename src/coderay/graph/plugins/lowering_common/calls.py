@@ -163,9 +163,7 @@ class CallFactMixin:
         """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
-        class_types = (
-            self._ctx.lang_cfg.class_scope_types + self._desc.extra_class_scope_types
-        )
+        class_types = self._ctx.lang_cfg.cst.class_scope_types
 
         def find_class(node: TSNode) -> TSNode | None:
             if node.type in class_types:
@@ -201,7 +199,7 @@ class CallFactMixin:
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
-        if parent is None or parent.type not in self._desc.assignment_types:
+        if parent is None or parent.type not in self._ctx.lang_cfg.cst.assignment_types:
             return
 
         lhs = (

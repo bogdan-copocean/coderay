@@ -18,6 +18,7 @@ from coderay.graph.plugins.lowering_common import (
     DefinitionFactMixin,
 )
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext
+from coderay.parsing.cst_kind import TraversalKind, classify_node
 
 TSNode = Any
 
@@ -73,22 +74,22 @@ class JsTsGraphExtractor(
         return self._facts
 
     def _dfs(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Walk the AST."""
+        """Walk the CST."""
         ntype = node.type
         cfg = self._ctx.lang_cfg
-        desc = self._desc
+        kind = classify_node(ntype, cfg)
 
-        if ntype in cfg.import_types:
+        if kind == TraversalKind.IMPORT:
             self._handle_import(node, scope_stack=scope_stack)
-        elif ntype in cfg.function_scope_types:
+        elif kind == TraversalKind.FUNCTION:
             self._handle_function_def(node, scope_stack=scope_stack)
             return
-        elif ntype in cfg.class_scope_types or ntype in desc.extra_class_scope_types:
+        elif kind == TraversalKind.CLASS:
             self._handle_class_def(node, scope_stack=scope_stack)
             return
-        elif ntype in desc.call_types:
+        elif kind == TraversalKind.CALL:
             self._handle_call(node, scope_stack=scope_stack)
-        elif ntype in desc.assignment_types:
+        elif kind == TraversalKind.ASSIGNMENT:
             self._handle_assignment(node, scope_stack=scope_stack)
 
         for child in node.children:

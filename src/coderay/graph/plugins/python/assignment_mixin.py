@@ -64,12 +64,18 @@ class PythonAssignmentMixin(AssignmentCoreMixin):
         if value.type == "as_pattern":
             target_node = value.child_by_field_name("alias")
             call_node = next(
-                (c for c in value.named_children if c.type in self._desc.call_types),
+                (
+                    c
+                    for c in value.named_children
+                    if c.type in self._ctx.lang_cfg.cst.call_types
+                ),
                 None,
             )
         else:
             target_node = value if value.type == "as_pattern_target" else None
-            call_node = value if value.type in self._desc.call_types else None
+            call_node = (
+                value if value.type in self._ctx.lang_cfg.cst.call_types else None
+            )
         if not call_node or not target_node:
             return
         var_name = self.node_text(target_node)
@@ -94,7 +100,7 @@ class PythonAssignmentMixin(AssignmentCoreMixin):
         if not identifiers:
             return
 
-        if rhs.type not in self._desc.call_types:
+        if rhs.type not in self._ctx.lang_cfg.cst.call_types:
             return
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:

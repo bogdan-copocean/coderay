@@ -17,9 +17,8 @@ class PythonTypeResolutionMixin(TypeResolutionCoreMixin):
     def _find_method_in_class(self, class_name: str, method_name: str) -> TSNode | None:
         """Find method definition in class."""
         tree = self.get_tree()
-        class_types = (
-            self._ctx.lang_cfg.class_scope_types + self._desc.extra_class_scope_types
-        )
+        dispatch = self._ctx.lang_cfg.cst
+        class_types = dispatch.class_scope_types
         body_types = self._desc.class_body_types
 
         def find_class(n: TSNode) -> TSNode | None:
@@ -77,7 +76,7 @@ class PythonTypeResolutionMixin(TypeResolutionCoreMixin):
         return None
 
     def _extract_tuple_type_args(self, type_node: TSNode) -> list[str]:
-        """Extract type args from tuple[X, Y, ...] via AST."""
+        """Extract type args from tuple[X, Y, ...] in the type CST subtree."""
         if type_node.type == "type" and type_node.named_children:
             type_node = type_node.named_children[0]
         if type_node.type != "generic_type":

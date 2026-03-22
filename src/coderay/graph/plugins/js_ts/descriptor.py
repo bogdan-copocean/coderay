@@ -1,4 +1,4 @@
-"""JavaScript/TypeScript graph lowering: AST type names and builtins."""
+"""JS/TS graph lowering: policy not covered by ``CstDispatchConfig``."""
 
 from __future__ import annotations
 
@@ -9,17 +9,14 @@ from coderay.parsing.builtins import JS_TS_BUILTINS
 
 @dataclass
 class JsTsGraphDescriptor:
-    """Tree-sitter dispatch and call filtering for JS/TS graph lowering."""
+    """Class body shape, typed params, builtins, and call prefixes."""
 
-    call_types: tuple[str, ...] = ("call_expression",)
-    assignment_types: tuple[str, ...] = ("assignment_expression", "variable_declarator")
     class_body_types: tuple[str, ...] = ("block", "class_body")
     typed_param_types: tuple[str, ...] = (
         "typed_parameter",
         "required_parameter",
         "optional_parameter",
     )
-    extra_class_scope_types: tuple[str, ...] = ("interface_declaration",)
     builtins: frozenset[str] = field(default_factory=lambda: JS_TS_BUILTINS)
     self_prefix: str = "this."
     super_prefixes: tuple[str, ...] = ("super().", "super.")

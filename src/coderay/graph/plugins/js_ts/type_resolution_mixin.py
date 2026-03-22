@@ -17,9 +17,8 @@ class JsTsTypeResolutionMixin(TypeResolutionCoreMixin):
     def _find_method_in_class(self, class_name: str, method_name: str) -> TSNode | None:
         """Find method_definition in class body."""
         tree = self.get_tree()
-        class_types = (
-            self._ctx.lang_cfg.class_scope_types + self._desc.extra_class_scope_types
-        )
+        dispatch = self._ctx.lang_cfg.cst
+        class_types = dispatch.class_scope_types
         body_types = self._desc.class_body_types
 
         def find_class(n: TSNode) -> TSNode | None:
