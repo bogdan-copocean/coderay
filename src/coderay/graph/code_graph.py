@@ -11,6 +11,8 @@ from coderay.graph.identifiers import file_path_to_module_names
 
 logger = logging.getLogger(__name__)
 
+GRAPH_SCHEMA_VERSION = 2
+
 
 class CodeGraph:
     """Directed graph of code relationships."""
@@ -235,7 +237,8 @@ class CodeGraph:
             n.file_path for n in nodes if n.kind != NodeKind.MODULE
         }
         nodes = [
-            n for n in nodes
+            n
+            for n in nodes
             if n.kind != NodeKind.MODULE or n.file_path not in files_with_non_module
         ]
 
@@ -418,11 +421,16 @@ class CodeGraph:
             kind = data.get("kind", "")
             kind_val = kind.value if hasattr(kind, "value") else str(kind)
             edges_list.append({"source": u, "target": v, "kind": kind_val})
-        return {"nodes": nodes, "edges": edges_list}
+        return {
+            "schema_version": GRAPH_SCHEMA_VERSION,
+            "nodes": nodes,
+            "edges": edges_list,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CodeGraph:
-        """Load graph from dict produced by to_dict."""
+        """Load graph from dict produced by to_dict (schema v1 or v2)."""
+        _ = data.get("schema_version", 1)
         graph = cls()
         for nd in data.get("nodes", []):
             graph.add_node(

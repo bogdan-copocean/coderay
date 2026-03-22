@@ -1,17 +1,16 @@
-"""JS/TS import handler."""
+"""JS/TS import_statement lowering."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from coderay.core.models import EdgeKind, GraphEdge
 from coderay.graph._utils import resolve_relative_import
 
 TSNode = Any
 
 
 class JsTsImportHandler:
-    """Handle JS/TS import_statement: import { x } from './foo', import * as X from 'pkg'."""
+    """Handle JS/TS import_statement."""
 
     def handle(
         self, node: TSNode, parser: Any, *, scope_stack: list[str] | None = None
@@ -107,10 +106,4 @@ class JsTsImportHandler:
                 continue
             resolved_target = parser._file_ctx.resolve(local)
             edge_target = resolved_target if resolved_target else qualified
-            parser._edges.append(
-                GraphEdge(
-                    source=parser._module_id,
-                    target=edge_target,
-                    kind=EdgeKind.IMPORTS,
-                )
-            )
+            parser._add_import_edge(parser._module_id, edge_target)

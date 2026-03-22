@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from coderay.parsing.base import BaseTreeSitterParser, get_parse_context
+from coderay.parsing.cst_kind import TraversalKind, classify_node
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,11 @@ def _symbol_not_found_hint(ctx, symbol: str) -> str:
     names: list[str] = []
     for child in tree.root_node.children:
         node = child
-        if node.type in lang_cfg.decorator_scope_types:
+        if node.type in lang_cfg.cst.decorator_scope_types:
             for inner in node.named_children:
                 if inner.type in (
-                    *lang_cfg.function_scope_types,
-                    *lang_cfg.class_scope_types,
+                    *lang_cfg.cst.function_scope_types,
+                    *lang_cfg.cst.class_scope_types,
                 ):
                     node = inner
                     break
@@ -99,9 +100,8 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
 
         lang_cfg = self._ctx.lang_cfg
         scope_types = (
-            *lang_cfg.function_scope_types,
-            *lang_cfg.class_scope_types,
-            *lang_cfg.skeleton.extra_class_like_types,
+            *lang_cfg.cst.function_scope_types,
+            *lang_cfg.cst.class_scope_types,
         )
         if node.type in scope_types:
             body_block_types = lang_cfg.skeleton.body_block_types
@@ -168,17 +168,15 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         if depth >= len(parts) - 1:
             return True
         lang_cfg = self._ctx.lang_cfg
-        return node.type in (
-            lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
-        )
+        return node.type in lang_cfg.cst.class_scope_types
 
     def _decorated_inner(self, node):
         """Return inner class/function from decorated node."""
         lang_cfg = self._ctx.lang_cfg
         for child in node.named_children:
             if child.type in (
-                *lang_cfg.function_scope_types,
-                *lang_cfg.class_scope_types,
+                *lang_cfg.cst.function_scope_types,
+                *lang_cfg.cst.class_scope_types,
             ):
                 return child
         return None
@@ -191,18 +189,10 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         indent = "    " * depth
         ntype = node.type
         lang_cfg = self._ctx.lang_cfg
+        kind = classify_node(ntype, lang_cfg)
 
-        interesting = (
-            "module",
-            *lang_cfg.import_types,
-            *lang_cfg.function_scope_types,
-            *lang_cfg.class_scope_types,
-            *lang_cfg.skeleton.extra_class_like_types,
-            *lang_cfg.decorator_scope_types,
-        )
-
-        # Uninteresting nodes: pass through, but capture top-level constants/docstrings
-        if ntype not in interesting:
+        # Pass-through: capture optional top-level constants; align with classify_node.
+        if kind == TraversalKind.OTHER:
             skel_cfg = lang_cfg.skeleton
             if depth == 0 and ntype in skel_cfg.top_level_expr_types:
                 if self._symbol is None:
@@ -215,13 +205,13 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                 self._dfs(child, lines, depth)
             return
 
-        if ntype in lang_cfg.import_types:
+        if kind == TraversalKind.IMPORT:
             if self._include_imports and self._symbol is None:
                 lines.append(indent + self.node_text(node).strip())
             return
 
         # Decorated nodes: emit decorator lines, then recurse into the inner def/class
-        if ntype in lang_cfg.decorator_scope_types:
+        if kind == TraversalKind.DECORATED_DEFINITION:
             inner = self._decorated_inner(node)
             if inner is not None and not self._matches_symbol(inner, depth):
                 self._seen.add(node.id)
@@ -233,8 +223,8 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
                     self._seen.add(child.id)
                     continue
                 if child.type in (
-                    *lang_cfg.function_scope_types,
-                    *lang_cfg.class_scope_types,
+                    *lang_cfg.cst.function_scope_types,
+                    *lang_cfg.cst.class_scope_types,
                 ):
                     self._dfs(child, lines, depth)
                     break
@@ -242,7 +232,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             return
 
         # Functions: signature + docstring + ellipsis, no body traversal
-        if ntype in lang_cfg.function_scope_types:
+        if kind == TraversalKind.FUNCTION:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return
@@ -257,9 +247,7 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
             return
 
         # Classes: signature + docstring, then recurse into body at depth+1
-        if ntype in (
-            lang_cfg.class_scope_types + lang_cfg.skeleton.extra_class_like_types
-        ):
+        if kind == TraversalKind.CLASS:
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return

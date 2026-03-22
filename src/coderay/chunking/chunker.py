@@ -14,7 +14,7 @@ MODULE_SYMBOL = "<module>"
 class ChunkingTreeSitterParser(BaseTreeSitterParser):
     """Chunk a source file into semantic units using tree-sitter.
 
-    Reads ``lang_cfg.chunker.chunk_types`` to decide which AST nodes
+    Reads ``lang_cfg.chunker.chunk_types`` to decide which CST nodes
     become chunks. Works for all supported languages.
     """
 
@@ -36,8 +36,9 @@ class ChunkingTreeSitterParser(BaseTreeSitterParser):
                 )
             )
 
-        # DFS: top-level chunk nodes become chunks; nested ones are skipped
-        # (their parent chunk already contains them).
+        # DFS: chunk_types (see languages.ChunkerConfig) — top-level nodes become
+        # chunks; nested chunk types under a chunk parent are skipped (parent
+        # text already includes them). Independent of cst_kind.classify_node.
         def _dfs(node) -> None:
             if node.type in chunk_types:
                 parent = node.parent

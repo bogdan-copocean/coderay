@@ -1,18 +1,18 @@
-"""Call handling: CALLS edges, resolution, filtering."""
+"""Call and decorator lowering (shared by Python and JS/TS)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from coderay.core.models import EdgeKind, GraphEdge
 from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
+from coderay.graph.facts import CallsEdge
 from coderay.parsing.languages import get_supported_extensions
 
 TSNode = Any
 
 
-class CallHandlerMixin:
-    """Handle calls: CALLS edges and instantiation tracking."""
+class CallFactMixin:
+    """Handle calls: CALLS facts and instantiation tracking."""
 
     def _caller_id_from_scope(self, scope_stack: list[str]) -> str:
         """Return caller node ID for scope."""
@@ -20,8 +20,18 @@ class CallHandlerMixin:
             return f"{self.file_path}::{'.'.join(scope_stack)}"
         return self._module_id
 
+    def _add_call_edges(
+        self, caller_id: str, raw: str, callee_targets: list[str]
+    ) -> None:
+        """Append CALLS facts for resolved targets."""
+        for callee_name in callee_targets:
+            if self._is_excluded(callee_name, raw):
+                continue
+            if callee_name:
+                self._facts.append(CallsEdge(source_id=caller_id, target=callee_name))
+
     def _handle_call(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create CALLS edge to resolved callee."""
+        """Create CALLS facts to resolved callee."""
         caller_id = self._caller_id_from_scope(scope_stack)
 
         callee_node = node.child_by_field_name("function")
@@ -32,28 +42,11 @@ class CallHandlerMixin:
             return
 
         callee_targets = self._resolve_callee_targets(raw_callee, scope_stack)
-
-        for callee_name in callee_targets:
-            if self._is_excluded(callee_name, raw_callee):
-                continue
-            if callee_name:
-                self._edges.append(
-                    GraphEdge(
-                        source=caller_id,
-                        target=callee_name,
-                        kind=EdgeKind.CALLS,
-                    )
-                )
-
+        self._add_call_edges(caller_id, raw_callee, callee_targets)
         self._maybe_track_instantiation(node, raw_callee)
 
     def _resolve_callee_targets(self, raw: str, scope_stack: list[str]) -> list[str]:
         """Resolve callee to qualified targets."""
-        # Priority: super().method > self.method > bare name > obj.method chain
-        # e.g. "super().save"  → parent class method
-        #      "self.client"   → tracked instance method
-        #      "process"       → local def / import / unresolved bare name
-        #      "svc.run"       → instance tracking or import-based resolution
         result = self._resolve_super_targets(raw, scope_stack)
         if result is not None:
             return result
@@ -68,9 +61,8 @@ class CallHandlerMixin:
     def _resolve_super_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve super().method (Python) or super.method (JS) to parent method."""
-        # e.g. super_prefixes = ("super().", "super.")
-        for prefix in self._gc.super_prefixes:
+        """Resolve super().method to parent method."""
+        for prefix in self._desc.super_prefixes:
             if raw.startswith(prefix):
                 method = raw[len(prefix) :]
                 target = self._resolve_super_call(scope_stack, method)
@@ -80,8 +72,8 @@ class CallHandlerMixin:
     def _resolve_self_targets(
         self, raw: str, scope_stack: list[str]
     ) -> list[str] | None:
-        """Resolve self.method() or this.method() via instance/class attrs."""
-        self_prefix = self._gc.self_prefix
+        """Resolve self.method via instance/class attrs."""
+        self_prefix = self._desc.self_prefix
         if not self_prefix or not raw.startswith(self_prefix):
             return None
         suffix = raw.split(".", 1)[1]
@@ -145,24 +137,20 @@ class CallHandlerMixin:
 
     def _is_excluded(self, resolved: str, raw: str) -> bool:
         """Return True if callee is excluded (builtins, typing, etc.)."""
-        # Skip calls into excluded modules (builtins, typing, ...)
         if "::" in resolved:
-            module_part = resolved.split("::")[0]
+            module_part = resolved.split("::", 1)[0]
             if module_part in self._excluded_modules:
                 return True
-        # Only filter builtin names when completely unresolved (resolved == bare).
-        # Resolved calls like "mymodule::append" pass through.
         bare = raw.rsplit(".", 1)[-1]
         if resolved != bare:
             return False
-        return bare in self._gc.builtins
+        return bare in self._desc.builtins
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
         """Resolve super().method() to parent method."""
         class_qualified = self._find_enclosing_class(scope_stack)
         if not class_qualified:
             return None
-        # Find the class node and its first base class
         base_name = self._get_first_base_class(class_qualified)
         if not base_name:
             return None
@@ -175,9 +163,7 @@ class CallHandlerMixin:
         """Return first base class name for class."""
         tree = self.get_tree()
         target_class = class_qualified.split(".")[-1]
-        class_types = (
-            self._ctx.lang_cfg.class_scope_types + self._gc.extra_class_scope_types
-        )
+        class_types = self._ctx.lang_cfg.cst.class_scope_types
 
         def find_class(node: TSNode) -> TSNode | None:
             if node.type in class_types:
@@ -213,7 +199,7 @@ class CallHandlerMixin:
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Track x = SomeClass() as instance for call resolution."""
         parent = call_node.parent
-        if parent is None or parent.type not in self._gc.assignment_types:
+        if parent is None or parent.type not in self._ctx.lang_cfg.cst.assignment_types:
             return
 
         lhs = (
@@ -228,13 +214,13 @@ class CallHandlerMixin:
             var_name = self.node_text(lhs)
         elif lhs.type == "attribute":
             var_name = self.node_text(lhs)
-            self_prefix = self._gc.self_prefix
+            self_prefix = self._desc.self_prefix
             if not self_prefix or not var_name.startswith(self_prefix):
-                return  # Only track self.attr = X(), not other.attr = X()
+                return
         else:
             return
 
-        callee_base = raw_callee.rsplit(".", 1)[-1]  # "ApiClient.create" → "create"
+        callee_base = raw_callee.rsplit(".", 1)[-1]
         if not callee_base:
             return
 
@@ -242,11 +228,9 @@ class CallHandlerMixin:
         is_known_class = self._file_ctx.is_class(callee_base)
         is_likely_class = bool(callee_base[0].isupper() and resolved is not None)
 
-        # Only register if this looks like a class instantiation
         if is_known_class or is_likely_class:
             self._file_ctx.register_instance(var_name, resolved or callee_base)
-            # Also register for class (enables service.client.get resolution)
-            if self._gc.self_prefix and var_name.startswith(self._gc.self_prefix):
+            if self._desc.self_prefix and var_name.startswith(self._desc.self_prefix):
                 func_node = self._get_enclosing_function_node(call_node)
                 if func_node:
                     class_qualified = self._find_enclosing_class_from_node(func_node)
@@ -257,11 +241,10 @@ class CallHandlerMixin:
                         )
 
     def _handle_decorator(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Create CALLS edge to decorator target (Python only)."""
+        """Create CALLS facts for decorator targets."""
         text = self.node_text(node).strip()
         if not text or not text.startswith("@"):
             return
-        # Strip @ and any trailing call parens: @foo.bar(args) -> foo.bar
         target_raw = text[1:].strip()
         if "(" in target_raw:
             target_raw = target_raw[: target_raw.index("(")].strip()
@@ -270,14 +253,4 @@ class CallHandlerMixin:
 
         callee_targets = self._resolve_callee_targets(target_raw, scope_stack)
         caller_id = self._caller_id_from_scope(scope_stack)
-        for callee_name in callee_targets:
-            if self._is_excluded(callee_name, target_raw):
-                continue
-            if callee_name:
-                self._edges.append(
-                    GraphEdge(
-                        source=caller_id,
-                        target=callee_name,
-                        kind=EdgeKind.CALLS,
-                    )
-                )
+        self._add_call_edges(caller_id, target_raw, callee_targets)
