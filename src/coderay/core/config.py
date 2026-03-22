@@ -152,33 +152,13 @@ def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
     return BoostingConfig(penalties=penalties, bonuses=bonuses)
 
 
-def _coerce_embedder_dict(raw: dict[str, Any]) -> dict[str, Any]:
-    """Normalize legacy flat embedder keys into fastembed/mlx sections."""
-    if not raw:
-        return {}
-    if "fastembed" in raw or "mlx" in raw:
-        return raw
-    return {
-        "backend": raw.get("backend", "auto"),
-        "fastembed": {
-            "model": raw.get("model", FastembedEmbedderConfig.model),
-            "dimensions": int(raw.get("dimensions", 768)),
-        },
-        "mlx": {
-            "model": raw.get("mlx_model", MlxEmbedderConfig.model),
-            "dimensions": int(raw.get("mlx_dimensions", raw.get("dimensions", 768))),
-            "max_length": int(raw.get("mlx_max_length", MlxEmbedderConfig.max_length)),
-        },
-    }
-
-
 def _parse_embedder_config(data: dict[str, Any]) -> EmbedderConfig:
     """Build EmbedderConfig from merged or YAML dict."""
-    coerced = _coerce_embedder_dict(data or {})
+    d = data or {}
     return EmbedderConfig(
-        backend=str(coerced.get("backend", "auto")),
-        fastembed=FastembedEmbedderConfig(**(coerced.get("fastembed") or {})),
-        mlx=MlxEmbedderConfig(**(coerced.get("mlx") or {})),
+        backend=str(d.get("backend", "auto")),
+        fastembed=FastembedEmbedderConfig(**(d.get("fastembed") or {})),
+        mlx=MlxEmbedderConfig(**(d.get("mlx") or {})),
     )
 
 
@@ -257,10 +237,6 @@ def _load_config_impl() -> Config:
 
 def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
     """Apply validated overrides to default config."""
-    overrides = dict(overrides)
-    if "embedder" in overrides and isinstance(overrides["embedder"], dict):
-        overrides["embedder"] = _coerce_embedder_dict(overrides["embedder"])
-
     base: dict[str, Any] = asdict(Config())
 
     def _merge_section(

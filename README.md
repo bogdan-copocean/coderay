@@ -157,5 +157,3 @@ graph:
   include_modules: []  # force-include (override excludes)
 ```
 
-Legacy one-level keys under `embedder` (`model`, `dimensions`, `mlx_model`, …) are still accepted and mapped into `fastembed` / `mlx` automatically.
-

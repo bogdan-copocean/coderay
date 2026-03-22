@@ -21,7 +21,9 @@ class TestGetConfig:
 
     def test_with_yaml_overrides(self, tmp_path, monkeypatch):
         monkeypatch.setenv(ENV_INDEX_DIR, str(tmp_path))
-        (tmp_path / "config.yaml").write_text("embedder:\n  dimensions: 64\n")
+        (tmp_path / "config.yaml").write_text(
+            "embedder:\n  backend: fastembed\n  fastembed:\n    dimensions: 64\n"
+        )
         _reset_config_for_testing(None)
         cfg = get_config()
         assert cfg.embedder.effective_dimensions() == 64
