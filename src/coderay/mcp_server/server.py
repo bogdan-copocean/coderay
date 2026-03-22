@@ -83,7 +83,7 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
         "each with path, line range, symbol, score, content, and a "
         "relevance tier ('high', 'medium', or 'low'). "
         "Best for 'how/where' questions; use grep for exact symbols or keywords. "
-        "Queries with 3 or fewer words will return an error; use at least 4 meaningful words."
+        "Avoid empty or single-character queries."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
