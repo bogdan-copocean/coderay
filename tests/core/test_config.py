@@ -16,7 +16,7 @@ class TestGetConfig:
         _reset_config_for_testing(None)
         cfg = get_config()
         assert isinstance(cfg, Config)
-        assert cfg.embedder.dimensions == 384
+        assert cfg.embedder.effective_dimensions() == 768
         assert Path(cfg.index.path) == tmp_path
 
     def test_with_yaml_overrides(self, tmp_path, monkeypatch):
@@ -24,4 +24,4 @@ class TestGetConfig:
         (tmp_path / "config.yaml").write_text("embedder:\n  dimensions: 64\n")
         _reset_config_for_testing(None)
         cfg = get_config()
-        assert cfg.embedder.dimensions == 64
+        assert cfg.embedder.effective_dimensions() == 64

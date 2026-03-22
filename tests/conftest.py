@@ -10,7 +10,9 @@ import pytest
 from coderay.core.config import (
     Config,
     EmbedderConfig,
+    FastembedEmbedderConfig,
     IndexConfig,
+    MlxEmbedderConfig,
     _reset_config_for_testing,
 )
 from coderay.core.models import Chunk
@@ -36,7 +38,10 @@ class MockEmbedder(Embedder):
 
 
 MOCK_CONFIG: Config = Config(
-    embedder=EmbedderConfig(dimensions=MockEmbedder.DIMS),
+    embedder=EmbedderConfig(
+        fastembed=FastembedEmbedderConfig(dimensions=MockEmbedder.DIMS),
+        mlx=MlxEmbedderConfig(dimensions=MockEmbedder.DIMS),
+    ),
 )
 
 SAMPLE_PYTHON = """\
@@ -178,7 +183,10 @@ def app_config(tmp_path: Path) -> Config:
     idx.mkdir()
     cfg = Config(
         index=IndexConfig(path=str(idx)),
-        embedder=EmbedderConfig(dimensions=MockEmbedder.DIMS),
+        embedder=EmbedderConfig(
+            fastembed=FastembedEmbedderConfig(dimensions=MockEmbedder.DIMS),
+            mlx=MlxEmbedderConfig(dimensions=MockEmbedder.DIMS),
+        ),
     )
     _reset_config_for_testing(cfg)
     yield cfg
@@ -187,8 +195,8 @@ def app_config(tmp_path: Path) -> Config:
 
 @pytest.fixture
 def default_config() -> Config:
-    """Reset global config to default."""
-    cfg = Config()
+    """Reset global config; pin embedder to fastembed so tests are OS-agnostic."""
+    cfg = Config(embedder=EmbedderConfig(backend="fastembed"))
     _reset_config_for_testing(cfg)
     yield cfg
     _reset_config_for_testing(None)

@@ -8,6 +8,8 @@ from typing import Annotated, Any
 
 import yaml
 
+from coderay.embedding.backend_resolve import resolved_embedder_backend
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,9 +24,35 @@ ENV_CONFIG_FILE = "CODERAY_CONFIG_FILE"
 
 
 @dataclass(frozen=True)
+class FastembedEmbedderConfig:
+    """ONNX / CPU path via fastembed."""
+
+    model: str = "nomic-ai/nomic-embed-text-v1.5"
+    dimensions: int = 768
+
+
+@dataclass(frozen=True)
+class MlxEmbedderConfig:
+    """Apple Silicon path via mlx-embeddings."""
+
+    model: str = "mlx-community/nomicai-modernbert-embed-base-4bit"
+    dimensions: int = 768
+    # 8192 is supported but very slow for indexing; raise in config if needed.
+    max_length: int = 2048
+
+
+@dataclass(frozen=True)
 class EmbedderConfig:
-    model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    dimensions: int = 384
+    """Embedding: pick backend; each backend has its own model and dimensions."""
+
+    backend: str = "auto"
+    fastembed: FastembedEmbedderConfig = field(default_factory=FastembedEmbedderConfig)
+    mlx: MlxEmbedderConfig = field(default_factory=MlxEmbedderConfig)
+
+    def effective_dimensions(self) -> int:
+        """Return vector size for the resolved backend (auto picks MLX or fastembed)."""
+        b = resolved_embedder_backend(self.backend)
+        return self.mlx.dimensions if b == "mlx" else self.fastembed.dimensions
 
 
 @dataclass(frozen=True)
@@ -79,6 +107,7 @@ def _default_boosting() -> BoostingConfig:
 class SemanticSearchConfig:
     boosting: BoostingConfig = field(default_factory=_default_boosting)
     metric: str = "cosine"
+    hybrid: bool = True
 
 
 @dataclass(frozen=True)
@@ -123,12 +152,43 @@ def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
     return BoostingConfig(penalties=penalties, bonuses=bonuses)
 
 
+def _coerce_embedder_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy flat embedder keys into fastembed/mlx sections."""
+    if not raw:
+        return {}
+    if "fastembed" in raw or "mlx" in raw:
+        return raw
+    return {
+        "backend": raw.get("backend", "auto"),
+        "fastembed": {
+            "model": raw.get("model", FastembedEmbedderConfig.model),
+            "dimensions": int(raw.get("dimensions", 768)),
+        },
+        "mlx": {
+            "model": raw.get("mlx_model", MlxEmbedderConfig.model),
+            "dimensions": int(raw.get("mlx_dimensions", raw.get("dimensions", 768))),
+            "max_length": int(raw.get("mlx_max_length", MlxEmbedderConfig.max_length)),
+        },
+    }
+
+
+def _parse_embedder_config(data: dict[str, Any]) -> EmbedderConfig:
+    """Build EmbedderConfig from merged or YAML dict."""
+    coerced = _coerce_embedder_dict(data or {})
+    return EmbedderConfig(
+        backend=str(coerced.get("backend", "auto")),
+        fastembed=FastembedEmbedderConfig(**(coerced.get("fastembed") or {})),
+        mlx=MlxEmbedderConfig(**(coerced.get("mlx") or {})),
+    )
+
+
 def _parse_semantic_search(data: dict[str, Any]) -> SemanticSearchConfig:
     """Parse dict into SemanticSearchConfig."""
     boosting_data = data.get("boosting") or {}
     return SemanticSearchConfig(
         boosting=_parse_boosting(boosting_data),
         metric=data.get("metric", "cosine"),
+        hybrid=data.get("hybrid", True),
     )
 
 
@@ -185,7 +245,7 @@ def _load_config_impl() -> Config:
     index_dict["path"] = str(index_dir)
     default_data["index"] = index_dict
     return Config(
-        embedder=EmbedderConfig(**default_data.get("embedder", {})),
+        embedder=_parse_embedder_config(default_data.get("embedder") or {}),
         index=IndexConfig(**default_data.get("index", {})),
         semantic_search=_parse_semantic_search(
             default_data.get("semantic_search", {}) or {}
@@ -197,6 +257,10 @@ def _load_config_impl() -> Config:
 
 def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
     """Apply validated overrides to default config."""
+    overrides = dict(overrides)
+    if "embedder" in overrides and isinstance(overrides["embedder"], dict):
+        overrides["embedder"] = _coerce_embedder_dict(overrides["embedder"])
+
     base: dict[str, Any] = asdict(Config())
 
     def _merge_section(
@@ -261,7 +325,7 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
     merged["index"] = index_dict
 
     return Config(
-        embedder=EmbedderConfig(**merged.get("embedder", {})),
+        embedder=_parse_embedder_config(merged.get("embedder") or {}),
         index=IndexConfig(**merged.get("index", {})),
         semantic_search=_parse_semantic_search(merged.get("semantic_search", {}) or {}),
         watcher=WatcherConfig(**merged.get("watcher", {})),
