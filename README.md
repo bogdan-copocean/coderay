@@ -30,11 +30,13 @@ Then install:
 pip install coderay
 ```
 
-With all extras (JS/TS/Go support, MCP server tools):
+With all extras (development tools):
 
 ```bash
 pip install "coderay[all]"
 ```
+
+With `embedder.backend: auto` (default), CodeRay uses **MLX** on Apple Silicon (those wheels install automatically with `pip install coderay`) and **fastembed** elsewhere (CPU ONNX). Override with `backend: fastembed` or `backend: mlx`. Run `coderay build --full` after switching backends or models.
 
 For development:
 
@@ -105,9 +107,11 @@ Run `coderay build` (or `coderay watch`) from the project root first.
 
 ## Embedding
 
-Embedding is **offline-first**: the model loads from the local cache only, with no HuggingFace API calls. On first use, if the model is not cached, it downloads automatically (one-time, requires network). No manual steps.
+Embedding is **offline-first**: models load from the local cache. With **`backend: auto`** (default), Apple Silicon uses MLX (installed as a core dependency on that platform); otherwise ONNX via fastembed on CPU. On first use, if the model is not cached, it downloads automatically (one-time, requires network).
 
-If you previously used a different model, run `coderay build --full` after upgrading.
+The default model is **Nomic Embed v1.5** (`nomic-ai/nomic-embed-text-v1.5`, 768d, full ONNX). Chunks are embedded as `path`, `symbol`, then source text so identifiers and paths influence retrieval (for example queries like `lancedb` match file paths and symbols, not only error message bodies). Long bodies are tokenized by the model (up to a large context window); `EMBED_MAX_CHARS` caps raw string length (default 120000) to bound memory.
+
+If you change embedder backend, either backend’s model/dimensions, or MLX `max_length`, run **`coderay build --full`** so the index matches the new vectors.
 
 ## Configuration
 
@@ -117,14 +121,21 @@ Optional `config.yaml` in the index directory (default: `.index/config.yaml`):
 
 ```yaml
 embedder:
-  model: sentence-transformers/all-MiniLM-L6-v2
-  dimensions: 384
+  backend: auto   # auto | fastembed | mlx
+  fastembed:
+    model: nomic-ai/nomic-embed-text-v1.5
+    dimensions: 768
+  mlx:
+    model: mlx-community/nomicai-modernbert-embed-base-4bit
+    dimensions: 768
+    max_length: 2048   # increase (e.g. 8192) only if chunks need longer context (slower)
 
 index:
   exclude_patterns:  # besides .gitignore
     - "*.log"
 
 semantic_search:
+  hybrid: true   # vector + FTS on path/symbol/body; set false for vector-only
   boosting:
     penalties:
       - pattern: "(^|/)tests?/"
@@ -145,4 +156,6 @@ graph:
   exclude_modules: []   # module names to exclude from CALLS/IMPORTS edges
   include_modules: []  # force-include (override excludes)
 ```
+
+Legacy one-level keys under `embedder` (`model`, `dimensions`, `mlx_model`, …) are still accepted and mapped into `fastembed` / `mlx` automatically.
 

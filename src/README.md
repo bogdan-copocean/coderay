@@ -6,7 +6,7 @@
 | [chunking](chunking/)     | Tree-sitter parsing and semantic code chunking           |
 | [cli](cli/)               | Click-based command-line interface                       |
 | [core](core/)             | Config, domain models, file locking, timing, utilities   |
-| [embedding](embedding/)   | Embedder abstraction (local ONNX via fastembed)         |
+| [embedding](embedding/)   | Embedder abstraction (fastembed CPU; optional MLX on Apple Silicon) |
 | [graph](graph/)           | Code relationship graph (calls, imports, inheritance)    |
 | [mcp_server](mcp_server/) | MCP server for AI assistant integration                  |
 | [pipeline](pipeline/)     | Index build/update orchestration and file watcher        |
