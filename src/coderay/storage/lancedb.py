@@ -65,7 +65,7 @@ class Store:
         cfg = get_config()
         self._config = cfg
         self.db_path = Path(cfg.index.path)
-        self.dimensions = cfg.embedder.dimensions
+        self.dimensions = cfg.embedder.effective_dimensions()
         self.metric = cfg.semantic_search.metric
         self._ensure_dir()
         self._db = lancedb.connect(str(self.db_path))
@@ -102,6 +102,7 @@ class Store:
                     f"Embedding dimension {len(emb)} "
                     f"!= store dimension {self.dimensions}"
                 )
+            lexical = f"{chunk.path}\n{chunk.symbol}\n{chunk.content}"
             rows.append(
                 {
                     "path": chunk.path,
@@ -109,6 +110,7 @@ class Store:
                     "end_line": chunk.end_line,
                     "symbol": chunk.symbol,
                     "content": chunk.content,
+                    "search_text": lexical,
                     "vector": emb,
                 }
             )
@@ -124,7 +126,7 @@ class Store:
         """Create/replace FTS index on content column."""
         try:
             table.create_fts_index(
-                "content",
+                "search_text",
                 replace=True,
                 use_tantivy=False,
             )
@@ -175,20 +177,24 @@ class Store:
     ) -> list[dict[str, Any]]:
         """Run vector or hybrid search."""
 
-        # heuristics: arbitrary choice
-        if isinstance(query_text, str) and len(query_text.strip().split(" ")) <= 3:
-            raise SearchError("Too few tokens to embed; use ripgrep instead")
+        if query_text is not None:
+            qt = str(query_text).strip()
+            if not qt:
+                raise SearchError("Empty query")
+            if len(qt) < 2:
+                raise SearchError(
+                    "Query too short; use ripgrep for keyward search"
+                )
 
         if not self._table_exists():
             return []
         table = self._get_table()
 
-        # TODO: hybrid search seems to return poor results; needs rework
-        # defaults to vector search
-        use_hybrid = False
+        hybrid_enabled = bool(self._config.semantic_search.hybrid)
         rows = None
+        used_hybrid = False
 
-        if use_hybrid:
+        if hybrid_enabled and query_text is not None:
             rows = self._try_hybrid_search(
                 table=table,
                 query_embedding=query_embedding,
@@ -197,8 +203,8 @@ class Store:
                 path_prefix=path_prefix,
                 include_tests=include_tests,
             )
-            if rows is None:
-                use_hybrid = False
+            if rows is not None:
+                used_hybrid = True
 
         if rows is None:
             rows = self._vector_search(
@@ -209,11 +215,11 @@ class Store:
                 include_tests=include_tests,
             )
 
-        if use_hybrid:
+        if used_hybrid:
             self._hybrid_failures = 0
 
-        score_mode = _ScoreField.RELEVANCE if use_hybrid else _ScoreField.DISTANCE
-        search_mode = "hybrid" if use_hybrid else "vector"
+        score_mode = _ScoreField.RELEVANCE if used_hybrid else _ScoreField.DISTANCE
+        search_mode = "hybrid" if used_hybrid else "vector"
 
         results = []
         for r in rows:
@@ -221,6 +227,7 @@ class Store:
             row["score"] = round(float(_extract_score(row, score_mode)), 4)
             row["search_mode"] = search_mode
             row.pop("vector", None)
+            row.pop("search_text", None)
             results.append(row)
 
         return results
@@ -240,9 +247,10 @@ class Store:
             self._fts_stale = False
         try:
             query = (
-                table.search(query_type="hybrid")
+                table.search(query_type="hybrid", fts_columns="search_text")
                 .vector(query_embedding)
                 .text(query_text)
+                .distance_type(self.metric)
                 .rerank(reranker=_RERANKER)
             )
             if path_prefix:
@@ -283,7 +291,7 @@ class Store:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
             query = query.where(f"path LIKE '{prefix}%'")
         if not include_tests:
-            query = query.where("path NOT LIKE '%test%'")
+            query = query.where("path NOT ILIKE '%test%'")
 
         return query.limit(top_k).to_list()
 
