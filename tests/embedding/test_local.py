@@ -19,13 +19,13 @@ class TestLocalEmbedder:
         e = LocalEmbedder()
         mock_model = MagicMock()
         mock_model.embed.return_value = iter(
-            [np.array([0.1] * 384), np.array([0.2] * 384)]
+            [np.array([0.1] * 768), np.array([0.2] * 768)]
         )
         e._model = mock_model
 
         result = e.embed(["hello", "world"])
         assert len(result) == 2
-        assert len(result[0]) == 384
+        assert len(result[0]) == 768
         mock_model.embed.assert_called_once()
 
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
@@ -33,7 +33,7 @@ class TestLocalEmbedder:
         e = LocalEmbedder()
         assert e._model is None
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 384)])
+        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
 
         def _fake_load():
             e._model = mock_model
@@ -46,7 +46,7 @@ class TestLocalEmbedder:
     def test_truncates_long_text(self, mock_load):
         e = LocalEmbedder()
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 384)])
+        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
         e._model = mock_model
 
         long_text = "x" * 20000

@@ -38,10 +38,24 @@ def load_embedder_from_config() -> Embedder:
     """Build Embedder from application config."""
 
     from coderay.core.config import get_config
+    from coderay.embedding.backend_resolve import resolved_embedder_backend
     from coderay.embedding.local import LocalEmbedder
+    from coderay.embedding.mlx_backend import MlxEmbedder
 
     config = get_config()
+    ed = config.embedder
+    backend = resolved_embedder_backend(ed.backend)
+    if (ed.backend or "auto").strip().lower() == "auto":
+        logger.info("embedder.backend=auto -> %s", backend)
+    if backend == "mlx":
+        mx = ed.mlx
+        return MlxEmbedder(
+            model_id=mx.model,
+            dimensions=mx.dimensions,
+            max_length=mx.max_length,
+        )
+    fe = ed.fastembed
     return LocalEmbedder(
-        model=config.embedder.model,
-        dimensions=config.embedder.dimensions,
+        model=fe.model,
+        dimensions=fe.dimensions,
     )

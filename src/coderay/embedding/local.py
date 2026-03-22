@@ -3,15 +3,20 @@ from __future__ import annotations
 import logging
 import os
 
+from onnxruntime.capi.onnxruntime_pybind11_state import NoSuchFile
+
 from coderay.embedding.base import Embedder, EmbedTask
+from coderay.embedding.prefixes import NOMIC_PREFIXES
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-DEFAULT_DIMENSIONS = 384
+# Full ONNX weights (`onnx/model.onnx`); `-Q` uses `model_quantized.onnx` which may be
+# absent from some HF snapshots — see _load_model fallback.
+DEFAULT_MODEL = "nomic-ai/nomic-embed-text-v1.5"
+DEFAULT_DIMENSIONS = 768
 
-# all-MiniLM-L6-v2 supports 256 tokens (~384 chars). Truncate early to avoid waste.
-MAX_CHARS = 384
+# Nomic v1.5 supports ~8192 tokens; cap raw chars to bound memory (tokenizer truncates).
+_DEFAULT_MAX_CHARS = 120_000
 
 # Number of parallel ONNX workers (0 = auto based on CPU cores)
 _PARALLEL_WORKERS = int(os.environ.get("EMBED_WORKERS", 0)) or None
@@ -19,17 +24,15 @@ _PARALLEL_WORKERS = int(os.environ.get("EMBED_WORKERS", 0)) or None
 # Batch size for embedding; lower if OOM (e.g. EMBED_BATCH_SIZE=32)
 _BATCH_SIZE = int(os.environ.get("EMBED_BATCH_SIZE", 64))
 
+_MAX_CHARS = int(os.environ.get("EMBED_MAX_CHARS", _DEFAULT_MAX_CHARS))
+
+# Tests and tooling may reference the active char cap.
+MAX_CHARS = _MAX_CHARS
+
 # Model-specific task prefixes for asymmetric retrieval.
-# Models not listed here get no prefix (symmetric embedding).
 _TASK_PREFIXES: dict[str, dict[EmbedTask, str]] = {
-    "nomic-ai/nomic-embed-text-v1.5": {
-        EmbedTask.DOCUMENT: "search_document: ",
-        EmbedTask.QUERY: "search_query: ",
-    },
-    "nomic-ai/nomic-embed-text-v1.5-Q": {
-        EmbedTask.DOCUMENT: "search_document: ",
-        EmbedTask.QUERY: "search_query: ",
-    },
+    "nomic-ai/nomic-embed-text-v1.5": NOMIC_PREFIXES,
+    "nomic-ai/nomic-embed-text-v1.5-Q": NOMIC_PREFIXES,
 }
 
 
@@ -50,21 +53,27 @@ class LocalEmbedder(Embedder):
         """Load fastembed model on first use; try cache then download."""
         from fastembed import TextEmbedding
 
+        def _open(name: str, local_only: bool) -> object:
+            return TextEmbedding(model_name=name, local_files_only=local_only)
+
         logger.info("Loading local embedding model %s...", self._model_name)
         try:
-            self._model = TextEmbedding(
-                model_name=self._model_name,
-                local_files_only=True,
-            )
-        except ValueError as e:
-            if "Could not load model" in str(e):
-                logger.info("Model not cached, downloading (one-time)...")
-                self._model = TextEmbedding(
-                    model_name=self._model_name,
-                    local_files_only=False,
-                )
-            else:
+            self._model = _open(self._model_name, True)
+        except (NoSuchFile, ValueError) as e:
+            if isinstance(e, ValueError) and "Could not load model" not in str(e):
                 raise
+            logger.info("Model not cached, downloading (one-time)...")
+            try:
+                self._model = _open(self._model_name, False)
+            except NoSuchFile:
+                if self._model_name == "nomic-ai/nomic-embed-text-v1.5-Q":
+                    logger.warning(
+                        "Quantized ONNX missing from cache or repo layout; "
+                        "loading full-precision nomic-ai/nomic-embed-text-v1.5.",
+                    )
+                    self._model = _open("nomic-ai/nomic-embed-text-v1.5", False)
+                else:
+                    raise
 
     @property
     def dimensions(self) -> int:
@@ -93,7 +102,7 @@ class LocalEmbedder(Embedder):
         if self._model is None:
             self._load_model()
 
-        truncated = [t[:MAX_CHARS] if len(t) > MAX_CHARS else t for t in texts]
+        truncated = [t[:_MAX_CHARS] if len(t) > _MAX_CHARS else t for t in texts]
         prefixed = self._apply_prefix(truncated, task)
 
         logger.info("Embedding %d chunks (task=%s)...", len(prefixed), task.value)
