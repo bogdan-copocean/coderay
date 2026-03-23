@@ -27,7 +27,7 @@ ENV_CONFIG_FILE = "CODERAY_CONFIG_FILE"
 class FastembedEmbedderConfig:
     """ONNX / CPU path via fastembed."""
 
-    model: str = "nomic-ai/nomic-embed-text-v1.5"
+    model_name: str = "nomic-ai/nomic-embed-text-v1.5"
     dimensions: int = 768
 
 
@@ -35,10 +35,10 @@ class FastembedEmbedderConfig:
 class MlxEmbedderConfig:
     """Apple Silicon path via mlx-embeddings."""
 
-    model: str = "mlx-community/nomicai-modernbert-embed-base-4bit"
-    dimensions: int = 768
+    model_name: str = "mlx-community/bge-small-en-v1.5-bf16"
+    dimensions: int = 256
     # 8192 is supported but very slow for indexing; raise in config if needed.
-    max_length: int = 2048
+    max_tokens: int = 2048
 
 
 @dataclass(frozen=True)

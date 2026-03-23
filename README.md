@@ -128,7 +128,7 @@ embedder:
   mlx:
     model: mlx-community/nomicai-modernbert-embed-base-4bit
     dimensions: 768
-    max_length: 2048   # increase (e.g. 8192) only if chunks need longer context (slower)
+    max_length: 512   # higher = slower (attention cost); 2048–8192 only if you need long chunks
 
 index:
   exclude_patterns:  # besides .gitignore

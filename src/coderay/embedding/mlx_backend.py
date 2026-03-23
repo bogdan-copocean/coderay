@@ -1,71 +1,55 @@
-from __future__ import annotations
-
 import logging
-import os
-import platform
-import sys
 
+import mlx.core as mx
 import numpy as np
+from mlx_embedding_models.embedding import EmbeddingModel
 
-from coderay.embedding.base import Embedder, EmbedTask
-from coderay.embedding.local import MAX_CHARS
-from coderay.embedding.prefixes import NOMIC_PREFIXES, is_nomic_model_id
+from coderay.embedding.base import EmbedTask
 
 logger = logging.getLogger(__name__)
 
-_BATCH = int(os.environ.get("EMBED_BATCH_SIZE", 32))
+_BATCH = 256
+
+_TASK_PREFIXES: dict[str, dict[EmbedTask, str]] = {
+    # Add new model families here as needed
+    "nomic": {
+        EmbedTask.DOCUMENT: "search_document: ",
+        EmbedTask.QUERY: "search_query: ",
+    },
+    "modernbert": {
+        EmbedTask.DOCUMENT: "search_document: ",
+        EmbedTask.QUERY: "search_query: ",
+    },
+}
+
+_NO_PREFIX = {
+    EmbedTask.DOCUMENT: "",
+    EmbedTask.QUERY: "",
+}
 
 
-def _require_apple_silicon() -> None:
-    """Raise if MLX backend is not supported on this machine."""
-    if sys.platform != "darwin":
-        raise RuntimeError("MLX embedder is only supported on macOS.")
-    if platform.machine().lower() != "arm64":
-        raise RuntimeError("MLX embedder requires Apple Silicon (arm64).")
-
-
-class MlxEmbedder(Embedder):
-    """Apple Silicon embeddings via mlx-embeddings."""
-
+class MlxEmbedder:
     def __init__(
         self,
-        model_id: str,
+        model_name: str,
+        *,
         dimensions: int,
-        max_length: int = 2048,
+        batch_size: int = _BATCH,
     ) -> None:
-        """Load MLX model id, output dimension, and tokenizer max_length."""
-        _require_apple_silicon()
-        self._model_id = model_id
+        self._model_name = model_name
         self._dimensions = dimensions
-        self._max_length = max_length
+        self._batch_size = batch_size
         self._model = None
         self._tokenizer = None
-
-    def _load(self) -> None:
-        """Load model and tokenizer on first use."""
-        try:
-            from mlx_embeddings.utils import load as mlx_load
-        except ImportError as e:
-            raise RuntimeError(
-                "MLX embedder requires mlx-embeddings; reinstall coderay."
-            ) from e
-
-        logger.info("Loading MLX embedding model %s...", self._model_id)
-        self._model, self._tokenizer = mlx_load(self._model_id)
+        self._prefixes = self._resolve_prefixes(model_name)
 
     @property
     def dimensions(self) -> int:
-        """Return vector dimension."""
         return self._dimensions
 
-    def _apply_nomic_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
-        """Prepend Nomic search_document/search_query when model expects it."""
-        if not is_nomic_model_id(self._model_id):
-            return texts
-        prefix = NOMIC_PREFIXES.get(task, "")
-        if not prefix:
-            return texts
-        return [prefix + t for t in texts]
+    @property
+    def model_name(self) -> str:
+        return self._model_name
 
     def embed(
         self,
@@ -73,55 +57,67 @@ class MlxEmbedder(Embedder):
         *,
         task: EmbedTask = EmbedTask.DOCUMENT,
     ) -> list[list[float]]:
-        """Embed texts; Nomic MLX models use asymmetric query/document prefixes."""
         if not texts:
             return []
-        if self._model is None:
-            self._load()
-        assert self._model is not None and self._tokenizer is not None
+        self._ensure_loaded()
 
+        prefix = self._prefixes[task]
+        prefixed = [prefix + t for t in texts] if prefix else texts
+
+        return self._embed_batched(prefixed)
+
+    @staticmethod
+    def _resolve_prefixes(model_name: str) -> dict[EmbedTask, str]:
+        """
+        Resolve task prefixes based on model family name.
+        Extend _TASK_PREFIXES dict to support new model families
+        without touching this method.
+        """
+        lower = model_name.lower()
+        for family, prefixes in _TASK_PREFIXES.items():
+            if family in lower:
+                return prefixes
+        return _NO_PREFIX
+
+    def _ensure_loaded(self) -> None:
+        if self._model is not None:
+            return
         import mlx.core as mx
 
-        truncated = [t[:MAX_CHARS] if len(t) > MAX_CHARS else t for t in texts]
-        prefixed = self._apply_nomic_prefix(truncated, task)
-        n_batches = (len(prefixed) + _BATCH - 1) // _BATCH
         logger.info(
-            "Embedding %d chunks (mlx, batch_size=%d, max_length=%d, ~%d batches)...",
-            len(prefixed),
-            _BATCH,
-            self._max_length,
-            n_batches,
+            "Loading MLX model %s on %s...", self._model_name, mx.default_device()
         )
-        # mlx_embeddings.TokenizerWrapper is not callable; batch_encode_plus can
-        # resolve to Rust TokenizersBackend (no batch_encode_plus in new transformers).
-        tok = self._tokenizer
-        if type(tok).__name__ == "TokenizerWrapper":
-            tok = tok._tokenizer
-        out: list[list[float]] = []
-        for bi, i in enumerate(range(0, len(prefixed), _BATCH)):
-            batch = prefixed[i : i + _BATCH]
-            inputs = tok(
-                batch,
-                return_tensors="mlx",
-                padding=True,
-                truncation=True,
-                max_length=self._max_length,
-            )
-            outputs = self._model(
-                inputs["input_ids"],
-                inputs["attention_mask"],
-            )
-            emb = outputs.text_embeds
-            mx.eval(emb)
-            arr = np.asarray(emb)
-            for row in arr:
-                out.append(row.astype(float).tolist())
-            step = max(1, n_batches // 10)
-            if bi == 0 or (bi + 1) % step == 0 or (bi + 1) == n_batches:
-                logger.info("MLX embedding batch %d/%d", bi + 1, n_batches)
+        # taylorai API — loads weights as real MLX arrays
+        self._model = EmbeddingModel.from_registry(self._model_name)
+        logger.info("MLX model ready.")
 
-        if out and len(out[0]) != self._dimensions:
-            raise RuntimeError(
-                f"MLX model output dim {len(out[0])} != configured {self._dimensions}"
-            )
+    def _embed_batched(self, texts: list[str]) -> list[list[float]]:
+        out: list[list[float]] = []
+        n = len(texts)
+        bs = self._batch_size
+
+        for i in range(0, n, bs):
+            batch = texts[i : i + bs]
+            arr = self._embed_single_batch(batch)
+            out.extend(arr.tolist())
+            logger.info("MLX embedded %d/%d", min(i + bs, n), n)
+
         return out
+
+    def _embed_single_batch(self, batch: list[str]) -> np.ndarray:
+        import time
+
+        t0 = time.time()
+        # encode() handles tokenization + forward pass + pooling internally
+        emb = self._model.encode(batch)  # returns np.ndarray directly
+        print(f"encode: {time.time() - t0:.3f}s")
+
+        arr = np.asarray(emb, dtype=np.float32)
+
+        if arr.shape[1] > self._dimensions:
+            arr = arr[:, : self._dimensions]
+        elif arr.shape[1] != self._dimensions:
+            raise RuntimeError(
+                f"Model output {arr.shape[1]}d != configured {self._dimensions}d"
+            )
+        return arr

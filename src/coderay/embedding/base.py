@@ -50,9 +50,8 @@ def load_embedder_from_config() -> Embedder:
     if backend == "mlx":
         mx = ed.mlx
         return MlxEmbedder(
-            model_id=mx.model,
+            model_name=mx.model_name,
             dimensions=mx.dimensions,
-            max_length=mx.max_length,
         )
     fe = ed.fastembed
     return LocalEmbedder(

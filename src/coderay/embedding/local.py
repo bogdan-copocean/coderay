@@ -10,11 +10,6 @@ from coderay.embedding.prefixes import NOMIC_PREFIXES
 
 logger = logging.getLogger(__name__)
 
-# Full ONNX weights (`onnx/model.onnx`); `-Q` uses `model_quantized.onnx` which may be
-# absent from some HF snapshots — see _load_model fallback.
-DEFAULT_MODEL = "nomic-ai/nomic-embed-text-v1.5"
-DEFAULT_DIMENSIONS = 768
-
 # Nomic v1.5 supports ~8192 tokens; cap raw chars to bound memory (tokenizer truncates).
 _DEFAULT_MAX_CHARS = 120_000
 
@@ -41,13 +36,18 @@ class LocalEmbedder(Embedder):
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
-        dimensions: int = DEFAULT_DIMENSIONS,
+        model: str,
+        dimensions: int,
     ) -> None:
         """Initialize with model name and dimensions."""
         self._dimensions = dimensions
         self._model_name = model
         self._model = None
+
+    @property
+    def dimensions(self) -> int:
+        """Return vector dimension."""
+        return self._dimensions
 
     def _load_model(self):
         """Load fastembed model on first use; try cache then download."""
@@ -58,27 +58,12 @@ class LocalEmbedder(Embedder):
 
         logger.info("Loading local embedding model %s...", self._model_name)
         try:
-            self._model = _open(self._model_name, True)
+            self._model = _open(name=self._model_name, local_only=True)
         except (NoSuchFile, ValueError) as e:
             if isinstance(e, ValueError) and "Could not load model" not in str(e):
                 raise
             logger.info("Model not cached, downloading (one-time)...")
-            try:
-                self._model = _open(self._model_name, False)
-            except NoSuchFile:
-                if self._model_name == "nomic-ai/nomic-embed-text-v1.5-Q":
-                    logger.warning(
-                        "Quantized ONNX missing from cache or repo layout; "
-                        "loading full-precision nomic-ai/nomic-embed-text-v1.5.",
-                    )
-                    self._model = _open("nomic-ai/nomic-embed-text-v1.5", False)
-                else:
-                    raise
-
-    @property
-    def dimensions(self) -> int:
-        """Return vector dimension."""
-        return self._dimensions
+            self._model = _open(name=self._model_name, local_only=False)
 
     def _apply_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
         """Prepend task prefix when available."""

@@ -8,6 +8,7 @@ from coderay.core.config import (
     _reset_config_for_testing,
     get_config,
 )
+from coderay.embedding.backend_resolve import resolved_embedder_backend
 
 
 class TestGetConfig:
@@ -16,7 +17,13 @@ class TestGetConfig:
         _reset_config_for_testing(None)
         cfg = get_config()
         assert isinstance(cfg, Config)
-        assert cfg.embedder.effective_dimensions() == 768
+        ed = cfg.embedder
+        want = (
+            ed.mlx.dimensions
+            if resolved_embedder_backend(ed.backend) == "mlx"
+            else ed.fastembed.dimensions
+        )
+        assert cfg.embedder.effective_dimensions() == want
         assert Path(cfg.index.path) == tmp_path
 
     def test_with_yaml_overrides(self, tmp_path, monkeypatch):

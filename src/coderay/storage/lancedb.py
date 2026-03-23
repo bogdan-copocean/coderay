@@ -182,9 +182,7 @@ class Store:
             if not qt:
                 raise SearchError("Empty query")
             if len(qt) < 2:
-                raise SearchError(
-                    "Query too short; use ripgrep for keyward search"
-                )
+                raise SearchError("Query too short; use ripgrep for keyward search")
 
         if not self._table_exists():
             return []
