@@ -1,9 +1,5 @@
 import logging
 
-import mlx.core as mx
-import numpy as np
-from mlx_embedding_models.embedding import EmbeddingModel
-
 from coderay.embedding.base import EmbedTask
 
 logger = logging.getLogger(__name__)
@@ -11,7 +7,6 @@ logger = logging.getLogger(__name__)
 _BATCH = 256
 
 _TASK_PREFIXES: dict[str, dict[EmbedTask, str]] = {
-    # Add new model families here as needed
     "nomic": {
         EmbedTask.DOCUMENT: "search_document: ",
         EmbedTask.QUERY: "search_query: ",
@@ -83,12 +78,12 @@ class MlxEmbedder:
         if self._model is not None:
             return
         import mlx.core as mx
+        from mlx_embeddings import load
 
         logger.info(
             "Loading MLX model %s on %s...", self._model_name, mx.default_device()
         )
-        # taylorai API — loads weights as real MLX arrays
-        self._model = EmbeddingModel.from_registry(self._model_name)
+        self._model, self._tokenizer = load(self._model_name)
         logger.info("MLX model ready.")
 
     def _embed_batched(self, texts: list[str]) -> list[list[float]]:
@@ -104,15 +99,12 @@ class MlxEmbedder:
 
         return out
 
-    def _embed_single_batch(self, batch: list[str]) -> np.ndarray:
-        import time
+    def _embed_single_batch(self, batch: list[str]):
+        import numpy as np
+        from mlx_embeddings import generate
 
-        t0 = time.time()
-        # encode() handles tokenization + forward pass + pooling internally
-        emb = self._model.encode(batch)  # returns np.ndarray directly
-        print(f"encode: {time.time() - t0:.3f}s")
-
-        arr = np.asarray(emb, dtype=np.float32)
+        output = generate(self._model, self._tokenizer, batch)
+        arr = np.asarray(output.text_embeds, dtype=np.float32)
 
         if arr.shape[1] > self._dimensions:
             arr = arr[:, : self._dimensions]
