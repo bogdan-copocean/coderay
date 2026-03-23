@@ -38,16 +38,17 @@ class LocalEmbedder(Embedder):
         self,
         model: str,
         dimensions: int,
+        matryoshka_dimensions: int | None = None,
     ) -> None:
         """Initialize with model name and dimensions."""
         self._dimensions = dimensions
+        self._matryoshka_dimensions = matryoshka_dimensions
         self._model_name = model
         self._model = None
 
     @property
     def dimensions(self) -> int:
-        """Return vector dimension."""
-        return self._dimensions
+        return self._matryoshka_dimensions or self._dimensions
 
     def _load_model(self):
         """Load fastembed model on first use; try cache then download."""
@@ -98,4 +99,6 @@ class LocalEmbedder(Embedder):
                 batch_size=_BATCH_SIZE,
             )
         )
+        if self._matryoshka_dimensions is not None:
+            return [e.tolist()[: self._matryoshka_dimensions] for e in embeddings]
         return [e.tolist() for e in embeddings]

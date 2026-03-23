@@ -29,10 +29,12 @@ class MLXEmbedder:
         model_name: str,
         *,
         dimensions: int,
+        matryoshka_dimensions: int | None = None,
         batch_size: int = _BATCH,
     ) -> None:
         self._model_name = model_name
         self._dimensions = dimensions
+        self._matryoshka_dimensions = matryoshka_dimensions
         self._batch_size = batch_size
         self._model = None
         self._tokenizer = None
@@ -40,7 +42,7 @@ class MLXEmbedder:
 
     @property
     def dimensions(self) -> int:
-        return self._dimensions
+        return self._matryoshka_dimensions or self._dimensions
 
     @property
     def model_name(self) -> str:
@@ -84,7 +86,7 @@ class MLXEmbedder:
             "Loading MLX model %s on %s...", self._model_name, mx.default_device()
         )
         self._model, self._tokenizer = load(self._model_name)
-        logger.info("MLX model ready.")
+        logger.info(f"MLX model: {self._model_name} ready.")
 
     def _embed_batched(self, texts: list[str]) -> list[list[float]]:
         out: list[list[float]] = []
@@ -106,10 +108,10 @@ class MLXEmbedder:
         output = generate(self._model, self._tokenizer, batch)
         arr = np.asarray(output.text_embeds, dtype=np.float32)
 
-        if arr.shape[1] > self._dimensions:
-            arr = arr[:, : self._dimensions]
-        elif arr.shape[1] != self._dimensions:
+        if arr.shape[1] != self._dimensions:
             raise RuntimeError(
                 f"Model output {arr.shape[1]}d != configured {self._dimensions}d"
             )
+        if self._matryoshka_dimensions is not None:
+            arr = arr[:, : self._matryoshka_dimensions]
         return arr

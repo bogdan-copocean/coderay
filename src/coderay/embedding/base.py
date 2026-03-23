@@ -52,9 +52,11 @@ def load_embedder_from_config() -> Embedder:
         return MLXEmbedder(
             model_name=mx.model_name,
             dimensions=mx.dimensions,
+            matryoshka_dimensions=mx.matryoshka_dimensions,
         )
     fe = ed.fastembed
     return LocalEmbedder(
-        model=fe.model,
+        model=fe.model_name,
         dimensions=fe.dimensions,
+        matryoshka_dimensions=fe.matryoshka_dimensions,
     )
