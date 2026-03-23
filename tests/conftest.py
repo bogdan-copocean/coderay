@@ -12,7 +12,7 @@ from coderay.core.config import (
     EmbedderConfig,
     FastembedEmbedderConfig,
     IndexConfig,
-    MlxEmbedderConfig,
+    MLXEmbedderConfig,
     _reset_config_for_testing,
 )
 from coderay.core.models import Chunk
@@ -40,7 +40,7 @@ class MockEmbedder(Embedder):
 MOCK_CONFIG: Config = Config(
     embedder=EmbedderConfig(
         fastembed=FastembedEmbedderConfig(dimensions=MockEmbedder.DIMS),
-        mlx=MlxEmbedderConfig(dimensions=MockEmbedder.DIMS),
+        mlx=MLXEmbedderConfig(dimensions=MockEmbedder.DIMS),
     ),
 )
 
@@ -185,7 +185,7 @@ def app_config(tmp_path: Path) -> Config:
         index=IndexConfig(path=str(idx)),
         embedder=EmbedderConfig(
             fastembed=FastembedEmbedderConfig(dimensions=MockEmbedder.DIMS),
-            mlx=MlxEmbedderConfig(dimensions=MockEmbedder.DIMS),
+            mlx=MLXEmbedderConfig(dimensions=MockEmbedder.DIMS),
         ),
     )
     _reset_config_for_testing(cfg)

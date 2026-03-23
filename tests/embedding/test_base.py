@@ -8,7 +8,7 @@ from coderay.core.config import (
     Config,
     EmbedderConfig,
     FastembedEmbedderConfig,
-    MlxEmbedderConfig,
+    MLXEmbedderConfig,
     _reset_config_for_testing,
 )
 from coderay.embedding.base import Embedder, load_embedder_from_config
@@ -51,14 +51,14 @@ class TestLoadEmbedderFromConfig:
         finally:
             _reset_config_for_testing(None)
 
-    @patch("coderay.embedding.mlx_backend.MlxEmbedder")
+    @patch("coderay.embedding.mlx_backend.MLXEmbedder")
     def test_mlx_backend(self, mock_mlx_cls):
         mock_mlx_cls.return_value = MagicMock()
         _reset_config_for_testing(
             Config(
                 embedder=EmbedderConfig(
                     backend="mlx",
-                    mlx=MlxEmbedderConfig(
+                    mlx=MLXEmbedderConfig(
                         model="mlx-community/nomicai-modernbert-embed-base-4bit",
                         dimensions=768,
                         max_length=512,

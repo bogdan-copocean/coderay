@@ -32,7 +32,7 @@ class FastembedEmbedderConfig:
 
 
 @dataclass(frozen=True)
-class MlxEmbedderConfig:
+class MLXEmbedderConfig:
     """Apple Silicon path via mlx-embeddings."""
 
     model_name: str = "mlx-community/bge-small-en-v1.5-bf16"
@@ -47,7 +47,7 @@ class EmbedderConfig:
 
     backend: str = "auto"
     fastembed: FastembedEmbedderConfig = field(default_factory=FastembedEmbedderConfig)
-    mlx: MlxEmbedderConfig = field(default_factory=MlxEmbedderConfig)
+    mlx: MLXEmbedderConfig = field(default_factory=MLXEmbedderConfig)
 
     def effective_dimensions(self) -> int:
         """Return vector size for the resolved backend (auto picks MLX or fastembed)."""
@@ -158,7 +158,7 @@ def _parse_embedder_config(data: dict[str, Any]) -> EmbedderConfig:
     return EmbedderConfig(
         backend=str(d.get("backend", "auto")),
         fastembed=FastembedEmbedderConfig(**(d.get("fastembed") or {})),
-        mlx=MlxEmbedderConfig(**(d.get("mlx") or {})),
+        mlx=MLXEmbedderConfig(**(d.get("mlx") or {})),
     )
 
 

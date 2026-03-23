@@ -23,7 +23,7 @@ _NO_PREFIX = {
 }
 
 
-class MlxEmbedder:
+class MLXEmbedder:
     def __init__(
         self,
         model_name: str,
