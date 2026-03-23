@@ -16,26 +16,26 @@ install:
 # ─── Indexing ────────────────────────────────────────────────────────
 
 build:
-	coderay --index-dir $(INDEX_DIR) build --repo $(REPO)
+	coderay build --repo $(REPO)
 
 build-full:
-	coderay --index-dir $(INDEX_DIR) build --full --repo $(REPO)
+	coderay build --full --repo $(REPO)
 
 maintain:
-	coderay --index-dir $(INDEX_DIR) maintain --repo $(REPO)
+	coderay maintain --repo $(REPO)
 
 # ─── Querying ────────────────────────────────────────────────────────
 
 # Usage: make search QUERY="how does auth work" [TOP_K=5]
 search:
 	@if [ -z "$(QUERY)" ]; then echo "Usage: make search QUERY=\"your query\""; exit 1; fi
-	coderay --index-dir $(INDEX_DIR) search "$(QUERY)" --top-k $(or $(TOP_K),10)
+	coderay search "$(QUERY)" --top-k $(or $(TOP_K),10)
 
 list:
-	coderay --index-dir $(INDEX_DIR) list --by-file
+	coderay list --by-file
 
 status:
-	coderay --index-dir $(INDEX_DIR) status
+	coderay status
 
 # Usage: make skeleton FILE=src/pipeline/indexer.py
 skeleton:
@@ -44,7 +44,7 @@ skeleton:
 
 # Usage: make graph [KIND=calls] [LIMIT=50]
 graph:
-	coderay --index-dir $(INDEX_DIR) graph --kind $(or $(KIND),calls) --limit $(or $(LIMIT),50)
+	coderay graph --kind $(or $(KIND),calls) --limit $(or $(LIMIT),50)
 
 # ─── MCP server ──────────────────────────────────────────────────────
 
