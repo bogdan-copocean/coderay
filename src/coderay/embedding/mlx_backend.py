@@ -1,7 +1,7 @@
 import logging
 
 from coderay.embedding.base import EmbedTask
-from coderay.embedding.prefixes import NOMIC_PREFIXES, is_nomic_model_id
+from coderay.embedding.prefixes import SEARCH_PREFIXES, requires_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ class MLXEmbedder:
             return []
         self._ensure_loaded()
 
-        if is_nomic_model_id(self._model_name):
-            prefix = NOMIC_PREFIXES.get(task, "")
+        if requires_prefix(self._model_name):
+            prefix = SEARCH_PREFIXES.get(task, "")
             texts = [prefix + t for t in texts] if prefix else texts
 
         return self._embed_batched(texts)

@@ -109,9 +109,9 @@ Run `coderay build` (or `coderay watch`) from the project root first.
 
 Embedding is **offline-first**: models load from the local cache. With **`backend: auto`** (default), Apple Silicon uses MLX (installed as a core dependency on that platform); otherwise ONNX via fastembed on CPU. On first use, if the model is not cached, it downloads automatically (one-time, requires network).
 
-The default model is **Nomic Embed v1.5** (`nomic-ai/nomic-embed-text-v1.5`, 768d, full ONNX). Chunks are embedded as `path`, `symbol`, then source text so identifiers and paths influence retrieval (for example queries like `lancedb` match file paths and symbols, not only error message bodies). Long bodies are tokenized by the model (up to a large context window); `EMBED_MAX_CHARS` caps raw string length (default 120000) to bound memory.
+The default model is **BGE Small v1.5** (`BAAI/bge-small-en-v1.5`, 384d) for fastembed and `mlx-community/bge-small-en-v1.5-bf16` for MLX. Chunks are embedded as `path`, `symbol`, then source text so identifiers and paths influence retrieval alongside semantic meaning.
 
-If you change embedder backend, either backend’s model/dimensions, or MLX `max_length`, run **`coderay build --full`** so the index matches the new vectors.
+If you change embedder backend, model, or dimensions, run **`coderay build --full`** so the index matches the new vectors.
 
 ## Configuration
 
@@ -123,12 +123,13 @@ Optional `config.yaml` in the index directory (default: `.index/config.yaml`):
 embedder:
   backend: auto   # auto | fastembed | mlx
   fastembed:
-    model: nomic-ai/nomic-embed-text-v1.5
-    dimensions: 768
+    model_name: BAAI/bge-small-en-v1.5
+    dimensions: 384
+    batch_size: 64
   mlx:
-    model: mlx-community/nomicai-modernbert-embed-base-4bit
-    dimensions: 768
-    max_length: 512   # higher = slower (attention cost); 2048–8192 only if you need long chunks
+    model_name: mlx-community/bge-small-en-v1.5-bf16
+    dimensions: 384
+    batch_size: 256
 
 index:
   exclude_patterns:  # besides .gitignore

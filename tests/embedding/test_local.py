@@ -7,7 +7,7 @@ import pytest
 
 from coderay.embedding.base import EmbedTask
 from coderay.embedding.local import LocalEmbedder
-from coderay.embedding.prefixes import NOMIC_PREFIXES
+from coderay.embedding.prefixes import SEARCH_PREFIXES
 
 
 class TestLocalEmbedder:
@@ -50,13 +50,13 @@ class TestLocalEmbedder:
                 "nomic-ai/nomic-embed-text-v1.5",
                 EmbedTask.DOCUMENT,
                 "def foo(): pass",
-                NOMIC_PREFIXES[EmbedTask.DOCUMENT],
+                SEARCH_PREFIXES[EmbedTask.DOCUMENT],
             ),
             (
                 "nomic-ai/nomic-embed-text-v1.5",
                 EmbedTask.QUERY,
                 "how does auth work",
-                NOMIC_PREFIXES[EmbedTask.QUERY],
+                SEARCH_PREFIXES[EmbedTask.QUERY],
             ),
             ("some/unknown-model", EmbedTask.DOCUMENT, "def foo(): pass", None),
         ],

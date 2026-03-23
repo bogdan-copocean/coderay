@@ -1,15 +1,14 @@
-"""Tests for Nomic prefix helpers."""
+"""Tests for search prefix helpers."""
 
 import pytest
 
 from coderay.embedding.base import EmbedTask
-from coderay.embedding.prefixes import NOMIC_PREFIXES, is_nomic_model_id
+from coderay.embedding.prefixes import SEARCH_PREFIXES, requires_prefix
 
 
-def test_nomic_prefixes_document_query():
-    """Nomic asymmetric prefixes differ for index vs search."""
-    assert "search_document" in NOMIC_PREFIXES[EmbedTask.DOCUMENT]
-    assert "search_query" in NOMIC_PREFIXES[EmbedTask.QUERY]
+def test_search_prefixes_document_query():
+    assert "search_document" in SEARCH_PREFIXES[EmbedTask.DOCUMENT]
+    assert "search_query" in SEARCH_PREFIXES[EmbedTask.QUERY]
 
 
 @pytest.mark.parametrize(
@@ -20,5 +19,5 @@ def test_nomic_prefixes_document_query():
         ("BAAI/bge-small-en-v1.5", False),
     ],
 )
-def test_is_nomic_model_id(model_id, expected):
-    assert is_nomic_model_id(model_id) is expected
+def test_requires_prefix(model_id, expected):
+    assert requires_prefix(model_id) is expected

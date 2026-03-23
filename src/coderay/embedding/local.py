@@ -5,7 +5,7 @@ import logging
 from onnxruntime.capi.onnxruntime_pybind11_state import NoSuchFile
 
 from coderay.embedding.base import Embedder, EmbedTask
-from coderay.embedding.prefixes import NOMIC_PREFIXES, is_nomic_model_id
+from coderay.embedding.prefixes import SEARCH_PREFIXES, requires_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +46,9 @@ class LocalEmbedder(Embedder):
             self._model = _open(name=self._model_name, local_only=False)
 
     def _apply_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
-        if not is_nomic_model_id(self._model_name):
+        if not requires_prefix(self._model_name):
             return texts
-        prefix = NOMIC_PREFIXES.get(task, "")
+        prefix = SEARCH_PREFIXES.get(task, "")
         return [prefix + t for t in texts] if prefix else texts
 
     def embed(

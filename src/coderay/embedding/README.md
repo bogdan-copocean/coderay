@@ -9,6 +9,6 @@ Maps code chunks to dense vectors.
 
 `auto` resolves via `backend_resolve.resolved_embedder_backend()` — MLX when `mlx_embeddings` is importable, else fastembed.
 
-Nomic models use asymmetric prefixes (`search_document:` / `search_query:`) — handled in `prefixes.py`.
+Models that require asymmetric prefixes (`search_document:` / `search_query:`) are detected by `requires_prefix()` in `prefixes.py`.
 
 `format_chunk_for_embedding()` in `format.py` defines how a chunk becomes an embedding input (path + symbol + content).
