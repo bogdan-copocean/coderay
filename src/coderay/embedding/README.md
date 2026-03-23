@@ -5,9 +5,9 @@ Maps code chunks to dense vectors.
 ## Backends
 
 - **`LocalEmbedder`** — ONNX via fastembed when the resolved backend is **`fastembed`** (including **`backend: auto`** off Apple Silicon or without `mlx-embeddings`). Defaults: **`nomic-ai/nomic-embed-text-v1.5`** (768d). Config: `embedder.fastembed`. **`v1.5-Q`**: if quantized ONNX is missing, we fall back to full **v1.5**.
-- **`MlxEmbedder`** — when **`backend: mlx`** or **`backend: auto`** on Apple Silicon (MLX packages are default dependencies there). Defaults: **`mlx-community/nomicai-modernbert-embed-base-4bit`** (768d). Config: `embedder.mlx`.
+- **`MLXEmbedder`** — when **`backend: mlx`** or **`backend: auto`** on Apple Silicon (MLX packages are default dependencies there). Defaults: **`mlx-community/nomicai-modernbert-embed-base-4bit`** (768d). Config: `embedder.mlx`.
 
-Nomic models use **asymmetric** prefixes (`search_document:` / `search_query:`) — see `prefixes.py` and `LocalEmbedder` / `MlxEmbedder`.
+Nomic models use **asymmetric** prefixes (`search_document:` / `search_query:`) — see `prefixes.py` and `LocalEmbedder` / `MLXEmbedder`.
 
 - **`format_chunk_for_embedding()`** — combines `path`, `symbol`, and `content` for document embedding.
 
