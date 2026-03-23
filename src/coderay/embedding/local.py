@@ -1,34 +1,13 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from onnxruntime.capi.onnxruntime_pybind11_state import NoSuchFile
 
 from coderay.embedding.base import Embedder, EmbedTask
-from coderay.embedding.prefixes import NOMIC_PREFIXES
+from coderay.embedding.prefixes import NOMIC_PREFIXES, is_nomic_model_id
 
 logger = logging.getLogger(__name__)
-
-# Nomic v1.5 supports ~8192 tokens; cap raw chars to bound memory (tokenizer truncates).
-_DEFAULT_MAX_CHARS = 120_000
-
-# Number of parallel ONNX workers (0 = auto based on CPU cores)
-_PARALLEL_WORKERS = int(os.environ.get("EMBED_WORKERS", 0)) or None
-
-# Batch size for embedding; lower if OOM (e.g. EMBED_BATCH_SIZE=32)
-_BATCH_SIZE = int(os.environ.get("EMBED_BATCH_SIZE", 64))
-
-_MAX_CHARS = int(os.environ.get("EMBED_MAX_CHARS", _DEFAULT_MAX_CHARS))
-
-# Tests and tooling may reference the active char cap.
-MAX_CHARS = _MAX_CHARS
-
-# Model-specific task prefixes for asymmetric retrieval.
-_TASK_PREFIXES: dict[str, dict[EmbedTask, str]] = {
-    "nomic-ai/nomic-embed-text-v1.5": NOMIC_PREFIXES,
-    "nomic-ai/nomic-embed-text-v1.5-Q": NOMIC_PREFIXES,
-}
 
 
 class LocalEmbedder(Embedder):
@@ -39,19 +18,19 @@ class LocalEmbedder(Embedder):
         model: str,
         dimensions: int,
         matryoshka_dimensions: int | None = None,
+        batch_size: int = 64,
     ) -> None:
-        """Initialize with model name and dimensions."""
+        self._model_name = model
         self._dimensions = dimensions
         self._matryoshka_dimensions = matryoshka_dimensions
-        self._model_name = model
+        self._batch_size = batch_size
         self._model = None
 
     @property
     def dimensions(self) -> int:
         return self._matryoshka_dimensions or self._dimensions
 
-    def _load_model(self):
-        """Load fastembed model on first use; try cache then download."""
+    def _load_model(self) -> None:
         from fastembed import TextEmbedding
 
         def _open(name: str, local_only: bool) -> object:
@@ -67,14 +46,10 @@ class LocalEmbedder(Embedder):
             self._model = _open(name=self._model_name, local_only=False)
 
     def _apply_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
-        """Prepend task prefix when available."""
-        prefixes = _TASK_PREFIXES.get(self._model_name)
-        if prefixes is None:
+        if not is_nomic_model_id(self._model_name):
             return texts
-        prefix = prefixes.get(task, "")
-        if not prefix:
-            return texts
-        return [prefix + t for t in texts]
+        prefix = NOMIC_PREFIXES.get(task, "")
+        return [prefix + t for t in texts] if prefix else texts
 
     def embed(
         self,
@@ -82,23 +57,15 @@ class LocalEmbedder(Embedder):
         *,
         task: EmbedTask = EmbedTask.DOCUMENT,
     ) -> list[list[float]]:
-        """Embed texts via fastembed."""
         if not texts:
             return []
         if self._model is None:
             self._load_model()
 
-        truncated = [t[:_MAX_CHARS] if len(t) > _MAX_CHARS else t for t in texts]
-        prefixed = self._apply_prefix(truncated, task)
+        prefixed = self._apply_prefix(texts, task)
 
         logger.info("Embedding %d chunks (task=%s)...", len(prefixed), task.value)
-        embeddings = list(
-            self._model.embed(
-                prefixed,
-                parallel=_PARALLEL_WORKERS,
-                batch_size=_BATCH_SIZE,
-            )
-        )
+        embeddings = list(self._model.embed(prefixed, batch_size=self._batch_size))
         if self._matryoshka_dimensions is not None:
             return [e.tolist()[: self._matryoshka_dimensions] for e in embeddings]
         return [e.tolist() for e in embeddings]

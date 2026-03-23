@@ -1,26 +1,9 @@
 import logging
 
 from coderay.embedding.base import EmbedTask
+from coderay.embedding.prefixes import NOMIC_PREFIXES, is_nomic_model_id
 
 logger = logging.getLogger(__name__)
-
-_BATCH = 256
-
-_TASK_PREFIXES: dict[str, dict[EmbedTask, str]] = {
-    "nomic": {
-        EmbedTask.DOCUMENT: "search_document: ",
-        EmbedTask.QUERY: "search_query: ",
-    },
-    "modernbert": {
-        EmbedTask.DOCUMENT: "search_document: ",
-        EmbedTask.QUERY: "search_query: ",
-    },
-}
-
-_NO_PREFIX = {
-    EmbedTask.DOCUMENT: "",
-    EmbedTask.QUERY: "",
-}
 
 
 class MLXEmbedder:
@@ -30,7 +13,7 @@ class MLXEmbedder:
         *,
         dimensions: int,
         matryoshka_dimensions: int | None = None,
-        batch_size: int = _BATCH,
+        batch_size: int = 256,
     ) -> None:
         self._model_name = model_name
         self._dimensions = dimensions
@@ -38,7 +21,6 @@ class MLXEmbedder:
         self._batch_size = batch_size
         self._model = None
         self._tokenizer = None
-        self._prefixes = self._resolve_prefixes(model_name)
 
     @property
     def dimensions(self) -> int:
@@ -58,23 +40,11 @@ class MLXEmbedder:
             return []
         self._ensure_loaded()
 
-        prefix = self._prefixes[task]
-        prefixed = [prefix + t for t in texts] if prefix else texts
+        if is_nomic_model_id(self._model_name):
+            prefix = NOMIC_PREFIXES.get(task, "")
+            texts = [prefix + t for t in texts] if prefix else texts
 
-        return self._embed_batched(prefixed)
-
-    @staticmethod
-    def _resolve_prefixes(model_name: str) -> dict[EmbedTask, str]:
-        """
-        Resolve task prefixes based on model family name.
-        Extend _TASK_PREFIXES dict to support new model families
-        without touching this method.
-        """
-        lower = model_name.lower()
-        for family, prefixes in _TASK_PREFIXES.items():
-            if family in lower:
-                return prefixes
-        return _NO_PREFIX
+        return self._embed_batched(texts)
 
     def _ensure_loaded(self) -> None:
         if self._model is not None:

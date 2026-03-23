@@ -27,8 +27,10 @@ class TestLoadEmbedderFromConfig:
         _ = load_embedder_from_config()
         cfg = default_config
         mock_local_cls.assert_called_once_with(
-            model=cfg.embedder.fastembed.model,
+            model=cfg.embedder.fastembed.model_name,
             dimensions=cfg.embedder.fastembed.dimensions,
+            matryoshka_dimensions=cfg.embedder.fastembed.matryoshka_dimensions,
+            batch_size=cfg.embedder.fastembed.batch_size,
         )
 
     @patch("coderay.embedding.local.LocalEmbedder")
@@ -45,8 +47,10 @@ class TestLoadEmbedderFromConfig:
         try:
             _ = load_embedder_from_config()
             mock_local_cls.assert_called_once_with(
-                model=Config().embedder.fastembed.model,
+                model=Config().embedder.fastembed.model_name,
                 dimensions=123,
+                matryoshka_dimensions=None,
+                batch_size=64,
             )
         finally:
             _reset_config_for_testing(None)
@@ -59,9 +63,8 @@ class TestLoadEmbedderFromConfig:
                 embedder=EmbedderConfig(
                     backend="mlx",
                     mlx=MLXEmbedderConfig(
-                        model="mlx-community/nomicai-modernbert-embed-base-4bit",
-                        dimensions=768,
-                        max_length=512,
+                        model_name="mlx-community/bge-small-en-v1.5-bf16",
+                        dimensions=384,
                     ),
                 ),
             ),
@@ -69,9 +72,10 @@ class TestLoadEmbedderFromConfig:
         try:
             _ = load_embedder_from_config()
             mock_mlx_cls.assert_called_once_with(
-                model_id="mlx-community/nomicai-modernbert-embed-base-4bit",
-                dimensions=768,
-                max_length=512,
+                model_name="mlx-community/bge-small-en-v1.5-bf16",
+                dimensions=384,
+                matryoshka_dimensions=None,
+                batch_size=256,
             )
         finally:
             _reset_config_for_testing(None)

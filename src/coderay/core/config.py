@@ -30,6 +30,7 @@ class FastembedEmbedderConfig:
     model_name: str = "BAAI/bge-small-en-v1.5"
     dimensions: int = 384
     matryoshka_dimensions: int | None = None
+    batch_size: int = 64
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class MLXEmbedderConfig:
     model_name: str = "mlx-community/bge-small-en-v1.5-bf16"
     dimensions: int = 384
     matryoshka_dimensions: int | None = None
+    batch_size: int = 256
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,8 @@ class EmbedderConfig:
     def effective_dimensions(self) -> int:
         """Return vector size for the resolved backend (auto picks MLX or fastembed)."""
         b = resolved_embedder_backend(self.backend)
-        return self.mlx.dimensions if b == "mlx" else self.fastembed.dimensions
+        cfg = self.mlx if b == "mlx" else self.fastembed
+        return cfg.matryoshka_dimensions or cfg.dimensions
 
 
 @dataclass(frozen=True)
