@@ -30,7 +30,7 @@ class Retrieval:
         self.index_dir = Path(self._config.index.path)
         self._explicit_embedder = embedder
         self._lazy_embedder: Embedder | None = None
-        self._dimensions = self._config.embedder.dimensions
+        self._dimensions = self._config.embedder.effective_dimensions()
         self._booster = StructuralBooster.from_config()
         self._store: Store | None = None
         self._version_checked = False

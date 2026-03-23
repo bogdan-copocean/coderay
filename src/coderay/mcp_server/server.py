@@ -79,11 +79,11 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 
 @mcp.tool(
     description=(
-        "Search code by meaning. Returns chunks ranked by relevance, "
-        "each with path, line range, symbol, score, content, and a "
-        "relevance tier ('high', 'medium', or 'low'). "
-        "Best for 'how/where' questions; use grep for exact symbols or keywords. "
-        "Queries with 3 or fewer words will return an error; use at least 4 meaningful words."
+        "Search the codebase by meaning. Best for intent-based questions like "
+        "'where is auth handled' or 'how are embeddings loaded'. Returns chunks "
+        "ranked by relevance with path, line range, symbol, score, content, and "
+        "relevance tier ('high', 'medium', 'low'). "
+        "For exact symbols or identifiers, prefer grep — it is faster and more precise."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"search"},
@@ -91,9 +91,7 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, destructiveHint=False
 def semantic_search(
     query: Annotated[
         str,
-        Field(
-            description="Natural language question about the code (no keyword search)."
-        ),
+        Field(description="Natural language question about the code."),
     ],
     top_k: int = 5,
     path_prefix: Annotated[

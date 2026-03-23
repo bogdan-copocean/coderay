@@ -10,6 +10,7 @@ from coderay.core.config import Config, get_config
 from coderay.core.timing import timed, timed_phase
 from coderay.core.utils import files_with_changed_content, hash_content, read_from_path
 from coderay.embedding.base import Embedder, EmbedTask, load_embedder_from_config
+from coderay.embedding.format import format_chunk_for_embedding
 from coderay.graph.builder import build_and_save_graph
 from coderay.state.machine import IndexMeta, StateMachine
 from coderay.state.version import check_index_version, write_index_version
@@ -256,7 +257,7 @@ class Indexer:
             logger.info("Pipeline done: 0 chunks in %d files", len(files_content))
             return path_hashes, files_content
 
-        texts = [c.content for c in chunks]
+        texts = [format_chunk_for_embedding(c) for c in chunks]
         with timed_phase("embedding"):
             embeddings = self._embedder.embed(texts, task=EmbedTask.DOCUMENT)
 

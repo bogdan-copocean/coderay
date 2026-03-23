@@ -8,6 +8,8 @@ from typing import Annotated, Any
 
 import yaml
 
+from coderay.embedding.backend_resolve import resolved_embedder_backend
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,9 +24,38 @@ ENV_CONFIG_FILE = "CODERAY_CONFIG_FILE"
 
 
 @dataclass(frozen=True)
-class EmbedderConfig:
-    model: str = "sentence-transformers/all-MiniLM-L6-v2"
+class FastembedEmbedderConfig:
+    """ONNX / CPU path via fastembed."""
+
+    model_name: str = "BAAI/bge-small-en-v1.5"
     dimensions: int = 384
+    matryoshka_dimensions: int | None = None
+    batch_size: int = 64
+
+
+@dataclass(frozen=True)
+class MLXEmbedderConfig:
+    """Apple Silicon path via mlx-embeddings."""
+
+    model_name: str = "mlx-community/bge-small-en-v1.5-bf16"
+    dimensions: int = 384
+    matryoshka_dimensions: int | None = None
+    batch_size: int = 256
+
+
+@dataclass(frozen=True)
+class EmbedderConfig:
+    """Embedding: pick backend; each backend has its own model and dimensions."""
+
+    backend: str = "auto"
+    fastembed: FastembedEmbedderConfig = field(default_factory=FastembedEmbedderConfig)
+    mlx: MLXEmbedderConfig = field(default_factory=MLXEmbedderConfig)
+
+    def effective_dimensions(self) -> int:
+        """Return vector size for the resolved backend (auto picks MLX or fastembed)."""
+        b = resolved_embedder_backend(self.backend)
+        cfg = self.mlx if b == "mlx" else self.fastembed
+        return cfg.matryoshka_dimensions or cfg.dimensions
 
 
 @dataclass(frozen=True)
@@ -79,6 +110,7 @@ def _default_boosting() -> BoostingConfig:
 class SemanticSearchConfig:
     boosting: BoostingConfig = field(default_factory=_default_boosting)
     metric: str = "cosine"
+    hybrid: bool = True
 
 
 @dataclass(frozen=True)
@@ -123,12 +155,23 @@ def _parse_boosting(data: dict[str, Any]) -> BoostingConfig:
     return BoostingConfig(penalties=penalties, bonuses=bonuses)
 
 
+def _parse_embedder_config(data: dict[str, Any]) -> EmbedderConfig:
+    """Build EmbedderConfig from merged or YAML dict."""
+    d = data or {}
+    return EmbedderConfig(
+        backend=str(d.get("backend", "auto")),
+        fastembed=FastembedEmbedderConfig(**(d.get("fastembed") or {})),
+        mlx=MLXEmbedderConfig(**(d.get("mlx") or {})),
+    )
+
+
 def _parse_semantic_search(data: dict[str, Any]) -> SemanticSearchConfig:
     """Parse dict into SemanticSearchConfig."""
     boosting_data = data.get("boosting") or {}
     return SemanticSearchConfig(
         boosting=_parse_boosting(boosting_data),
         metric=data.get("metric", "cosine"),
+        hybrid=data.get("hybrid", True),
     )
 
 
@@ -185,7 +228,7 @@ def _load_config_impl() -> Config:
     index_dict["path"] = str(index_dir)
     default_data["index"] = index_dict
     return Config(
-        embedder=EmbedderConfig(**default_data.get("embedder", {})),
+        embedder=_parse_embedder_config(default_data.get("embedder") or {}),
         index=IndexConfig(**default_data.get("index", {})),
         semantic_search=_parse_semantic_search(
             default_data.get("semantic_search", {}) or {}
@@ -261,7 +304,7 @@ def _deep_merge(overrides: dict, *, index_dir: Path) -> Config:
     merged["index"] = index_dict
 
     return Config(
-        embedder=EmbedderConfig(**merged.get("embedder", {})),
+        embedder=_parse_embedder_config(merged.get("embedder") or {}),
         index=IndexConfig(**merged.get("index", {})),
         semantic_search=_parse_semantic_search(merged.get("semantic_search", {}) or {}),
         watcher=WatcherConfig(**merged.get("watcher", {})),

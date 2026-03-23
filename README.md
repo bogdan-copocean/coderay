@@ -30,11 +30,13 @@ Then install:
 pip install coderay
 ```
 
-With all extras (JS/TS/Go support, MCP server tools):
+With all extras (development tools):
 
 ```bash
 pip install "coderay[all]"
 ```
+
+With `embedder.backend: auto` (default), CodeRay uses **MLX** on Apple Silicon (those wheels install automatically with `pip install coderay`) and **fastembed** elsewhere (CPU ONNX). Override with `backend: fastembed` or `backend: mlx`. Run `coderay build --full` after switching backends or models.
 
 For development:
 
@@ -105,9 +107,11 @@ Run `coderay build` (or `coderay watch`) from the project root first.
 
 ## Embedding
 
-Embedding is **offline-first**: the model loads from the local cache only, with no HuggingFace API calls. On first use, if the model is not cached, it downloads automatically (one-time, requires network). No manual steps.
+Embedding is **offline-first**: models load from the local cache. With **`backend: auto`** (default), Apple Silicon uses MLX (installed as a core dependency on that platform); otherwise ONNX via fastembed on CPU. On first use, if the model is not cached, it downloads automatically (one-time, requires network).
 
-If you previously used a different model, run `coderay build --full` after upgrading.
+The default model is **BGE Small v1.5** (`BAAI/bge-small-en-v1.5`, 384d) for fastembed and `mlx-community/bge-small-en-v1.5-bf16` for MLX. Chunks are embedded as `path`, `symbol`, then source text so identifiers and paths influence retrieval alongside semantic meaning.
+
+If you change embedder backend, model, or dimensions, run **`coderay build --full`** so the index matches the new vectors.
 
 ## Configuration
 
@@ -117,14 +121,22 @@ Optional `config.yaml` in the index directory (default: `.index/config.yaml`):
 
 ```yaml
 embedder:
-  model: sentence-transformers/all-MiniLM-L6-v2
-  dimensions: 384
+  backend: auto   # auto | fastembed | mlx
+  fastembed:
+    model_name: BAAI/bge-small-en-v1.5
+    dimensions: 384
+    batch_size: 64
+  mlx:
+    model_name: mlx-community/bge-small-en-v1.5-bf16
+    dimensions: 384
+    batch_size: 256
 
 index:
   exclude_patterns:  # besides .gitignore
     - "*.log"
 
 semantic_search:
+  hybrid: true   # vector + FTS on path/symbol/body; set false for vector-only
   boosting:
     penalties:
       - pattern: "(^|/)tests?/"

@@ -1,8 +1,14 @@
 # embedding
 
-Converts code chunks into dense vector embeddings.
+Maps code chunks to dense vectors.
 
-`LocalEmbedder` (default) — `all-MiniLM-L6-v2` via fastembed/ONNX Runtime, 384d.
-Offline-first, zero config. Truncates at 384 chars (256-token model limit).
+## Backends
 
-`load_embedder_from_config()` in `base.py` is the factory.
+- **`LocalEmbedder`** — ONNX via fastembed. Default when `backend: fastembed` or `backend: auto` off Apple Silicon. Config: `embedder.fastembed`.
+- **`MLXEmbedder`** — MLX on Apple Silicon. Default when `backend: mlx` or `backend: auto` on ARM Mac. Config: `embedder.mlx`.
+
+`auto` resolves via `backend_resolve.resolved_embedder_backend()` — MLX when `mlx_embeddings` is importable, else fastembed.
+
+Models that require asymmetric prefixes (`search_document:` / `search_query:`) are detected by `requires_prefix()` in `prefixes.py`.
+
+`format_chunk_for_embedding()` in `format.py` defines how a chunk becomes an embedding input (path + symbol + content).

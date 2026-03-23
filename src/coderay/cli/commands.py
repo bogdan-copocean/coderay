@@ -153,7 +153,7 @@ def search_cmd(
         click.echo("")
         click.echo(
             _color(
-                f"  {i}. {r.path}:{r.start_line}-{r.end_line} ({r.symbol} score: {r.score:.3f})",
+                f"  {i}. {r.path}:{r.start_line}-{r.end_line} ({r.symbol} score: {r.score:.3f} relevance: {r.relevance})",
                 GREEN,
             )
         )
