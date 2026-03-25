@@ -1,5 +1,5 @@
 _DEFAULT_MSG = (
-    "Index not built. Ask the user to run 'coderay build' in their terminal, "
+    "Index not built. Ask the user to run `coderay init` then `coderay build`, "
     "then retry."
 )
 
