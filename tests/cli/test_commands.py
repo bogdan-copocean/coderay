@@ -28,13 +28,13 @@ class TestCLI:
     def test_list_no_index(self):
         runner = CliRunner()
         with runner.isolated_filesystem():
-            Path(".index").mkdir()
-            result = runner.invoke(cli, ["--index-dir", ".index", "list"])
+            Path(".coderay").mkdir()
+            result = runner.invoke(cli, ["list"])
             assert result.exit_code in (0, 1) or result.exception is not None
 
     def test_maintain_no_index(self):
         runner = CliRunner()
         with runner.isolated_filesystem():
-            Path(".index").mkdir()
-            result = runner.invoke(cli, ["--index-dir", ".index", "maintain"])
+            Path(".coderay").mkdir()
+            result = runner.invoke(cli, ["maintain"])
             assert result.exit_code in (0, 1) or result.exception is not None
