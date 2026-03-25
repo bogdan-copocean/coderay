@@ -1,5 +1,6 @@
 # Index (gitignored per plan; includes .indexer.lock for file lock)
 .coderay/
+.coderay.toml
 
 # Generated artifacts (AST HTML/MD, etc.)
 output/
