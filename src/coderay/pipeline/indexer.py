@@ -15,7 +15,7 @@ from coderay.core.utils import files_with_changed_content, hash_content, read_fr
 from coderay.embedding.base import Embedder, EmbedTask, load_embedder_from_config
 from coderay.embedding.format import format_chunk_for_embedding
 from coderay.graph.builder import build_and_save_graph
-from coderay.state.machine import IndexMeta, StateMachine
+from coderay.state.machine import IndexMeta, MetaState, StateMachine
 from coderay.state.version import check_index_version, write_index_version
 from coderay.storage.lancedb import Store, index_exists
 from coderay.vcs.git import Git
@@ -129,6 +129,7 @@ class Indexer:
         if can_resume:
             paths_remaining = saved_paths[processed_count:]
             if not paths_remaining:
+                logger.info("Finishing full index build (checkpoint already complete)")
                 self._state.finish(
                     last_commit=self._git.get_head_commit(),
                     branch=self._git.get_current_branch(),
@@ -136,6 +137,12 @@ class Indexer:
                 write_index_version(self._index_dir)
                 self._refresh_graph()
                 return IndexResult(cached=len(self._state.file_hashes))
+            logger.info(
+                "Resuming full index build (%d file(s) remaining, %d / %d processed)",
+                len(paths_remaining),
+                processed_count,
+                len(saved_paths),
+            )
             paths_to_process = paths_remaining
             rel_paths = saved_paths
         else:
@@ -333,65 +340,6 @@ class Indexer:
         except Exception as e:
             logger.warning("Graph refresh failed: %s", e)
 
-    def update_paths(
-        self,
-        changed: list[str],
-        removed: list[str] | None = None,
-    ) -> IndexResult:
-        """Update index for explicit paths (used by watcher)."""
-        self._state.set_incomplete()
-        file_hashes = self._state.file_hashes.copy()
-
-        removed = removed or []
-        if self._include_roots:
-            changed = [
-                p for p in changed if self._is_in_scope((self._repo_root / p).resolve())
-            ]
-            removed = [
-                p for p in removed if self._is_in_scope((self._repo_root / p).resolve())
-            ]
-        if removed:
-            self._store.delete_by_paths(removed)
-            for p in removed:
-                file_hashes.pop(p, None)
-            self._state.file_hashes = file_hashes
-
-        if not changed:
-            self._state.finish(
-                last_commit=self._git.get_head_commit(),
-                branch=self._git.get_current_branch(),
-            )
-            if removed:
-                self._refresh_graph()
-            return IndexResult(removed=len(removed))
-
-        paths_to_add = [self._repo_root / p for p in changed]
-        existing = files_with_changed_content(
-            repo=self._repo_root, paths=paths_to_add, file_hashes=file_hashes
-        )
-
-        if not existing and not removed:
-            self._state.finish(
-                last_commit=self._git.get_head_commit(),
-                branch=self._git.get_current_branch(),
-            )
-            return IndexResult(cached=len(file_hashes))
-
-        if existing:
-            result = self._update(
-                paths_to_add=existing,
-                file_hashes=file_hashes,
-            )
-            result.removed = len(removed)
-            return result
-
-        self._state.finish(
-            last_commit=self._git.get_head_commit(),
-            branch=self._git.get_current_branch(),
-        )
-        self._refresh_graph()
-        return IndexResult(removed=len(removed))
-
     def maintain(self) -> dict[str, Any]:
         """Run store maintenance."""
         if not index_exists(self._index_dir):
@@ -402,9 +350,23 @@ class Indexer:
         """Return True if index exists."""
         return index_exists(self._index_dir)
 
+    def _should_resume_full_build(self) -> bool:
+        """Return True when meta indicates an interrupted full build to finish."""
+        meta = self._state.current_state
+        if meta is None or meta.state == MetaState.ERRORED:
+            return False
+        if not (meta.is_in_progress() or meta.is_incomplete()):
+            return False
+        run = meta.current_run
+        if run.paths_to_process:
+            return True
+        return meta.is_in_progress()
+
     def ensure_index(self) -> IndexResult:
         """Build full index if missing; else incremental."""
         if not self.index_exists():
+            return self.build_full()
+        if self._should_resume_full_build():
             return self.build_full()
         return self.update_incremental()
 

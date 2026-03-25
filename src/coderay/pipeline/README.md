@@ -9,5 +9,5 @@ Orchestrates index lifecycle: build, incremental update, and file watching.
   and updates the graph and state. Supports full rebuild, incremental
   update, and resume from interruption (batched checkpoints).
 - `watcher.py` — `FileWatcher` monitors the repo with watchdog, debounces
-  rapid events, and triggers `Indexer.update_paths()` for changed files.
+  rapid events, and runs `Indexer.update_incremental()` after changes.
   Respects `.gitignore` and detects branch switches.
