@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,7 @@ from typing import Any
 import pathspec
 
 from coderay.chunking.chunker import chunk_file
-from coderay.core.config import Config, get_config
+from coderay.core.config import ENV_REPO_ROOT, Config, get_config
 from coderay.core.timing import timed, timed_phase
 from coderay.core.utils import files_with_changed_content, hash_content, read_from_path
 from coderay.embedding.base import Embedder, EmbedTask, load_embedder_from_config
@@ -49,9 +50,11 @@ class Indexer:
         embedder: Embedder | None = None,
     ) -> None:
         """Initialize indexer."""
-        self._repo_root = Path(repo_root)
-        self._config = get_config()
+        self._repo_root = Path(repo_root).resolve()
+        os.environ[ENV_REPO_ROOT] = str(self._repo_root)
+        self._config = get_config(self._repo_root)
         self._index_dir = Path(self._config.index.path)
+        self._include_roots = self._resolve_include_roots()
         self._git = Git(self._repo_root)
         self._state = StateMachine()
         self._embedder = embedder or load_embedder_from_config()
@@ -60,6 +63,29 @@ class Indexer:
             "gitignore", self._config.index.exclude_patterns
         )
         check_index_version(self._index_dir)
+
+    def _resolve_include_roots(self) -> list[Path]:
+        """Resolve `index.paths` into absolute roots."""
+        roots: list[Path] = []
+        for raw in self._config.index.paths or []:
+            p = Path(raw).expanduser()
+            roots.append(
+                (self._repo_root / p).resolve() if not p.is_absolute() else p.resolve()
+            )
+        return roots
+
+    def _is_in_scope(self, path: Path) -> bool:
+        """Return True if path is within configured include roots."""
+        if not self._include_roots:
+            return True
+        p = path.resolve()
+        for root in self._include_roots:
+            try:
+                p.relative_to(root)
+                return True
+            except ValueError:
+                continue
+        return False
 
     @property
     def config(self) -> Config:
@@ -117,6 +143,8 @@ class Indexer:
             self._store.clear()
 
             py_files = self._filter_excluded(self._git.discover_files())
+            if self._include_roots:
+                py_files = [p for p in py_files if self._is_in_scope(p)]
             if not py_files:
                 logger.warning("No source files found under %s", self._repo_root)
                 return IndexResult(cached=len(self._state.file_hashes))
@@ -159,6 +187,13 @@ class Indexer:
             last_commit=current.last_commit if current else None
         )
         to_add = self._filter_excluded(to_add)
+        if self._include_roots:
+            to_add = [p for p in to_add if self._is_in_scope(p)]
+            to_remove = [
+                p
+                for p in to_remove
+                if self._is_in_scope((self._repo_root / p).resolve())
+            ]
         if to_remove:
             self._store.delete_by_paths(paths=to_remove)
 
@@ -308,6 +343,13 @@ class Indexer:
         file_hashes = self._state.file_hashes.copy()
 
         removed = removed or []
+        if self._include_roots:
+            changed = [
+                p for p in changed if self._is_in_scope((self._repo_root / p).resolve())
+            ]
+            removed = [
+                p for p in removed if self._is_in_scope((self._repo_root / p).resolve())
+            ]
         if removed:
             self._store.delete_by_paths(removed)
             for p in removed:
