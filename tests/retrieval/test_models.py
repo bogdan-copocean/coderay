@@ -105,12 +105,19 @@ class TestIsTestPath:
     @pytest.mark.parametrize(
         "path,expected",
         [
+            # Python conventions
             ("src/tests/test_foo.py", True),
             ("test_foo.py", True),
             ("foo_test.py", True),
             ("tests/conftest.py", True),
+            # JavaScript / TypeScript conventions
+            ("src/utils/utils.spec.js", True),
+            ("src/components/Button.spec.tsx", True),
+            ("src/__tests__/auth.ts", True),
+            # Not test paths
             ("src/coderay/retrieval/search.py", False),
             ("src/coderay/__init__.py", False),
+            ("src/services/user.service.ts", False),
         ],
     )
     def test_is_test_path(self, path, expected):

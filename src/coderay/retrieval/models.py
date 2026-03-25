@@ -8,12 +8,19 @@ DEFAULT_MAX_CONTENT_LINES: int = 60
 Relevance = Literal["high", "medium", "low"]
 
 _TEST_PATH_PATTERNS: tuple[str, ...] = (
+    # Python conventions
     "/tests/",
     "/test/",
     "/test_",
     "_test.py",
     "/conftest.py",
     "/conftest_",
+    # JavaScript / TypeScript conventions
+    ".spec.ts",
+    ".spec.js",
+    ".spec.tsx",
+    ".spec.jsx",
+    "/__tests__/",
 )
 
 

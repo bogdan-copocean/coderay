@@ -9,7 +9,7 @@ from coderay.core.errors import IndexStaleError
 from coderay.core.timing import timed_phase
 from coderay.embedding.base import Embedder, EmbedTask, load_embedder_from_config
 from coderay.retrieval.boosting import StructuralBooster
-from coderay.retrieval.models import Relevance, SearchResult, is_test_path
+from coderay.retrieval.models import Relevance, SearchResult
 from coderay.state.machine import IndexMeta
 from coderay.state.version import check_index_version
 from coderay.storage.lancedb import Store, index_exists
@@ -102,9 +102,6 @@ class Retrieval:
         boosted = self._booster.boost(raw_results)
         results = [SearchResult.from_raw(r) for r in boosted]
         results = self._deduplicate_by_containment(results)
-
-        if not include_tests:
-            results = [r for r in results if not is_test_path(r.path)]
 
         results = self._assign_relevance(results)
         return results
