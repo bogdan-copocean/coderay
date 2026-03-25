@@ -56,7 +56,6 @@ def helper():
     return g.greet("world")
 """
 
-TREE_SITTER_PLAYGROUND_PATH = Path(__file__).parent / "tree_sitter_playground.py"
 
 EXPECTED_TREE_SITTER_PLAYGROUND_SKELETON = '''"""Sample for skeleton/chunking tests."""
 from __future__ import annotations
@@ -212,13 +211,6 @@ def tmp_index_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def sample_python_code() -> str:
     return SAMPLE_PYTHON
-
-
-@pytest.fixture
-def tree_sitter_playground_source() -> tuple[str, str]:
-    """Return (path, source) for tree_sitter_playground.py."""
-    source = TREE_SITTER_PLAYGROUND_PATH.read_text(encoding="utf-8")
-    return (str(TREE_SITTER_PLAYGROUND_PATH), source)
 
 
 @pytest.fixture

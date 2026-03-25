@@ -1,8 +1,14 @@
 """Tests for skeleton.extractor."""
 
+from __future__ import annotations
+
+from pathlib import Path
+
 import pytest
 
 from coderay.skeleton.extractor import extract_skeleton
+
+FIXTURES_PY = Path(__file__).parent.parent / "fixtures" / "py"
 
 SAMPLE_PYTHON = '''
 import os
@@ -89,12 +95,12 @@ class TestExtractSkeleton:
     def test_unsupported_extension_returns_content_unchanged(self, path, content):
         assert extract_skeleton(path, content) == content
 
-    def test_tree_sitter_playground_skeleton(
-        self, tree_sitter_playground_source, expected_tree_sitter_playground_skeleton
-    ):
-        """Verify skeleton extraction for the eclectic tree_sitter_playground module."""
-        path, source = tree_sitter_playground_source
-        skeleton = extract_skeleton(path, source, include_imports=True)
+    def test_playground_skeleton(self, expected_tree_sitter_playground_skeleton):
+        """Verify skeleton extraction for the eclectic playground module."""
+        path = FIXTURES_PY / "playground.py"
+        skeleton = extract_skeleton(
+            str(path), path.read_text(encoding="utf-8"), include_imports=True
+        )
         assert skeleton == expected_tree_sitter_playground_skeleton
 
     def test_include_imports_false_omits_imports_keeps_signatures(self):
@@ -176,48 +182,3 @@ class TestExtractSkeleton:
     def test_unknown_dotted_symbol_returns_hint(self):
         skeleton = extract_skeleton("test.py", SAMPLE_PYTHON, symbol="FakeClass.method")
         assert "not found" in skeleton.lower()
-
-    def test_javascript_skeleton(self):
-        """Extract JS class and function signatures with ellipsis."""
-        code = """
-import { fetch } from './api';
-
-const MY_CONST = 42;
-
-class UserService {
-    "Manages user operations."
-
-    createUser(name, email) {
-        return db.insert(name, email);
-    }
-}
-
-function helperFunction(x) {
-    "A helper."
-    return x + 1;
-}
-"""
-        try:
-            import tree_sitter_javascript  # noqa: F401
-        except ImportError:
-            pytest.skip("tree-sitter-javascript not installed")
-
-        skeleton = extract_skeleton("test.js", code)
-        assert "class UserService" in skeleton
-        assert "createUser" in skeleton
-        assert "function helperFunction" in skeleton
-        assert "..." in skeleton
-        assert "db.insert" not in skeleton
-        assert "MY_CONST" in skeleton
-
-    def test_javascript_skeleton_with_imports(self):
-        """JS imports included when requested."""
-        code = "import { foo } from './bar';\nfunction baz() {}\n"
-        try:
-            import tree_sitter_javascript  # noqa: F401
-        except ImportError:
-            pytest.skip("tree-sitter-javascript not installed")
-
-        skeleton = extract_skeleton("test.js", code, include_imports=True)
-        assert "import { foo }" in skeleton
-        assert "function baz" in skeleton

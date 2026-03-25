@@ -12,7 +12,7 @@ from coderay.graph.builder import build_and_save_graph
 from coderay.graph.extractor import extract_graph_from_file
 from coderay.skeleton.extractor import extract_skeleton
 
-FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "js_ts_production"
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "js_ts"
 
 
 def _extract_graph(path: Path):
