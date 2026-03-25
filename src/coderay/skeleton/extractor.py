@@ -170,6 +170,16 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         lang_cfg = self._ctx.lang_cfg
         return node.type in lang_cfg.cst.class_scope_types
 
+    def _is_call_argument(self, node) -> bool:
+        """Return True if *node* is an argument to a call expression.
+
+        Arrow functions appearing directly inside an ``arguments`` node are
+        callback arguments (implementation detail) and should not be emitted
+        as skeleton entries.
+        """
+        parent = node.parent
+        return parent is not None and parent.type == "arguments"
+
     def _decorated_inner(self, node):
         """Return inner class/function from decorated node."""
         lang_cfg = self._ctx.lang_cfg
@@ -233,6 +243,11 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
 
         # Functions: signature + docstring + ellipsis, no body traversal
         if kind == TraversalKind.FUNCTION:
+            # Arrow functions passed as call arguments (callbacks) are
+            # implementation detail — skip them entirely.
+            if ntype == "arrow_function" and self._is_call_argument(node):
+                self._seen.add(node.id)
+                return
             if not self._matches_symbol(node, depth):
                 self._seen.add(node.id)
                 return
