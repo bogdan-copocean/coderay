@@ -24,6 +24,14 @@ _RERANKER = RRFReranker()
 
 _HYBRID_FAILURE_WARN_THRESHOLD = 3
 
+# SQL WHERE fragment for test path filtering.  Kept here (not imported from
+# retrieval.models) to avoid a storage→retrieval dependency inversion.
+_TEST_SQL_FILTER = (
+    "path NOT ILIKE '%test%'"
+    " AND path NOT ILIKE '%.spec.%'"
+    " AND path NOT ILIKE '%/__tests__/%'"
+)
+
 
 class _ScoreField(Enum):
     """LanceDB score column names by search mode."""
@@ -255,7 +263,7 @@ class Store:
                 prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
                 query = query.where(f"path LIKE '{prefix}%'")
             if not include_tests:
-                query = query.where("path NOT ILIKE '%test%' ")
+                query = query.where(_TEST_SQL_FILTER)
             return query.limit(top_k).to_list()
         except Exception:
             self._hybrid_failures += 1
@@ -289,7 +297,7 @@ class Store:
             prefix = (path_prefix.rstrip("/") + "/").replace("'", "''")
             query = query.where(f"path LIKE '{prefix}%'")
         if not include_tests:
-            query = query.where("path NOT ILIKE '%test%'")
+            query = query.where(_TEST_SQL_FILTER)
 
         return query.limit(top_k).to_list()
 

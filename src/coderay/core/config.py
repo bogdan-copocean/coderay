@@ -58,11 +58,15 @@ class EmbedderConfig:
         return cfg.matryoshka_dimensions or cfg.dimensions
 
 
+def _default_exclude_patterns() -> list[str]:
+    return ["dist/", "build/", ".next/", "out/"]
+
+
 @dataclass(frozen=True)
 class IndexConfig:
     path: str = DEFAULT_INDEX_DIR
     exclude_patterns: Annotated[list[str], "optional, besides .gitignore"] = field(
-        default_factory=list
+        default_factory=_default_exclude_patterns
     )
 
 

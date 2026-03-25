@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pathspec
+
 from coderay.chunking.chunker import chunk_file
 from coderay.core.config import Config, get_config
 from coderay.core.timing import timed, timed_phase
@@ -54,6 +56,9 @@ class Indexer:
         self._state = StateMachine()
         self._embedder = embedder or load_embedder_from_config()
         self._store = Store()
+        self._exclude_spec = pathspec.PathSpec.from_lines(
+            "gitignore", self._config.index.exclude_patterns
+        )
         check_index_version(self._index_dir)
 
     @property
@@ -75,6 +80,14 @@ class Indexer:
     def current_state(self) -> IndexMeta | None:
         """Return current meta state; None if no run completed."""
         return self._state.current_state
+
+    def _filter_excluded(self, paths: list[Path]) -> list[Path]:
+        """Remove paths matching index.exclude_patterns."""
+        return [
+            p
+            for p in paths
+            if not self._exclude_spec.match_file(str(p.relative_to(self._repo_root)))
+        ]
 
     @timed("full_build")
     def build_full(self) -> IndexResult:
@@ -103,7 +116,7 @@ class Indexer:
             self._state.set_incomplete()
             self._store.clear()
 
-            py_files = self._git.discover_files()
+            py_files = self._filter_excluded(self._git.discover_files())
             if not py_files:
                 logger.warning("No source files found under %s", self._repo_root)
                 return IndexResult(cached=len(self._state.file_hashes))
@@ -145,6 +158,7 @@ class Indexer:
         to_add, to_remove = self._git.get_files_to_index(
             last_commit=current.last_commit if current else None
         )
+        to_add = self._filter_excluded(to_add)
         if to_remove:
             self._store.delete_by_paths(paths=to_remove)
 
