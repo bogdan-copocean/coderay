@@ -1,16 +1,11 @@
 """Tests for embedding base utilities."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from coderay.core.config import (
-    Config,
-    EmbedderConfig,
-    FastembedEmbedderConfig,
-    MLXEmbedderConfig,
-    _reset_config_for_testing,
-)
+from coderay.core.config import _reset_config_for_testing, config_for_repo
 from coderay.embedding.base import Embedder, load_embedder_from_config
 
 
@@ -36,21 +31,25 @@ class TestLoadEmbedderFromConfig:
     @patch("coderay.embedding.local.LocalEmbedder")
     def test_uses_dimensions_from_config(self, mock_local_cls):
         mock_local_cls.return_value = MagicMock()
+        base = config_for_repo(Path.cwd())
         _reset_config_for_testing(
-            Config(
-                embedder=EmbedderConfig(
-                    backend="fastembed",
-                    fastembed=FastembedEmbedderConfig(dimensions=123),
-                ),
+            config_for_repo(
+                Path.cwd(),
+                {
+                    "embedder": {
+                        "backend": "fastembed",
+                        "fastembed": {"dimensions": 123},
+                    }
+                },
             ),
         )
         try:
             _ = load_embedder_from_config()
             mock_local_cls.assert_called_once_with(
-                model=Config().embedder.fastembed.model_name,
+                model=base.embedder.fastembed.model_name,
                 dimensions=123,
                 matryoshka_dimensions=None,
-                batch_size=64,
+                batch_size=base.embedder.fastembed.batch_size,
             )
         finally:
             _reset_config_for_testing(None)
@@ -59,14 +58,17 @@ class TestLoadEmbedderFromConfig:
     def test_mlx_backend(self, mock_mlx_cls):
         mock_mlx_cls.return_value = MagicMock()
         _reset_config_for_testing(
-            Config(
-                embedder=EmbedderConfig(
-                    backend="mlx",
-                    mlx=MLXEmbedderConfig(
-                        model_name="mlx-community/bge-small-en-v1.5-bf16",
-                        dimensions=384,
-                    ),
-                ),
+            config_for_repo(
+                Path.cwd(),
+                {
+                    "embedder": {
+                        "backend": "mlx",
+                        "mlx": {
+                            "model_name": "mlx-community/bge-small-en-v1.5-bf16",
+                            "dimensions": 384,
+                        },
+                    }
+                },
             ),
         )
         try:
