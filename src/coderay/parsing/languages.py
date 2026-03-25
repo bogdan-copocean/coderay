@@ -123,6 +123,8 @@ class PythonConfig:
 _JS_TS_IMPORT_TYPES: tuple[str, ...] = ("import_statement",)
 _JS_TS_FUNCTION_SCOPE_TYPES: tuple[str, ...] = (
     "function_declaration",
+    "generator_function_declaration",
+    "generator_function",
     "method_definition",
     "arrow_function",
 )

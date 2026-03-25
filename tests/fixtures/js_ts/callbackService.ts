@@ -2,44 +2,44 @@
  * Service with callback-heavy methods — exercises Promise and nested callback patterns.
  */
 
-export class TokenVerifier {
-    constructor(private readonly publicKey: string) {}
+export class TaskRunner {
+    constructor(private readonly config: RunnerConfig) {}
 
-    verify(token: string, ignoreExpiration = false): VerifyResult {
+    run(task: Task, options: RunOptions = {}): RunResult {
         try {
-            const decoded = lib.verify(token, this.publicKey, { ignoreExpiration });
-            return decoded ? VerifyResult.Valid : VerifyResult.Invalid;
+            const output = lib.execute(task, this.config, options);
+            return output ? RunResult.Success : RunResult.Failed;
         } catch (e) {
-            if (e instanceof lib.ExpiredError) {
-                return VerifyResult.Expired;
+            if (e instanceof lib.TimeoutError) {
+                return RunResult.TimedOut;
             }
-            return VerifyResult.Invalid;
+            return RunResult.Failed;
         }
     }
 
-    verifyAsync(token: string, ignoreExpiration = false): Promise<VerifyResult> {
+    runAsync(task: Task, options: RunOptions = {}): Promise<RunResult> {
         return new Promise((resolve) => {
-            lib.verify(
-                token,
-                this.publicKey,
-                { ignoreExpiration },
-                (err, decoded) => {
+            lib.execute(
+                task,
+                this.config,
+                options,
+                (err, output) => {
                     if (err) {
-                        resolve(err instanceof lib.ExpiredError ? VerifyResult.Expired : VerifyResult.Invalid);
+                        resolve(err instanceof lib.TimeoutError ? RunResult.TimedOut : RunResult.Failed);
                         return;
                     }
-                    resolve(decoded ? VerifyResult.Valid : VerifyResult.Invalid);
+                    resolve(output ? RunResult.Success : RunResult.Failed);
                 },
             );
         });
     }
 
-    extract(token: string): { payload?: unknown; status: VerifyResult } {
+    inspect(task: Task): { output?: unknown; status: RunResult } {
         try {
-            const decoded = lib.verify(token, this.publicKey);
-            return { payload: decoded, status: VerifyResult.Valid };
+            const output = lib.execute(task, this.config);
+            return { output, status: RunResult.Success };
         } catch (e) {
-            return { status: VerifyResult.Invalid };
+            return { status: RunResult.Failed };
         }
     }
 }

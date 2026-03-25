@@ -124,12 +124,15 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         return None
 
     def _get_signature_line(self, node) -> str:
-        """Return text up to colon or brace."""
+        """Return text up to the first body-opening colon or brace."""
         text = self.node_text(node)
+        candidates = []
         for delimiter in (":\n", "{\n", ":\r\n", "{\r\n"):
             idx = text.find(delimiter)
             if idx >= 0:
-                return text[: idx + 1]
+                candidates.append(idx)
+        if candidates:
+            return text[: min(candidates) + 1]
         first_line = text.split("\n")[0]
         return first_line
 
@@ -170,15 +173,14 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         lang_cfg = self._ctx.lang_cfg
         return node.type in lang_cfg.cst.class_scope_types
 
-    def _is_call_argument(self, node) -> bool:
-        """Return True if *node* is an argument to a call expression.
+    def _is_anonymous(self, node) -> bool:
+        """Return True if *node* is an anonymous function/generator expression.
 
-        Arrow functions appearing directly inside an ``arguments`` node are
-        callback arguments (implementation detail) and should not be emitted
-        as skeleton entries.
+        Arrow functions and generator function expressions used as values
+        (callbacks, object properties, IIFE wrappers, etc.) have no ``name``
+        field and should not be emitted as skeleton entries.
         """
-        parent = node.parent
-        return parent is not None and parent.type == "arguments"
+        return node.child_by_field_name("name") is None
 
     def _decorated_inner(self, node):
         """Return inner class/function from decorated node."""
@@ -243,9 +245,12 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
 
         # Functions: signature + docstring + ellipsis, no body traversal
         if kind == TraversalKind.FUNCTION:
-            # Arrow functions passed as call arguments (callbacks) are
+            # Anonymous arrow functions and generator function expressions
+            # (callbacks, object-literal values, IIFE wrappers, etc.) are
             # implementation detail — skip them entirely.
-            if ntype == "arrow_function" and self._is_call_argument(node):
+            if ntype in ("arrow_function", "generator_function") and self._is_anonymous(
+                node
+            ):
                 self._seen.add(node.id)
                 return
             if not self._matches_symbol(node, depth):

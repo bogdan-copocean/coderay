@@ -82,32 +82,32 @@ class TestApiClient:
 
 class TestCallbackService:
     def test_class_header_present(self) -> None:
-        assert "class TokenVerifier" in _skeleton("callbackService.ts")
+        assert "class TaskRunner" in _skeleton("callbackService.ts")
 
     def test_all_method_signatures_present(self) -> None:
         skeleton = _skeleton("callbackService.ts")
-        assert "verify(" in skeleton
-        assert "verifyAsync(" in skeleton
-        assert "extract(" in skeleton
+        assert "run(" in skeleton
+        assert "runAsync(" in skeleton
+        assert "inspect(" in skeleton
 
     def test_ellipsis_present(self) -> None:
         assert "..." in _skeleton("callbackService.ts")
 
     def test_no_implementation_lines(self) -> None:
         skeleton = _skeleton("callbackService.ts")
-        assert "lib.verify" not in skeleton
+        assert "lib.execute" not in skeleton
         assert "resolve(" not in skeleton
 
-    def test_callback_args_not_emitted_as_signatures(self) -> None:
-        """Arrow functions passed as call arguments must not appear as signatures."""
+    def test_anonymous_functions_not_emitted_as_signatures(self) -> None:
+        """Anonymous arrow functions used as values must not appear as signatures."""
         skeleton = _skeleton("callbackService.ts")
         assert "(resolve)" not in skeleton
-        assert "(err, decoded)" not in skeleton
+        assert "(err, output)" not in skeleton
 
     def test_symbol_filter_scopes_to_class(self) -> None:
-        skeleton = _skeleton("callbackService.ts", symbol="TokenVerifier")
-        assert "class TokenVerifier" in skeleton
-        assert "verifyAsync(" in skeleton
+        skeleton = _skeleton("callbackService.ts", symbol="TaskRunner")
+        assert "class TaskRunner" in skeleton
+        assert "runAsync(" in skeleton
         assert "(resolve)" not in skeleton
 
 
