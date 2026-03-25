@@ -74,7 +74,7 @@ class Store:
         self._config = cfg
         self.db_path = Path(cfg.index.path)
         self.dimensions = cfg.embedder.effective_dimensions()
-        self.metric = cfg.semantic_search.metric
+        self.metric = cfg.search.metric
         self._ensure_dir()
         self._db = lancedb.connect(str(self.db_path))
         self._table_known = False
@@ -196,7 +196,7 @@ class Store:
             return []
         table = self._get_table()
 
-        hybrid_enabled = bool(self._config.semantic_search.hybrid)
+        hybrid_enabled = bool(self._config.search.hybrid)
         rows = None
         used_hybrid = False
 
