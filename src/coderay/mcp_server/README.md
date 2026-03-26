@@ -11,10 +11,10 @@ Entry point: `coderay-mcp` (stdio transport).
 
 ## Configuration
 
-Set `CODERAY_INDEX_DIR` in the MCP server's `env` so it finds the index and graph:
+Set `CODERAY_REPO_ROOT` in the MCP server's `env` so it finds `.coderay.toml` and the `.coderay/` index:
 
 ```json
-"env": { "CODERAY_INDEX_DIR": "${workspaceFolder}/.index" }
+"env": { "CODERAY_REPO_ROOT": "${workspaceFolder}" }
 ```
 
-Cursor interpolates `${workspaceFolder}`. Without this, the server may use the wrong working directory and fail to load the index.
+Cursor interpolates `${workspaceFolder}`. Run `coderay init` then `coderay build` (or `coderay watch`) from the project root first.

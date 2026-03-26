@@ -30,8 +30,8 @@ def repo(tmp_path: Path) -> Path:
 @pytest.fixture
 def index_dir(tmp_path: Path) -> Path:
     """Return index directory (outside repo)."""
-    d = tmp_path / ".index"
-    d.mkdir()
+    d = tmp_path / ".coderay"
+    d.mkdir(exist_ok=True)
     return d
 
 
@@ -311,8 +311,8 @@ class TestDebouncedHandlerBatching:
 
 class TestFileWatcher:
     def test_start_stop_lifecycle(self, repo: Path, tmp_path: Path) -> None:
-        idx = tmp_path / ".index"
-        idx.mkdir()
+        idx = tmp_path / ".coderay"
+        idx.mkdir(exist_ok=True)
         calls: list[tuple] = []
         watcher = FileWatcher(
             repo,
@@ -325,8 +325,8 @@ class TestFileWatcher:
         watcher.stop()
 
     def test_detects_new_file(self, repo: Path, tmp_path: Path) -> None:
-        idx = tmp_path / ".index"
-        idx.mkdir()
+        idx = tmp_path / ".coderay"
+        idx.mkdir(exist_ok=True)
         calls: list[tuple] = []
 
         def record(c: set[str], r: set[str]) -> None:
@@ -352,8 +352,8 @@ class TestFileWatcher:
         assert "new_file.py" in all_changed
 
     def test_ignores_non_source_files(self, repo: Path, tmp_path: Path) -> None:
-        idx = tmp_path / ".index"
-        idx.mkdir()
+        idx = tmp_path / ".coderay"
+        idx.mkdir(exist_ok=True)
         calls: list[tuple] = []
         watcher = FileWatcher(
             repo,
@@ -371,8 +371,8 @@ class TestFileWatcher:
         assert len(calls) == 0
 
     def test_respects_gitignore(self, repo: Path, tmp_path: Path) -> None:
-        idx = tmp_path / ".index"
-        idx.mkdir()
+        idx = tmp_path / ".coderay"
+        idx.mkdir(exist_ok=True)
         (repo / ".gitignore").write_text("scratch/\n")
         (repo / "scratch").mkdir()
 

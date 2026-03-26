@@ -1,5 +1,7 @@
 """Test graph.extractor: FileContext, build_module_filter, integration."""
 
+from pathlib import Path
+
 from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.extractor import (
     FileContext,
@@ -90,10 +92,13 @@ class TestBuildModuleFilter:
         assert "myproject" not in filt
 
     def test_exclude_modules_adds_entries(self):
-        from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
+        from coderay.core.config import _reset_config_for_testing, config_for_repo
 
         _reset_config_for_testing(
-            Config(graph=GraphConfig(exclude_modules=["numpy", "pandas"]))
+            config_for_repo(
+                Path.cwd(),
+                {"graph": {"exclude_modules": ["numpy", "pandas"]}},
+            )
         )
         try:
             filt = build_module_filter()
@@ -104,9 +109,11 @@ class TestBuildModuleFilter:
         assert "builtins" in filt
 
     def test_include_modules_overrides_default(self):
-        from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
+        from coderay.core.config import _reset_config_for_testing, config_for_repo
 
-        _reset_config_for_testing(Config(graph=GraphConfig(include_modules=["typing"])))
+        _reset_config_for_testing(
+            config_for_repo(Path.cwd(), {"graph": {"include_modules": ["typing"]}})
+        )
         try:
             filt = build_module_filter()
         finally:
@@ -115,14 +122,17 @@ class TestBuildModuleFilter:
         assert "builtins" in filt
 
     def test_both_exclude_and_include(self):
-        from coderay.core.config import Config, GraphConfig, _reset_config_for_testing
+        from coderay.core.config import _reset_config_for_testing, config_for_repo
 
         _reset_config_for_testing(
-            Config(
-                graph=GraphConfig(
-                    exclude_modules=["requests"],
-                    include_modules=["typing"],
-                )
+            config_for_repo(
+                Path.cwd(),
+                {
+                    "graph": {
+                        "exclude_modules": ["requests"],
+                        "include_modules": ["typing"],
+                    }
+                },
             )
         )
         try:

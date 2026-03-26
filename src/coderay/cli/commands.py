@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -45,6 +46,33 @@ def _setup_logging(verbose: bool = False) -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
+def _set_repo_root(repo_root: Path) -> None:
+    from coderay.core.config import ENV_REPO_ROOT
+
+    os.environ[ENV_REPO_ROOT] = str(repo_root.resolve())
+
+
+def _load_config_or_exit(ctx: click.Context, repo_root: Path):
+    from coderay.core.config import ProjectNotInitializedError, get_config
+
+    try:
+        _set_repo_root(repo_root)
+        return get_config(repo_root)
+    except ProjectNotInitializedError as e:
+        click.echo(_color(str(e), YELLOW))
+        ctx.exit(1)
+
+
+def _require_built_index(ctx: click.Context, index_dir: Path) -> None:
+    if not index_exists(index_dir):
+        click.echo(_color("No index found. Run `coderay build` first.", YELLOW))
+        ctx.exit(1)
+    sm = StateMachine()
+    if sm.current_state is None:
+        click.echo(_color("No index state. Run `coderay build` first.", YELLOW))
+        ctx.exit(1)
+
+
 @click.group()
 @click.version_option(package_name="coderay", prog_name="coderay")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Verbose logging")
@@ -54,9 +82,44 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     _setup_logging(verbose)
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
-    from coderay.core.config import get_config
 
-    get_config()
+
+@cli.command()
+@click.option(
+    "--repo",
+    default=".",
+    type=click.Path(exists=True, path_type=Path),
+    help="Repo root (where .coderay.toml will be written).",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite existing .coderay.toml if present.",
+)
+@click.pass_context
+def init(ctx: click.Context, repo: Path, force: bool) -> None:
+    """Initialize a repository for CodeRay."""
+    from coderay.core.config import render_default_toml
+
+    repo_root = repo.resolve()
+    _set_repo_root(repo_root)
+    cfg_path = repo_root / ".coderay.toml"
+    index_dir = repo_root / ".coderay"
+
+    if cfg_path.exists() and not force:
+        click.echo(
+            _color(
+                f"Config already exists at {cfg_path}. Use --force to overwrite.",
+                YELLOW,
+            )
+        )
+        ctx.exit(1)
+
+    index_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(render_default_toml(repo_root), encoding="utf-8")
+    click.echo(_color(f"Wrote {cfg_path}", GREEN))
+    click.echo(_color(f"Index directory: {index_dir}", CYAN))
 
 
 @cli.command()
@@ -70,9 +133,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 @click.pass_context
 def build(ctx: click.Context, full: bool, repo: Path) -> None:
     """Build or rebuild index."""
-    from coderay.core.config import get_config
-
-    config = get_config()
+    config = _load_config_or_exit(ctx, repo)
     index_dir = Path(config.index.path)
     index_dir.mkdir(parents=True, exist_ok=True)
     indexer = Indexer(repo)
@@ -115,19 +176,10 @@ def search_cmd(
     include_tests: bool,
 ) -> None:
     """Semantic search."""
-    from coderay.core.config import get_config
-
-    config = get_config()
+    config = _load_config_or_exit(ctx, Path.cwd())
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
-
-    sm = StateMachine()
-    current_state = sm.current_state
-    if current_state is None:
-        click.echo(_color("No index state. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
+    _require_built_index(ctx, index_dir)
+    current_state = StateMachine().current_state
 
     retrieval = Retrieval()
     click.echo(_color(f"Searching: {query_text!r}", CYAN))
@@ -187,13 +239,9 @@ def list_cmd(
     show_content: bool,
 ) -> None:
     """Show index contents: chunk counts and/or list."""
-    from coderay.core.config import get_config
-
-    config = get_config()
+    config = _load_config_or_exit(ctx, Path.cwd())
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
+    _require_built_index(ctx, index_dir)
 
     store = Store()
     total = store.chunk_count()
@@ -225,21 +273,14 @@ def list_cmd(
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Show index status."""
-    from coderay.core.config import get_config
     from coderay.state.version import read_index_version
     from coderay.storage.lancedb import Store
 
-    config = get_config()
+    config = _load_config_or_exit(ctx, Path.cwd())
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
-
+    _require_built_index(ctx, index_dir)
     sm = StateMachine()
     state = sm.current_state
-    if state is None:
-        click.echo(_color("No index state found.", YELLOW))
-        ctx.exit(1)
 
     store = Store()
     chunks = store.chunk_count()
@@ -266,13 +307,9 @@ def status(ctx: click.Context) -> None:
 @click.pass_context
 def maintain(ctx: click.Context, repo: Path) -> None:
     """Reclaim space and compact index."""
-    from coderay.core.config import get_config
-
-    config = get_config()
+    config = _load_config_or_exit(ctx, repo)
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
+    _require_built_index(ctx, index_dir)
     click.echo(_color("Maintaining index...", CYAN))
     indexer = Indexer(repo)
     with acquire_indexer_lock(index_dir):
@@ -342,14 +379,11 @@ def graph_cmd(
     limit: int,
 ) -> None:
     """List call and import graph edges."""
-    from coderay.core.config import get_config
     from coderay.graph.builder import load_graph
 
-    config = get_config()
+    config = _load_config_or_exit(ctx, Path.cwd())
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
+    _require_built_index(ctx, index_dir)
     graph = load_graph(index_dir)
     edges = graph.to_dict().get("edges", []) if graph else []
     if not edges:
@@ -387,14 +421,11 @@ def graph_cmd(
 @click.pass_context
 def impact_cmd(ctx: click.Context, node_id: str, max_depth: int) -> None:
     """List blast radius (callers and dependents)."""
-    from coderay.core.config import get_config
     from coderay.graph.builder import load_graph
 
-    config = get_config()
+    config = _load_config_or_exit(ctx, Path.cwd())
     index_dir = Path(config.index.path)
-    if not index_exists(index_dir):
-        click.echo(_color("No index found. Run 'coderay build' first.", YELLOW))
-        ctx.exit(1)
+    _require_built_index(ctx, index_dir)
     graph = load_graph(index_dir)
     if graph is None:
         click.echo(_color("No graph data. Run 'coderay build' to build it.", YELLOW))
@@ -439,10 +470,9 @@ def watch(
     quiet: bool,
 ) -> None:
     """Watch for changes; re-index automatically."""
-    from coderay.core.config import get_config
     from coderay.pipeline.watcher import FileWatcher
 
-    config = get_config()
+    config = _load_config_or_exit(ctx, repo)
     index_dir = Path(config.index.path)
     index_dir.mkdir(parents=True, exist_ok=True)
 
@@ -451,13 +481,7 @@ def watch(
 
     indexer = Indexer(repo)
     try:
-        with timed_phase("watch_startup", log=False) as tp:
-            with acquire_indexer_lock(index_dir):
-                if not indexer.index_exists():
-                    click.echo(_color("No index found. Building full index...", CYAN))
-                result = indexer.ensure_index()
-            indexer.maintain()
-        click.echo(_color(f"{result} in {tp.elapsed:.2f}s", GREEN))
+        _require_built_index(ctx, index_dir)
     except Exception as e:
         indexer.error(str(e))
         click.echo(_color(f"Error: {e}", RED))

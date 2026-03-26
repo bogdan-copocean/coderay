@@ -25,7 +25,7 @@ class StructuralBooster:
     @classmethod
     def from_config(cls) -> StructuralBooster:
         """Build booster from config."""
-        boosting = get_config().semantic_search.boosting
+        boosting = get_config().search.boosting
         return cls(
             penalties=[
                 BoostRule(regex=re.compile(r.pattern), factor=r.factor)

@@ -1,8 +1,8 @@
 # CodeRay - convenience targets
-# Run from repo root.  Index lives in .index/ (gitignored).
+# Run from repo root.  Index lives in .coderay/ (gitignored).
 # Requires: pip install -e . (registers the `coderay` entry point)
 
-INDEX_DIR ?= .index
+INDEX_DIR ?= .coderay
 REPO ?= .
 
 .PHONY: install build build-full search list status maintain skeleton graph \

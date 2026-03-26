@@ -76,7 +76,7 @@ Add to `~/.claude/claude_code_config.json` or Cursor MCP settings:
       "command": "/path/to/your/.venv/bin/coderay-mcp",
       "args": [],
       "env": {
-        "CODERAY_INDEX_DIR": "${workspaceFolder}/.index"
+        "CODERAY_REPO_ROOT": "${workspaceFolder}"
       }
     }
   }
@@ -85,9 +85,9 @@ Add to `~/.claude/claude_code_config.json` or Cursor MCP settings:
 
 Replace `/path/to/your/.venv/bin/coderay-mcp` with the output of `which coderay-mcp`.
 
-**Important:** Set `CODERAY_INDEX_DIR` so the MCP server finds the index and graph
-in your project. Cursor interpolates `${workspaceFolder}` to the workspace root.
-Run `coderay build` (or `coderay watch`) from the project root first.
+**Important:** Set `CODERAY_REPO_ROOT` so the MCP server finds `.coderay.toml` and
+the `.coderay/` index. Cursor interpolates `${workspaceFolder}` to the workspace root.
+Run `coderay init` then `coderay build` (or `coderay watch`) from the project root first.
 
 ## CLI reference
 
@@ -117,44 +117,45 @@ If you change embedder backend, model, or dimensions, run **`coderay build --ful
 
 File discovery and ignoring are based on `.git` and `.gitignore`. The `.git` directory is excluded; files matching `.gitignore` are not indexed. Config `exclude_patterns` add extra exclusions on top of that.
 
-Optional `config.yaml` in the index directory (default: `.index/config.yaml`):
+Run `coderay init` to create `.coderay.toml` and `.coderay/`.
 
-```yaml
-embedder:
-  backend: auto   # auto | fastembed | mlx
-  fastembed:
-    model_name: BAAI/bge-small-en-v1.5
-    dimensions: 384
-    batch_size: 64
-  mlx:
-    model_name: mlx-community/bge-small-en-v1.5-bf16
-    dimensions: 384
-    batch_size: 256
+```toml
+[index]
+dir = ".coderay"
+paths = []  # empty means “index everything under repo”
+exclude_patterns = ["dist/", "build/", ".next/", "out/"]
 
-index:
-  exclude_patterns:  # besides .gitignore
-    - "*.log"
+[graph]
+exclude_modules = []
+include_modules = []
 
-semantic_search:
-  hybrid: true   # vector + FTS on path/symbol/body; set false for vector-only
-  boosting:
-    penalties:
-      - pattern: "(^|/)tests?/"
-        factor: 0.5
-      - pattern: "(^|/)test_[^/]+\\.py$"
-        factor: 0.5
-    bonuses:
-      - pattern: "(^|/)src/"
-        factor: 1.1
-  metric: cosine
+[search]
+metric = "cosine"
+hybrid = true
 
-watcher:
-  debounce: 2
-  exclude_patterns:  # besides .gitignore
-    - "*.log"
+[search.boosting]
+penalties = [
+  { pattern = "(^|/)tests?/", factor = 0.5 },
+  { pattern = "(^|/)test_[^/]+\\.py$", factor = 0.5 },
+  { pattern = "(^|/)(mock|fixture|conftest)", factor = 0.4 },
+]
+bonuses = [{ pattern = "(^|/)src/", factor = 1.1 }]
 
-graph:
-  exclude_modules: []   # module names to exclude from CALLS/IMPORTS edges
-  include_modules: []  # force-include (override excludes)
+[embedder]
+backend = "auto"  # auto | fastembed | mlx
+
+[embedder.fastembed]
+model_name = "BAAI/bge-small-en-v1.5"
+dimensions = 384
+batch_size = 64
+
+[embedder.mlx]
+model_name = "mlx-community/bge-small-en-v1.5-bf16"
+dimensions = 384
+batch_size = 256
+
+[watcher]
+debounce = 2
+exclude_patterns = []
 ```
 

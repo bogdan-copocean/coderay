@@ -76,7 +76,7 @@ class TestGetFileSkeleton:
         from coderay.mcp_server.server import get_file_skeleton
 
         with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
-            mock_idx.return_value = tmp_path / ".index"
+            mock_idx.return_value = tmp_path / ".coderay"
             f = tmp_path / "hello.py"
             f.write_text("def greet(): pass")
             result = get_file_skeleton("hello.py")
@@ -87,7 +87,7 @@ class TestGetFileSkeleton:
         from coderay.mcp_server.server import get_file_skeleton
 
         with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
-            mock_idx.return_value = tmp_path / ".index"
+            mock_idx.return_value = tmp_path / ".coderay"
             with pytest.raises(FileNotFoundError):
                 get_file_skeleton("../../etc/passwd")
 

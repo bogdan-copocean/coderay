@@ -2,19 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from coderay.core.config import (
-    Config,
-    EmbedderConfig,
-    FastembedEmbedderConfig,
-    IndexConfig,
-    MLXEmbedderConfig,
-    _reset_config_for_testing,
-)
+from coderay.core.config import Config, _reset_config_for_testing, config_for_repo
 from coderay.core.models import Chunk
 from coderay.embedding.base import Embedder, EmbedTask
 
@@ -36,13 +30,6 @@ class MockEmbedder(Embedder):
     ) -> list[list[float]]:
         return [[float(i + 1)] * self.DIMS for i, _ in enumerate(texts)]
 
-
-MOCK_CONFIG: Config = Config(
-    embedder=EmbedderConfig(
-        fastembed=FastembedEmbedderConfig(dimensions=MockEmbedder.DIMS),
-        mlx=MLXEmbedderConfig(dimensions=MockEmbedder.DIMS),
-    ),
-)
 
 SAMPLE_PYTHON = """\
 import os
@@ -171,21 +158,32 @@ def mock_embedder() -> MockEmbedder:
 
 
 @pytest.fixture
-def mock_config() -> Config:
-    return MOCK_CONFIG
+def mock_config(tmp_path: Path) -> Config:
+    return config_for_repo(
+        tmp_path,
+        {
+            "embedder": {
+                "fastembed": {"dimensions": MockEmbedder.DIMS},
+                "mlx": {"dimensions": MockEmbedder.DIMS},
+            }
+        },
+    )
 
 
 @pytest.fixture
 def app_config(tmp_path: Path) -> Config:
-    """Set global config: index=tmp_path/.index, dimensions=4."""
-    idx = tmp_path / ".index"
-    idx.mkdir()
-    cfg = Config(
-        index=IndexConfig(path=str(idx)),
-        embedder=EmbedderConfig(
-            fastembed=FastembedEmbedderConfig(dimensions=MockEmbedder.DIMS),
-            mlx=MLXEmbedderConfig(dimensions=MockEmbedder.DIMS),
-        ),
+    """Set global config: index=tmp_path/.coderay, dimensions=4."""
+    idx = tmp_path / ".coderay"
+    idx.mkdir(exist_ok=True)
+    cfg = config_for_repo(
+        tmp_path,
+        {
+            "index": {"path": str(idx)},
+            "embedder": {
+                "fastembed": {"dimensions": MockEmbedder.DIMS},
+                "mlx": {"dimensions": MockEmbedder.DIMS},
+            },
+        },
     )
     _reset_config_for_testing(cfg)
     yield cfg
@@ -193,18 +191,40 @@ def app_config(tmp_path: Path) -> Config:
 
 
 @pytest.fixture
-def default_config() -> Config:
+def default_config(tmp_path: Path) -> Config:
     """Reset global config; pin embedder to fastembed so tests are OS-agnostic."""
-    cfg = Config(embedder=EmbedderConfig(backend="fastembed"))
+    cfg = config_for_repo(tmp_path, {"embedder": {"backend": "fastembed"}})
     _reset_config_for_testing(cfg)
     yield cfg
     _reset_config_for_testing(None)
 
 
+@pytest.fixture(autouse=True)
+def _autouse_test_config(tmp_path: Path) -> None:
+    """Provide a default in-memory config for tests."""
+    from coderay.core.config import ENV_REPO_ROOT
+
+    prev = os.environ.get(ENV_REPO_ROOT)
+    os.environ[ENV_REPO_ROOT] = str(Path.cwd().resolve())
+    idx = tmp_path / ".coderay"
+    idx.mkdir(exist_ok=True)
+    cfg = config_for_repo(
+        tmp_path,
+        {"index": {"path": str(idx)}, "embedder": {"backend": "fastembed"}},
+    )
+    _reset_config_for_testing(cfg)
+    yield
+    _reset_config_for_testing(None)
+    if prev is None:
+        os.environ.pop(ENV_REPO_ROOT, None)
+    else:
+        os.environ[ENV_REPO_ROOT] = prev
+
+
 @pytest.fixture
 def tmp_index_dir(tmp_path: Path) -> Path:
-    d = tmp_path / ".index"
-    d.mkdir()
+    d = tmp_path / ".coderay"
+    d.mkdir(exist_ok=True)
     return d
 
 

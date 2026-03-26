@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from coderay.core.config import Config, IndexConfig, _reset_config_for_testing
+from coderay.core.config import _reset_config_for_testing, config_for_repo
 from coderay.state.machine import (
     FILE_HASHES_FILENAME,
     META_FILENAME,
@@ -40,7 +40,9 @@ class TestIndexMeta:
 
 class TestStateMachine:
     def test_init_empty_dir(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         assert sm.index_dir == tmp_index_dir
@@ -51,7 +53,9 @@ class TestStateMachine:
         assert sm.has_partial_progress is False
 
     def test_start_sets_in_progress(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -62,7 +66,9 @@ class TestStateMachine:
         assert sm.is_in_progress is True
 
     def test_finish_sets_done(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -72,7 +78,9 @@ class TestStateMachine:
         assert sm.is_in_progress is False
 
     def test_finish_with_overrides(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -81,7 +89,9 @@ class TestStateMachine:
         assert sm.current_state.branch == "feature"
 
     def test_set_errored(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -91,14 +101,18 @@ class TestStateMachine:
         assert sm.current_state.current_run.error == "Something went wrong"
 
     def test_set_errored_noop_when_no_state(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.set_errored("oops")
         assert sm.current_state is None
 
     def test_set_incomplete(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -107,7 +121,9 @@ class TestStateMachine:
         assert sm.is_in_progress is True
 
     def test_set_incomplete_noop_when_done(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -116,7 +132,9 @@ class TestStateMachine:
         assert sm.current_state.state == MetaState.DONE
 
     def test_save_progress(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -126,7 +144,9 @@ class TestStateMachine:
         assert sm.has_partial_progress is True
 
     def test_save_progress_noop_when_not_in_progress(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.save_progress(full_rel_paths=["a.py"], processed_count=1)
@@ -143,7 +163,9 @@ class TestStateMachine:
     def test_has_partial_progress(
         self, tmp_index_dir, paths, processed_count, expected
     ):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -153,7 +175,9 @@ class TestStateMachine:
 
 class TestMetaPersistence:
     def test_meta_json_persisted_on_start(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -165,7 +189,9 @@ class TestMetaPersistence:
         assert data["last_commit"] == "abc123"
 
     def test_meta_loaded_on_init(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm1 = StateMachine()
         sm1.start(branch="main", last_commit="abc123")
@@ -175,7 +201,9 @@ class TestMetaPersistence:
         assert sm2.current_state.branch == "main"
 
     def test_meta_loaded_after_finish(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm1 = StateMachine()
         sm1.start(branch="main", last_commit="abc123")
@@ -184,7 +212,9 @@ class TestMetaPersistence:
         assert sm2.current_state.state == MetaState.DONE
 
     def test_save_progress_persisted(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm1 = StateMachine()
         sm1.start(branch="main", last_commit="abc123")
@@ -196,7 +226,9 @@ class TestMetaPersistence:
 
 class TestFileHashesPersistence:
     def test_file_hashes_saved_on_finish(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm = StateMachine()
         sm.start(branch="main", last_commit="abc123")
@@ -208,7 +240,9 @@ class TestFileHashesPersistence:
         assert data == {"a.py": "hash1", "b.py": "hash2"}
 
     def test_file_hashes_loaded_on_init(self, tmp_index_dir):
-        cfg = Config(index=IndexConfig(path=str(tmp_index_dir)))
+        cfg = config_for_repo(
+            tmp_index_dir.parent, {"index": {"path": str(tmp_index_dir)}}
+        )
         _reset_config_for_testing(cfg)
         sm1 = StateMachine()
         sm1.start(branch="main", last_commit="abc123")

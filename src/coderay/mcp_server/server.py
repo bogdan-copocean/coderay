@@ -8,7 +8,7 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from coderay.core.config import get_config
+from coderay.core.config import ProjectNotInitializedError, get_config
 from coderay.mcp_server.errors import IndexNotBuiltError
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,10 @@ _state_machine_cache: dict[Path, Any] = {}
 
 def _resolve_index_dir() -> Path:
     """Resolve index directory to absolute path."""
-    return Path(get_config().index.path).resolve()
+    try:
+        return Path(get_config().index.path).resolve()
+    except ProjectNotInitializedError as e:
+        raise IndexNotBuiltError(str(e)) from e
 
 
 def _get_retrieval():
