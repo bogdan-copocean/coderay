@@ -6,7 +6,7 @@ from pathlib import Path
 
 from coderay.graph.builder import build_graph
 
-REPO_ROOT = Path(__file__).parents[2]
+REPO_ROOT = Path(__file__).parents[3]
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 
 
@@ -30,10 +30,6 @@ def _edge_set(graph_dict: dict) -> set[tuple[str, str, str]]:
 class TestPyAppGraphContracts:
     def test_py_app_explicit_edges(self) -> None:
         graph = build_graph(str(REPO_ROOT), _collect_files(FIXTURES / "py" / "app"))
-        for node in graph._g.nodes(data=True):
-            print()
-            print(node)
-            print()
         edges = _edge_set(graph.to_dict())
         expected = {
             (

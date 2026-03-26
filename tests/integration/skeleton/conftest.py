@@ -241,8 +241,8 @@ EXPECTED_UNKNOWN_SYMBOL_PREFIX = (
 
 
 EXPECTED_TS_CANONICAL_WITH_IMPORTS = (
-    """import { UserRepository } from '../fixtures/js_ts/app/data/userRepository';
-import type { ApiResponse, UserRecord } from '../fixtures/js_ts/app/types';
+    """import { UserRepository } from '../../fixtures/js_ts/app/data/userRepository';
+import type { ApiResponse, UserRecord } from '../../fixtures/js_ts/app/types';
 type Handler<T> = (value: T) => T;
 interface ServiceContract {
 class CoreService implements ServiceContract {

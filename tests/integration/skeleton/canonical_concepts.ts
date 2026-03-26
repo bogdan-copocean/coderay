@@ -2,8 +2,8 @@
  * Canonical JS/TS concepts for skeleton extraction tests.
  */
 
-import { UserRepository } from '../fixtures/js_ts/app/data/userRepository';
-import type { ApiResponse, UserRecord } from '../fixtures/js_ts/app/types';
+import { UserRepository } from '../../fixtures/js_ts/app/data/userRepository';
+import type { ApiResponse, UserRecord } from '../../fixtures/js_ts/app/types';
 
 type Handler<T> = (value: T) => T;
 

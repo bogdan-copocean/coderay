@@ -5,9 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from coderay.skeleton.extractor import extract_skeleton
-from tests.skeleton.conftest import (
+from tests.integration.skeleton.conftest import (
     EXPECTED_PY_CANONICAL_SYMBOL_FUNCTION_WITH_CLOSURE,
     EXPECTED_PY_CANONICAL_SYMBOL_LOCAL_IMPORTS,
     EXPECTED_PY_CANONICAL_SYMBOL_REPOSITORY,
@@ -17,6 +15,8 @@ from tests.skeleton.conftest import (
     EXPECTED_PY_CANONICAL_WITHOUT_IMPORTS,
     EXPECTED_UNKNOWN_SYMBOL_PREFIX,
 )
+
+from coderay.skeleton.extractor import extract_skeleton
 
 CANONICAL = Path(__file__).with_name("canonical_concepts.py")
 
