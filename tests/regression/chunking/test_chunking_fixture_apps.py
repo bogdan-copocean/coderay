@@ -10,8 +10,6 @@ from coderay.chunking.chunker import chunk_file
 
 FIXTURES_ROOT = Path(__file__).parents[3] / "tests" / "fixtures"
 
-pytestmark = pytest.mark.integration
-
 
 def _chunk_symbols(path: Path) -> set[str]:
     """Return chunk symbols for a file."""

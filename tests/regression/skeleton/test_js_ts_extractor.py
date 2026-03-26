@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.integration.skeleton.conftest import (
+
+from coderay.skeleton.extractor import extract_skeleton
+from tests.regression.skeleton.conftest import (
     EXPECTED_TS_CANONICAL_WITH_IMPORTS,
     EXPECTED_TS_CANONICAL_WITHOUT_IMPORTS,
     EXPECTED_TS_SYMBOL_BUILD_PROFILE_LABEL,
@@ -15,11 +17,7 @@ from tests.integration.skeleton.conftest import (
     EXPECTED_TS_UNKNOWN_SYMBOL_PREFIX,
 )
 
-from coderay.skeleton.extractor import extract_skeleton
-
 CANONICAL = Path(__file__).with_name("canonical_concepts.ts")
-
-pytestmark = pytest.mark.integration
 
 
 class TestCanonicalConcepts:

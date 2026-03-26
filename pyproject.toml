@@ -95,5 +95,6 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
-    "integration: integration tests that validate behavior across modules/apps",
+    "regression: regression tests that validate behavior across modules/apps",
+    "unit: unit tests that validate isolated behavior",
 ]
