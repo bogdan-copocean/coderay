@@ -1,38 +1,51 @@
 [index]
+# Where the index is stored (default comes from env).
 dir = "${INDEX_DIR}"
+# Root paths to index; empty means "current working directory".
 paths = []
-exclude_patterns = ["dist/", "build/", ".next/", "out/"]
+# Common directories to ignore.
+exclude_patterns = ["dist/", "build/", ".next/", "out/", "tests/"]
 
 [graph]
+# Restrict import graph construction (empty = no filtering).
 exclude_modules = []
 include_modules = []
 
 [search]
+# Similarity metric used for vector search.
 metric = "cosine"
+# Combine lexical + vector search for better recall.
 hybrid = true
 
 [search.boosting]
+# Down-rank test code by default.
 penalties = [
   { pattern = "(^|/)tests?/", factor = 0.5 },
-  { pattern = "(^|/)test_[^/]+\\.py$", factor = 0.5 },
-  { pattern = "(^|/)(mock|fixture|conftest)", factor = 0.4 },
+  { pattern = "(^|/)(test[^/]*|[^/]*_test)\\.py$", factor = 0.5 },
+  { pattern = "(^|/)conftest\\.py$", factor = 0.4 },
+  { pattern = "\\.(spec|test)\\.(js|jsx|ts|tsx)$", factor = 0.5 },
 ]
+# Slightly prefer directories.
 bonuses = [{ pattern = "(^|/)src/", factor = 1.1 }]
 
 [embedder]
+# "auto" picks the best available backend.
 backend = "auto"
 
 [embedder.fastembed]
+# Default embedder. Runs on CPU.
 model_name = "BAAI/bge-small-en-v1.5"
 dimensions = 384
 batch_size = 64
 
 [embedder.mlx]
+# Apple Silicon embedder (MLX/Metal; device depends on runtime).
 model_name = "mlx-community/bge-small-en-v1.5-bf16"
 dimensions = 384
 batch_size = 256
 
 [watcher]
+# Debounce filesystem events (seconds).
 debounce = 2
 exclude_patterns = []
 
