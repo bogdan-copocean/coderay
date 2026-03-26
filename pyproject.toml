@@ -94,3 +94,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "regression: regression tests that validate behavior across modules/apps",
+    "unit: unit tests that validate isolated behavior",
+]
