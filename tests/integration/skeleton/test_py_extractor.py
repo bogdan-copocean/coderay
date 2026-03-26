@@ -20,6 +20,8 @@ from coderay.skeleton.extractor import extract_skeleton
 
 CANONICAL = Path(__file__).with_name("canonical_concepts.py")
 
+pytestmark = pytest.mark.integration
+
 
 class TestExtractSkeleton:
     @staticmethod

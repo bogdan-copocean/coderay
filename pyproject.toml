@@ -94,3 +94,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "integration: integration tests that validate behavior across modules/apps",
+]

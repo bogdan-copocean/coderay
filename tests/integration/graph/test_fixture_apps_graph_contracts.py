@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from coderay.graph.builder import build_graph
 
 REPO_ROOT = Path(__file__).parents[3]
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
+
+pytestmark = pytest.mark.integration
 
 
 def _collect_files(base: Path) -> list[tuple[str, str]]:

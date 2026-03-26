@@ -19,6 +19,8 @@ from coderay.skeleton.extractor import extract_skeleton
 
 CANONICAL = Path(__file__).with_name("canonical_concepts.ts")
 
+pytestmark = pytest.mark.integration
+
 
 class TestCanonicalConcepts:
     @staticmethod
