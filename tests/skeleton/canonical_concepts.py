@@ -1,4 +1,4 @@
-"""Sample for skeleton/chunking tests."""
+"""Canonical Python concepts for skeleton extraction tests."""
 
 from __future__ import annotations
 
@@ -10,6 +10,11 @@ from collections import defaultdict as dd
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar, Generic, TypeVar
+
+from tests.fixtures.py.app.domain.models import User as FixtureUser
+from tests.fixtures.py.app.services.user_service import (
+    UserService as FixtureUserService,
+)
 
 logger = logging.getLogger(__name__)
 
