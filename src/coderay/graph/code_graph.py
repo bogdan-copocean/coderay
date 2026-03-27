@@ -67,7 +67,19 @@ class CodeGraph:
 
     def add_edge(self, edge: GraphEdge) -> None:
         """Add directed edge."""
-        self._g.add_edge(edge.source, edge.target, kind=edge.kind)
+        if not isinstance(edge.kind, EdgeKind):
+            logger.warning(
+                "Skipping edge with invalid kind: %s -> %s (%r)",
+                edge.source,
+                edge.target,
+                edge.kind,
+            )
+            return
+        if not self._g.has_edge(edge.source, edge.target):
+            self._g.add_edge(edge.source, edge.target, kind={edge.kind})
+            return
+        kinds = self._require_edge_kinds(edge.source, edge.target)
+        kinds.add(edge.kind)
 
     def add_nodes_and_edges(
         self, nodes: list[GraphNode], edges: list[GraphEdge]
@@ -88,10 +100,31 @@ class CodeGraph:
             self._g.remove_node(nid)
         return len(to_remove)
 
-    def remove_edge(self, source: str, target: str) -> None:
-        """Remove edge if present."""
-        if self._g.has_edge(source, target):
+    def remove_edge(
+        self, source: str, target: str, kind: EdgeKind | None = None
+    ) -> None:
+        """Remove edge, or one kind from a multi-kind edge."""
+        if not self._g.has_edge(source, target):
+            return
+
+        if kind is None:
             self._g.remove_edge(source, target)
+            return
+        kinds = self._require_edge_kinds(source, target)
+        if kind not in kinds:
+            return
+        kinds.remove(kind)
+        if not kinds:
+            self._g.remove_edge(source, target)
+            return
+        self._g.edges[source, target]["kind"] = kinds
+
+    def edge_has_kind(self, source: str, target: str, kind: EdgeKind) -> bool:
+        """Return True if edge has the given kind."""
+        if not self._g.has_edge(source, target):
+            return False
+        kinds = self._require_edge_kinds(source, target)
+        return kind in kinds
 
     def remove_orphan_phantoms(self) -> None:
         """Remove phantom nodes with no edges."""
@@ -153,15 +186,16 @@ class CodeGraph:
         {EdgeKind.CALLS, EdgeKind.IMPORTS, EdgeKind.INHERITS}
     )
 
-    def _normalize_edge_kind(self, raw: Any) -> EdgeKind | None:
-        """Return EdgeKind or None; accept enum or string."""
-        if raw is None:
-            return None
-        if isinstance(raw, EdgeKind):
-            return raw
-        if isinstance(raw, str) and raw in [e.value for e in EdgeKind]:
-            return EdgeKind(raw)
-        return None
+    def _require_edge_kinds(self, source: str, target: str) -> set[EdgeKind]:
+        """Return edge kinds for a graph edge; enforce internal invariant."""
+        raw = self._g.edges[source, target].get("kind")
+        if not isinstance(raw, set):
+            raise ValueError(f"Edge {source} -> {target} has non-set kinds: {raw!r}")
+        if any(not isinstance(kind, EdgeKind) for kind in raw):
+            raise ValueError(f"Edge {source} -> {target} has invalid kinds: {raw!r}")
+        if not raw:
+            raise ValueError(f"Edge {source} -> {target} has empty kinds set")
+        return raw
 
     def _parent_class_name(self, parent_node_id: str) -> str:
         """Extract class name from parent node ID (last component after ::)."""
@@ -173,7 +207,7 @@ class CodeGraph:
         return qualifier.split(".")[-1] if "." in qualifier else qualifier
 
     def get_impact_radius(self, symbol: str, depth: int = 2) -> ImpactResult:
-        """Find nodes affected if symbol changes (reverse BFS via CALLS/IMPORTS/INHERITS)."""
+        """Find nodes affected by reverse CALLS/IMPORTS/INHERITS BFS."""
         resolution_warning: str | None = None
         resolved = self.resolve_symbol(symbol)
 
@@ -201,9 +235,8 @@ class CodeGraph:
             for phantom in self._bare_name_targets(seed):
                 if phantom in self._g:
                     for pred in self._g.predecessors(phantom):
-                        edge_data = self._g.edges[pred, phantom]
-                        kind = self._normalize_edge_kind(edge_data.get("kind"))
-                        if kind in self._IMPACT_EDGE_KINDS:
+                        kinds = self._require_edge_kinds(pred, phantom)
+                        if any(kind in self._IMPACT_EDGE_KINDS for kind in kinds):
                             queue.append((pred, 1))
 
         while queue:
@@ -297,10 +330,8 @@ class CodeGraph:
         if class_node_id not in self._g:
             return seeds
         for _, parent in self._g.out_edges(class_node_id):
-            edge_kind = self._normalize_edge_kind(
-                self._g.edges[class_node_id, parent].get("kind")
-            )
-            if edge_kind != EdgeKind.INHERITS:
+            edge_kinds = self._require_edge_kinds(class_node_id, parent)
+            if EdgeKind.INHERITS not in edge_kinds:
                 continue
             parent_method = f"{parent}.{method_name}"
             if parent_method in self._g:
@@ -316,8 +347,8 @@ class CodeGraph:
         """Return True if edge is dependency (not containment)."""
         if not self._g.has_edge(source, target):
             return False
-        kind = self._normalize_edge_kind(self._g.edges[source, target].get("kind"))
-        return kind in self._IMPACT_EDGE_KINDS if kind else False
+        kinds = self._require_edge_kinds(source, target)
+        return any(kind in self._IMPACT_EDGE_KINDS for kind in kinds)
 
     def _not_found_result(self, symbol: str) -> ImpactResult:
         """Build ImpactResult with hint for missing node."""
@@ -370,8 +401,8 @@ class CodeGraph:
         importer_count = 0
         if module_id in self._g:
             for pred in self._g.predecessors(module_id):
-                edge_data = self._g.edges[pred, module_id]
-                if self._normalize_edge_kind(edge_data.get("kind")) == EdgeKind.IMPORTS:
+                kinds = self._require_edge_kinds(pred, module_id)
+                if EdgeKind.IMPORTS in kinds:
                     importer_count += 1
 
         if importer_count > 0:
@@ -418,9 +449,10 @@ class CodeGraph:
                 )
         edges_list = []
         for u, v, data in self._g.edges(data=True):
-            kind = data.get("kind", "")
-            kind_val = kind.value if hasattr(kind, "value") else str(kind)
-            edges_list.append({"source": u, "target": v, "kind": kind_val})
+            del data  # unused
+            kinds = self._require_edge_kinds(u, v)
+            for kind_item in sorted(kinds, key=lambda k: k.value):
+                edges_list.append({"source": u, "target": v, "kind": kind_item.value})
         return {
             "schema_version": GRAPH_SCHEMA_VERSION,
             "nodes": nodes,
