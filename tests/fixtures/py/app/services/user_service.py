@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TypeVar
 
+from app.services.internal.lazy_io import summarize_totals, to_json_line
+
 from ..core.decorators import audit, trace
 from ..infra.repositories.user_repository import UserRepository
 from .file_service import FileService
-from .internal.async_tasks import enrich_profile
+from .internal.async_tasks import enrich_profile as ep
 from .internal.formatters import format_public_name, format_score
-from .internal.lazy_io import summarize_totals, to_json_line
 
 T = TypeVar("T")
 
@@ -86,7 +87,7 @@ class UserService:
         profile = self.load_profile(user_id)
         if profile is None:
             return None
-        return await enrich_profile(profile)
+        return await ep(profile)
 
 
 def get_formatter() -> Callable[[str], str]:
