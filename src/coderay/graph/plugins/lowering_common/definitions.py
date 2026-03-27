@@ -25,7 +25,7 @@ class DefinitionFactMixin:
         if scope_stack:
             definer = f"{self.file_path}::{'.'.join(scope_stack)}"
 
-        self._facts.append(
+        self._facts.add(
             SymbolDefinition(
                 file_path=self.file_path,
                 scope_stack=tuple(scope_stack),
@@ -67,7 +67,7 @@ class DefinitionFactMixin:
             definer = f"{self.file_path}::{'.'.join(scope_stack)}"
         node_id = f"{self.file_path}::{qualified}"
 
-        self._facts.append(
+        self._facts.add(
             SymbolDefinition(
                 file_path=self.file_path,
                 scope_stack=tuple(scope_stack),
@@ -84,7 +84,7 @@ class DefinitionFactMixin:
                 continue
             for base_name in self._get_base_classes_from_arg_list(child):
                 resolved = self._resolve_base_class(base_name)
-                self._facts.append(InheritsEdge(source_id=node_id, target=resolved))
+                self._facts.add(InheritsEdge(source_id=node_id, target=resolved))
 
         self._file_ctx.register_definition(name, node_id, is_class=True)
 
