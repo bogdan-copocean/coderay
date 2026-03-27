@@ -54,17 +54,17 @@ class JsTsGraphExtractor(
         self._desc = descriptor or JS_TS_GRAPH_DESCRIPTOR
         self._excluded_modules = excluded_modules
         self._module_id: str = context.file_path
-        self._facts: list[Fact] = []
+        self._facts: set[Fact] = set()
         self._module_index = module_index or {}
         self._file_ctx = FileContext(module_index=self._module_index)
 
     def _add_import_edge(self, source: str, target: str) -> None:
-        self._facts.append(ImportsEdge(source_id=source, target=target))
+        self._facts.add(ImportsEdge(source_id=source, target=target))
 
     def extract_facts_list(self) -> list[Fact]:
         """Parse and return all facts for this file."""
         tree = self.get_tree()
-        self._facts.append(
+        self._facts.add(
             ModuleInfo(
                 file_path=self.file_path,
                 end_line=tree.root_node.end_point[0] + 1,

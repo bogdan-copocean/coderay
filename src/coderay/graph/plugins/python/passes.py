@@ -22,8 +22,8 @@ def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
     rewritten = 0
     to_rewrite: list[tuple[str, str, str]] = []
 
-    for u, v, data in graph.iter_edges():
-        if data.get("kind") != EdgeKind.CALLS:
+    for u, v, _ in graph.iter_edges():
+        if not graph.edge_has_kind(u, v, EdgeKind.CALLS):
             continue
         if graph.get_node(v) is not None:
             continue
@@ -40,7 +40,7 @@ def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
         to_rewrite.append((u, v, resolved))
 
     for u, v, new_target in to_rewrite:
-        graph.remove_edge(u, v)
+        graph.remove_edge(u, v, kind=EdgeKind.CALLS)
         graph.add_edge(GraphEdge(source=u, target=new_target, kind=EdgeKind.CALLS))
         rewritten += 1
 
@@ -52,8 +52,8 @@ def _rewrite_package_phantom_targets(graph: CodeGraph) -> int:
 def _prune_phantom_calls(graph: CodeGraph) -> int:
     """Remove CALLS edges to unresolvable phantom targets."""
     to_remove = []
-    for u, v, data in graph.iter_edges():
-        if data.get("kind") != EdgeKind.CALLS:
+    for u, v, _ in graph.iter_edges():
+        if not graph.edge_has_kind(u, v, EdgeKind.CALLS):
             continue
         if graph.get_node(v) is not None:
             continue
@@ -63,7 +63,7 @@ def _prune_phantom_calls(graph: CodeGraph) -> int:
             to_remove.append((u, v))
 
     for u, v in to_remove:
-        graph.remove_edge(u, v)
+        graph.remove_edge(u, v, kind=EdgeKind.CALLS)
 
     graph.remove_orphan_phantoms()
 

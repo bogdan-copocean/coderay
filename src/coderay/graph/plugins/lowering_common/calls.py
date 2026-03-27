@@ -28,7 +28,7 @@ class CallFactMixin:
             if self._is_excluded(callee_name, raw):
                 continue
             if callee_name:
-                self._facts.append(CallsEdge(source_id=caller_id, target=callee_name))
+                self._facts.add(CallsEdge(source_id=caller_id, target=callee_name))
 
     def _handle_call(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Create CALLS facts to resolved callee."""
@@ -242,15 +242,32 @@ class CallFactMixin:
 
     def _handle_decorator(self, node: TSNode, *, scope_stack: list[str]) -> None:
         """Create CALLS facts for decorator targets."""
-        text = self.node_text(node).strip()
-        if not text or not text.startswith("@"):
-            return
-        target_raw = text[1:].strip()
-        if "(" in target_raw:
-            target_raw = target_raw[: target_raw.index("(")].strip()
-        if not target_raw:
+        decorators: list[str] = []
+        decorated_name: str | None = None
+
+        for child in node.named_children:
+            if child.type == "decorator":
+                # Collect stacked decorators: @a, @b on same symbol.
+                for cchild in child.named_children:
+                    if cchild.type == "identifier":
+                        name = self.node_text(cchild).strip()
+                        if name:
+                            decorators.append(name)
+                        break
+            elif child.type in ("function_definition", "class_definition"):
+                # Identify the symbol being decorated.
+                for cchild in child.named_children:
+                    if cchild.type == "identifier":
+                        decorated_name = self.node_text(cchild).strip()
+                        break
+
+        if not decorators:
             return
 
-        callee_targets = self._resolve_callee_targets(target_raw, scope_stack)
-        caller_id = self._caller_id_from_scope(scope_stack)
-        self._add_call_edges(caller_id, target_raw, callee_targets)
+        # Caller is the decorated symbol if we know it; otherwise the current scope.
+        caller_scope = scope_stack + [decorated_name] if decorated_name else scope_stack
+        caller_id = self._caller_id_from_scope(caller_scope)
+        for decorator in decorators:
+            # Resolve decorator name in the original scope; it is usually imported.
+            callee_targets = self._resolve_callee_targets(decorator, scope_stack)
+            self._add_call_edges(caller_id, decorator, callee_targets)

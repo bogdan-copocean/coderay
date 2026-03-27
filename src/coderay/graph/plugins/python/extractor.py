@@ -53,17 +53,17 @@ class PythonGraphExtractor(
         self._desc = descriptor or PYTHON_GRAPH_DESCRIPTOR
         self._excluded_modules = excluded_modules
         self._module_id: str = context.file_path
-        self._facts: list[Fact] = []
+        self._facts: set[Fact] = set()
         self._module_index = module_index or {}
         self._file_ctx = FileContext(module_index=self._module_index)
 
     def _add_import_edge(self, source: str, target: str) -> None:
-        self._facts.append(ImportsEdge(source_id=source, target=target))
+        self._facts.add(ImportsEdge(source_id=source, target=target))
 
     def extract_facts_list(self) -> list[Fact]:
         """Parse and return all facts for this file."""
         tree = self.get_tree()
-        self._facts.append(
+        self._facts.add(
             ModuleInfo(
                 file_path=self.file_path,
                 end_line=tree.root_node.end_point[0] + 1,
@@ -88,8 +88,13 @@ class PythonGraphExtractor(
             return
         elif kind == TraversalKind.CALL:
             self._handle_call(node, scope_stack=scope_stack)
-        elif kind == TraversalKind.DECORATOR:
+        elif kind == TraversalKind.DECORATED_DEFINITION:
+            # Register nested function/class nodes first, then emit decorator call edges.
+            # Decorated definitions may have stacked decorators, and targets might not exist yet.
+            for child in node.children:
+                self._dfs(child, scope_stack=scope_stack)
             self._handle_decorator(node, scope_stack=scope_stack)
+            return
         elif kind == TraversalKind.ASSIGNMENT:
             self._handle_assignment(node, scope_stack=scope_stack)
         elif kind == TraversalKind.WITH:
