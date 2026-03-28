@@ -59,7 +59,6 @@ def _has_tree_sitter_ts() -> bool:
 
 class TestPyAppChunking:
     def test_main_chunks_endpoint_functions(self) -> None:
-        """Assert main.py chunks endpoints and functions."""
         path = FIXTURES_ROOT / "py" / "app" / "main.py"
         chunks = chunk_file(path, path.read_text(encoding="utf-8"))
         expected_chunks = [

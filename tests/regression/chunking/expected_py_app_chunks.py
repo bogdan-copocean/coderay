@@ -57,8 +57,8 @@ class DecoratedFormatter:
 
 USER_SERVICE_PY_FORMAT_CHUNK = """\
 def format(self, value: str) -> str:
-    \"\"\"Return formatted value.\"\"\"
-    return value.upper()"""
+        \"\"\"Return formatted value.\"\"\"
+        return value.upper()"""
 
 USER_SERVICE_PY_DECORATED_MULTIPLIER_CHUNK = """\
 @audit
