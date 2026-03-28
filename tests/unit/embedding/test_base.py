@@ -54,8 +54,12 @@ class TestLoadEmbedderFromConfig:
         finally:
             _reset_config_for_testing(None)
 
+    @patch(
+        "coderay.embedding.backend_resolve.mlx_optional_installed",
+        return_value=True,
+    )
     @patch("coderay.embedding.mlx_backend.MLXEmbedder")
-    def test_mlx_backend(self, mock_mlx_cls):
+    def test_mlx_backend(self, mock_mlx_cls, _mock_mlx_ok):
         mock_mlx_cls.return_value = MagicMock()
         _reset_config_for_testing(
             config_for_repo(
@@ -79,5 +83,30 @@ class TestLoadEmbedderFromConfig:
                 matryoshka_dimensions=None,
                 batch_size=256,
             )
+        finally:
+            _reset_config_for_testing(None)
+
+    def test_mlx_backend_raises_when_optional_not_installed(self):
+        _reset_config_for_testing(
+            config_for_repo(
+                Path.cwd(),
+                {
+                    "embedder": {
+                        "backend": "mlx",
+                        "mlx": {
+                            "model_name": "mlx-community/bge-small-en-v1.5-bf16",
+                            "dimensions": 384,
+                        },
+                    }
+                },
+            ),
+        )
+        try:
+            with patch(
+                "coderay.embedding.backend_resolve.mlx_optional_installed",
+                return_value=False,
+            ):
+                with pytest.raises(RuntimeError, match="coderay\\[mlx\\]"):
+                    load_embedder_from_config()
         finally:
             _reset_config_for_testing(None)
