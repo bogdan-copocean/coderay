@@ -14,6 +14,11 @@ def _mlx_runtime_available() -> bool:
     return importlib.util.find_spec("mlx_embeddings") is not None
 
 
+def mlx_optional_installed() -> bool:
+    """Return True if optional mlx / mlx-embeddings packages are available."""
+    return _mlx_runtime_available()
+
+
 def resolved_embedder_backend(config_value: str | None) -> str:
     """Map backend config to 'fastembed' or 'mlx' (handles 'auto')."""
     raw = (config_value or "auto").strip().lower()

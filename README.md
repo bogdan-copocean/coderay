@@ -30,13 +30,19 @@ Then install:
 pip install coderay
 ```
 
+Apple Silicon (optional MLX backend, separate from the default install):
+
+```bash
+pip install "coderay[mlx]"
+```
+
 With all extras (development tools):
 
 ```bash
 pip install "coderay[all]"
 ```
 
-With `embedder.backend: auto` (default), CodeRay uses **MLX** on Apple Silicon (those wheels install automatically with `pip install coderay`) and **fastembed** elsewhere (CPU ONNX). Override with `backend: fastembed` or `backend: mlx`. Run `coderay build --full` after switching backends or models.
+With `embedder.backend: auto` (default), CodeRay picks **MLX** on Apple Silicon **only if** `coderay[mlx]` is installed; otherwise **fastembed**. On other platforms **fastembed** is used. Override with `backend: fastembed` or `backend: mlx`. Run `coderay build --full` after switching backends or models.
 
 For development:
 
@@ -46,6 +52,8 @@ cd coderay
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
 ```
+
+On Apple Silicon, add `pip install -e ".[mlx]"` when you want the MLX embedder locally.
 
 ## Quick start
 
@@ -107,7 +115,7 @@ Run `coderay init` then `coderay build` (or `coderay watch`) from the project ro
 
 ## Embedding
 
-Embedding is **offline-first**: models load from the local cache. With **`backend: auto`** (default), Apple Silicon uses MLX (installed as a core dependency on that platform); otherwise ONNX via fastembed on CPU. On first use, if the model is not cached, it downloads automatically (one-time, requires network).
+Embedding is **offline-first**: models load from the local cache. With **`backend: auto`** (default), Apple Silicon uses MLX **if** you installed `coderay[mlx]`; otherwise fastembed (ONNX on CPU). On first use, if the model is not cached, it downloads automatically (one-time, requires network).
 
 The default model is **BGE Small v1.5** (`BAAI/bge-small-en-v1.5`, 384d) for fastembed and `mlx-community/bge-small-en-v1.5-bf16` for MLX. Chunks are embedded as `path`, `symbol`, then source text so identifiers and paths influence retrieval alongside semantic meaning.
 

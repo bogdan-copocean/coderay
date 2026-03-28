@@ -38,7 +38,7 @@ class FastembedEmbedderConfig(BaseConfig):
 
 
 class MLXEmbedderConfig(BaseConfig):
-    """Apple Silicon path via mlx-embeddings."""
+    """Apple Silicon path via mlx-embeddings (optional `pip install coderay[mlx]`)."""
 
     model_name: str
     dimensions: int

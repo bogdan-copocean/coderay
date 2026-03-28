@@ -38,7 +38,10 @@ def load_embedder_from_config() -> Embedder:
     """Build Embedder from application config."""
 
     from coderay.core.config import get_config
-    from coderay.embedding.backend_resolve import resolved_embedder_backend
+    from coderay.embedding.backend_resolve import (
+        mlx_optional_installed,
+        resolved_embedder_backend,
+    )
     from coderay.embedding.local import LocalEmbedder
     from coderay.embedding.mlx_backend import MLXEmbedder
 
@@ -47,6 +50,11 @@ def load_embedder_from_config() -> Embedder:
     backend = resolved_embedder_backend(ed.backend)
     if (ed.backend or "auto").strip().lower() == "auto":
         logger.info("embedder.backend=auto -> %s", backend)
+    if backend == "mlx" and not mlx_optional_installed():
+        raise RuntimeError(
+            "embedder.backend is 'mlx' but MLX is not installed. "
+            "On Apple Silicon: pip install 'coderay[mlx]'"
+        )
     if backend == "mlx":
         mx = ed.mlx
         return MLXEmbedder(
