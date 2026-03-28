@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from coderay.core.models import NodeKind
+from coderay.core.models import EdgeKind, NodeKind
 from coderay.graph.builder import build_graph
 
 REPO_ROOT = Path(__file__).parents[3]
@@ -98,229 +98,229 @@ def _assert_user_service_edges(computed_edges: list[tuple[str, str, str]]) -> No
     """Assert expected edges for `user_service.py`."""
     expected_edges = [
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::decorated_multiplier",
             "tests/fixtures/py/app/core/decorators.py::audit",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::decorated_multiplier",
             "tests/fixtures/py/app/core/decorators.py::trace",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::DecoratedFormatter",
             "tests/fixtures/py/app/core/decorators.py::audit",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/core/decorators.py::audit",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/core/decorators.py::trace",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.__init__",
             "tests/fixtures/py/app/services/file_service.py::FileService",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.__init__",
             "tests/fixtures/py/app/services/user_service.py::DecoratedFormatter",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository.get_by_id",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/file_service.py::FileService.process_payload",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/internal/formatters.py::format_public_name",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/internal/formatters.py::format_score",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/internal/lazy_io.py::to_json_line",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/internal/lazy_io.py::summarize_totals",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/user_service.py::DecoratedFormatter.format",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/user_service.py::UserService._build_formatter",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/user_service.py::chain_email_lookup",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
             "tests/fixtures/py/app/services/user_service.py::decorated_multiplier",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile_async",
             "tests/fixtures/py/app/services/internal/async_tasks.py::enrich_profile",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile_async",
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::chain_email_lookup",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository.get_by_id",
         ),
         # FIXME: Should resolve to User.to_dict when graph gains better resolution.
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::chain_email_lookup",
             "to_dict",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::get_formatter",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::get_formatter",
             "tests/fixtures/py/app/services/user_service.py::UserService",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/user_service.py::get_formatter",
             "tests/fixtures/py/app/services/user_service.py::UserService._build_formatter",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/user_service.py::UserService",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/user_service.py::chain_email_lookup",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/user_service.py::decorated_multiplier",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/user_service.py::DecoratedFormatter",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/user_service.py::get_formatter",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py::DecoratedFormatter",
             "tests/fixtures/py/app/services/user_service.py::DecoratedFormatter.format",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py::UserService",
             "tests/fixtures/py/app/services/user_service.py::UserService._build_formatter",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py::UserService",
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py::UserService",
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile_async",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py::UserService",
             "tests/fixtures/py/app/services/user_service.py::UserService.__init__",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/user_service.py::UserService._build_formatter",
             "tests/fixtures/py/app/services/user_service.py::UserService._build_formatter.formatter",
         ),
         # FIXME: 3rd party package should not be included
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "collections.abc::Callable",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/core/decorators.py::trace",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/core/decorators.py::audit",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/file_service.py::FileService",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/internal/async_tasks.py::enrich_profile",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/internal/formatters.py::format_public_name",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/internal/formatters.py::format_score",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/internal/lazy_io.py::summarize_totals",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/services/internal/lazy_io.py::to_json_line",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/user_service.py",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
         ),
@@ -356,22 +356,22 @@ def _assert_file_service_edges(computed_edges: list[tuple[str, str, str]]) -> No
     expected_edges = [
         # Through super().
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/services/file_service.py::FileService.process_payload",
             "tests/fixtures/py/app/services/base_service.py::BaseService.process_payload",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/file_service.py",
             "tests/fixtures/py/app/services/file_service.py::FileService",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/file_service.py::FileService",
             "tests/fixtures/py/app/services/file_service.py::FileService.process_payload",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/file_service.py",
             "tests/fixtures/py/app/services/base_service.py::BaseService",
         ),
@@ -414,42 +414,42 @@ def _assert_user_controller_edges(computed_edges: list[tuple[str, str, str]]) ->
     """Assert expected edges for `user_controller.py`."""
     expected_edges = [
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile",
             "tests/fixtures/py/app/api/serializers/profile_serializer.py::to_http_response",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile",
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile_async",
             "tests/fixtures/py/app/api/serializers/profile_serializer.py::to_http_response",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile_async",
             "tests/fixtures/py/app/services/user_service.py::UserService.load_profile_async",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/api/controllers/user_controller.py",
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/api/controllers/user_controller.py",
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile_async",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/api/controllers/user_controller.py",
             "tests/fixtures/py/app/api/serializers/profile_serializer.py::to_http_response",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/api/controllers/user_controller.py",
             "tests/fixtures/py/app/services/user_service.py::UserService",
         ),
@@ -486,27 +486,27 @@ def _assert_decorators_edges(computed_edges: list[tuple[str, str, str]]) -> None
     """Assert expected edges for `decorators.py`."""
     expected_edges = [
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/core/decorators.py",
             "tests/fixtures/py/app/core/decorators.py::audit",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/core/decorators.py",
             "tests/fixtures/py/app/core/decorators.py::trace",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/core/decorators.py::audit",
             "tests/fixtures/py/app/core/decorators.py::audit.wrapper",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/core/decorators.py::trace",
             "tests/fixtures/py/app/core/decorators.py::trace.inner",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/core/decorators.py",
             "collections.abc::Callable",
         ),
@@ -541,29 +541,29 @@ def _assert_lazy_io_edges(computed_edges: list[tuple[str, str, str]]) -> None:
     """Assert expected edges for `lazy_io.py`."""
     expected_edges = [
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/internal/lazy_io.py",
             "tests/fixtures/py/app/services/internal/lazy_io.py::summarize_totals",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/internal/lazy_io.py",
             "tests/fixtures/py/app/services/internal/lazy_io.py::to_json_line",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/internal/lazy_io.py",
             "collections::defaultdict",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/internal/lazy_io.py::summarize_totals",
             "itertools::chain",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/internal/lazy_io.py::to_json_line",
             "json",
         ),
@@ -595,24 +595,24 @@ def _assert_domain_models_edges(computed_edges: list[tuple[str, str, str]]) -> N
     """Assert expected edges for `models.py`."""
     expected_edges = [
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/domain/models.py",
             "tests/fixtures/py/app/domain/models.py::User",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/domain/models.py::User",
             "tests/fixtures/py/app/domain/models.py::User.to_dict",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/domain/models.py",
             "dataclasses",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/domain/models.py",
             "dataclasses::dataclass",
         ),
@@ -644,88 +644,88 @@ def _assert_main_edges(computed_edges: list[tuple[str, str, str]]) -> None:
     """Assert expected edges for `main.py`."""
     expected_edges = [
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/main.py::handle_request",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/services/file_service.py::FileService",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/services/file_service.py::FileService.process_payload",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py::handle_request",
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py::handle_request",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py::handle_request",
             "tests/fixtures/py/app/services/user_service.py::UserService",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py::handle_request_async",
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile_async",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py::handle_request_async",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
         ),
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/main.py::handle_request_async",
             "tests/fixtures/py/app/services/user_service.py::UserService",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/main.py::handle_request",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/main.py::handle_request_async",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/api/controllers/user_controller.py::get_user_profile_async",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/services/file_service.py::FileService",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/main.py",
             "tests/fixtures/py/app/services/user_service.py::UserService",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/main.py",
             "pathlib::Path",
         ),
@@ -763,23 +763,23 @@ def _assert_formatters_edges(computed_edges: list[tuple[str, str, str]]) -> None
     """Assert expected edges for `formatters.py`."""
     expected_edges = [
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/internal/formatters.py",
             "tests/fixtures/py/app/services/internal/formatters.py::format_public_name",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/internal/formatters.py",
             "tests/fixtures/py/app/services/internal/formatters.py::format_score",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/internal/formatters.py",
             "math",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/internal/formatters.py",
             "tests/fixtures/py/app/domain/models.py::User",
         ),
@@ -813,13 +813,13 @@ def _assert_async_tasks_edges(computed_edges: list[tuple[str, str, str]]) -> Non
     """Assert expected edges for `async_tasks.py`."""
     expected_edges = [
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/services/internal/async_tasks.py",
             "tests/fixtures/py/app/services/internal/async_tasks.py::enrich_profile",
         ),
         # FIXME: stdlib/3rd party lib should not be captured
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/services/internal/async_tasks.py",
             "asyncio",
         ),
@@ -862,32 +862,32 @@ def _assert_user_repository_edges(computed_edges: list[tuple[str, str, str]]) ->
     expected_edges = [
         # FIXME: Missing inherit edge between UserRepository and BaseRepository
         (
-            "calls",
+            EdgeKind.CALLS,
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository.__init__",
             "tests/fixtures/py/app/domain/models.py::User",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/user_repository.py",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository.__init__",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository",
             "tests/fixtures/py/app/infra/repositories/user_repository.py::UserRepository.get_by_id",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/infra/repositories/user_repository.py",
             "tests/fixtures/py/app/domain/models.py::User",
         ),
         (
-            "imports",
+            EdgeKind.IMPORTS,
             "tests/fixtures/py/app/infra/repositories/user_repository.py",
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository",
         ),
@@ -933,22 +933,22 @@ def _assert_base_repository_edges(computed_edges: list[tuple[str, str, str]]) ->
     """Assert expected edges for `base_repository.py`."""
     expected_edges = [
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/base_repository.py",
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository",
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository.__init__",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository",
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository.add",
         ),
         (
-            "defines",
+            EdgeKind.DEFINES,
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository",
             "tests/fixtures/py/app/infra/repositories/base_repository.py::BaseRepository.get",
         ),
