@@ -1,0 +1,53 @@
+[index]
+# Where the index is stored (default comes from env).
+path = "${INDEX_DIR}"
+# Common directories to ignore (besides .gitignore).
+exclude_patterns = ["dist/", "build/", ".next/", "out/", "tests/"]
+# Primary checkout is repo = "." (config project). Add rows for more checkouts.
+# Optional `include`: one path or a list (union of subtrees under repo).
+[[index.roots]]
+repo = "."
+
+[graph]
+# Include edges to stdlib / 3rd-party modules (outside the repo).
+include_external = false
+
+[search]
+# Similarity metric used for vector search.
+metric = "cosine"
+# Combine lexical + vector search for better recall.
+hybrid = true
+# "primary": search the primary repo (repo = ".") by default.
+# "*": search across all configured repos.
+default_scope = "primary"
+
+[search.boosting]
+# Down-rank test code by default.
+penalties = [
+  { pattern = "(^|/)tests?/", factor = 0.5 },
+  { pattern = "(^|/)(test[^/]*|[^/]*_test)\\.py$", factor = 0.5 },
+  { pattern = "(^|/)conftest\\.py$", factor = 0.4 },
+  { pattern = "\\.(spec|test)\\.(js|jsx|ts|tsx)$", factor = 0.5 },
+]
+# Slightly prefer directories.
+bonuses = [{ pattern = "(^|/)src/", factor = 1.1 }]
+
+[embedder]
+# "auto" picks the best available backend.
+backend = "auto"
+
+[embedder.fastembed]
+# Default embedder. Runs on CPU.
+model_name = "BAAI/bge-small-en-v1.5"
+dimensions = 384
+batch_size = 64
+
+[embedder.mlx]
+# Apple Silicon embedder (MLX/Metal; device depends on runtime).
+model_name = "mlx-community/bge-small-en-v1.5-bf16"
+dimensions = 384
+batch_size = 256
+
+[watcher]
+# Debounce filesystem events (seconds).
+debounce = 2

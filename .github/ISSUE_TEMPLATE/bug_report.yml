@@ -1,0 +1,54 @@
+name: Bug Report
+description: Report a bug in CodeRay
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to trigger the bug.
+      placeholder: |
+        1. coderay init
+        2. coderay build
+        3. coderay search "..."
+        4. Error: ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: CodeRay version
+      description: Output of `coderay --version` or `pip show coderay`
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+        - Windows (WSL)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python --version`
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, config snippets, or anything else relevant.
