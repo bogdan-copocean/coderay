@@ -1,0 +1,36 @@
+CodeRay third-party notices
+=============================
+
+CodeRay itself is licensed under the MIT License — see the LICENSE file in this
+repository.
+
+Runtime dependencies (default `pip install coderay`)
+----------------------------------------------------
+These are pulled in by a normal install. Upstream license terms apply; retain
+copyright notices where required.
+
+  pydantic               MIT
+  python-dotenv          BSD-3-Clause
+  networkx               BSD-3-Clause
+  tree-sitter            MIT (see package metadata on PyPI)
+  tree-sitter-python     MIT
+  tree-sitter-javascript MIT
+  tree-sitter-typescript MIT
+  lancedb                Apache-2.0 (see package metadata on PyPI)
+  pyyaml                 MIT
+  click                  BSD-3-Clause
+  filelock               MIT
+  fastembed              Apache-2.0 (see package metadata on PyPI)
+  fastmcp                Apache-2.0
+  watchdog               Apache-2.0
+  pathspec               MPL-2.0 (see package metadata on PyPI)
+
+Optional extra: Apple Silicon MLX (`pip install coderay[mlx]`)
+--------------------------------------------------------------
+The `mlx` extra is **not** installed by default. If you install it on
+darwin/arm64, pip installs **mlx** and **mlx-embeddings**.
+
+  mlx-embeddings         GNU General Public License v3 (GPL-3.0)
+
+This file is a convenience summary; it is not a substitute for each package’s
+full license text.
