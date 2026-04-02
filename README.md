@@ -19,31 +19,31 @@ Skeleton shows API shape and docstrings, not every branch. Use **search** and **
 
 **Semantic search** — “How/where” by meaning.
 
-<img src="assets/coderay-search.gif" alt="coderay search demo" width="100%" />
+<img src="assets/demos/coderay-search.gif" alt="coderay search demo" width="100%" />
 
 ### Blast radius
 
 Callers and dependents (calls, imports, inheritance).
 
-<img src="assets/coderay-impact.gif" alt="coderay impact demo" width="100%" />
+<img src="assets/demos/coderay-impact.gif" alt="coderay impact demo" width="100%" />
 
 ### Skeleton
 
 Signatures and docstrings only; API surface without bodies.
 
-<img src="assets/coderay-skeleton.gif" alt="coderay skeleton demo" width="100%" />
+<img src="assets/demos/coderay-skeleton.gif" alt="coderay skeleton demo" width="100%" />
 
 ### Full read
 
 Same file as skeleton: raw source costs more tokens.
 
-<img src="assets/coderay-fullread.gif" alt="same file, raw source head" width="100%" />
+<img src="assets/demos/coderay-fullread.gif" alt="same file, raw source head" width="100%" />
 
 ### First run
 
 `coderay init` and `coderay build`.
 
-<img src="assets/coderay.gif" alt="coderay init and build" width="100%" />
+<img src="assets/demos/coderay.gif" alt="coderay init and build" width="100%" />
 
 **Status** — `coderay status`: chunks, branch, commit, schema.
 
