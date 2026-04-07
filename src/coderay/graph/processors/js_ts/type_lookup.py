@@ -12,7 +12,7 @@ class JsTsTypeLookup(_TypeLookupCore):
     def find_method_in_class_body(
         self, class_node: TSNode, method_name: str
     ) -> TSNode | None:
-        body_types = self._syntax._ctx.lang_cfg.cst.class_body_types
+        body_types = self._syntax.lang_cfg.cst.class_body_types
         for child in class_node.children:
             if child.type not in body_types:
                 continue

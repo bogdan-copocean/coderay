@@ -22,7 +22,7 @@ class DecoratorProcessor:
         self._syntax = syntax
         self._callee = callee
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Record CALLS from decorated symbol to each decorator."""
         decorators: list[str] = []
         decorated_name: str | None = None
@@ -43,6 +43,7 @@ class DecoratorProcessor:
         for decorator in decorators:
             callee_targets = self._callee.resolve_callee_targets(decorator, scope_stack)
             self._callee.add_call_edges(caller_id, decorator, callee_targets)
+        return None
 
 
 def _extract_decorator_name(syntax: SyntaxRead, decorator_node: TSNode) -> str | None:
@@ -52,7 +53,7 @@ def _extract_decorator_name(syntax: SyntaxRead, decorator_node: TSNode) -> str |
             return syntax.node_text(child).strip() or None
         if child.type in ("attribute", "member_expression"):
             return syntax.node_text(child).strip() or None
-        if child.type in syntax._ctx.lang_cfg.cst.call_types:
+        if child.type in syntax.lang_cfg.cst.call_types:
             callee = child.child_by_field_name("function")
             if callee:
                 return syntax.node_text(callee).strip() or None

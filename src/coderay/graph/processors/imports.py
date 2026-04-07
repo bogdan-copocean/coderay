@@ -12,8 +12,8 @@ from coderay.parsing.base import TSNode
 class ImportProcessor(Protocol):
     """Single import node handler."""
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Lower one import node."""
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
+        """Lower one import node; return None (imports never push scope)."""
 
 
 def append_import_edge(session: LoweringSession, source: str, target: str) -> None:

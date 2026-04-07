@@ -17,7 +17,7 @@ class PythonImportProcessor:
         self._session = session
         self._syntax = syntax
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Process Python import node."""
         ntype = node.type
         module: list[str] = []
@@ -52,6 +52,7 @@ class PythonImportProcessor:
             self._emit_from_import_edges(module, imported, ntype, caller_id)
         if ntype == "import_statement":
             self._emit_bare_import_edges(imported, caller_id)
+        return None
 
     def _resolve_import_text(self, child: TSNode) -> str | None:
         text = self._syntax.node_text(child).strip()

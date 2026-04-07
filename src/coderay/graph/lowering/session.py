@@ -1,5 +1,3 @@
-"""Mutable state for one file's graph lowering."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field

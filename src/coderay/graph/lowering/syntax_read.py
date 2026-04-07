@@ -1,19 +1,22 @@
-"""Shared CST read surface for graph processors."""
+"""Read-only CST surface for graph processors."""
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from tree_sitter import Tree
 
-from coderay.parsing.base import ParserContext, TSNode
+from coderay.parsing.base import TSNode
 
 
 class SyntaxRead(Protocol):
-    """Read-only access to parser context and CST text for processors."""
+    """Read-only access to the CST and language config for processors."""
 
     @property
     def file_path(self) -> str: ...
+
+    @property
+    def lang_cfg(self) -> Any: ...
 
     def node_text(self, node: TSNode) -> str: ...
 
@@ -22,6 +25,3 @@ class SyntaxRead(Protocol):
     ) -> str: ...
 
     def get_tree(self) -> Tree: ...
-
-    @property
-    def _ctx(self) -> ParserContext: ...

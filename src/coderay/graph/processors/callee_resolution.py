@@ -40,7 +40,7 @@ class CalleeResolution:
 
     def resolve_callee_targets(self, raw: str, scope_stack: list[str]) -> list[str]:
         """Resolve callee to qualified targets."""
-        graph = self._syntax._ctx.lang_cfg.graph
+        graph = self._syntax.lang_cfg.graph
         result = self.resolve_super_targets(raw, scope_stack, graph.super_prefixes)
         if result is not None:
             return result

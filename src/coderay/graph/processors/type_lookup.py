@@ -108,7 +108,7 @@ class _TypeLookupCore:
         """Walk up to innermost enclosing class qualified name."""
         current = node.parent
         class_names: list[str] = []
-        class_scope_types = self._syntax._ctx.lang_cfg.cst.class_scope_types
+        class_scope_types = self._syntax.lang_cfg.cst.class_scope_types
         while current:
             if current.type in class_scope_types:
                 name_node = current.child_by_field_name("name") or (
@@ -175,7 +175,7 @@ class _TypeLookupCore:
     def get_enclosing_function_node(self, node: TSNode) -> TSNode | None:
         """Walk up tree to enclosing function definition."""
         current = node.parent
-        fn_types = self._syntax._ctx.lang_cfg.cst.function_scope_types
+        fn_types = self._syntax.lang_cfg.cst.function_scope_types
         while current:
             if current.type in fn_types:
                 return current
@@ -187,7 +187,7 @@ class _TypeLookupCore:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
-        param_types = self._syntax._ctx.lang_cfg.cst.typed_param_types
+        param_types = self._syntax.lang_cfg.cst.typed_param_types
         result: list[tuple[str, list[str]]] = []
         for child in params.children:
             if child.type in param_types:

@@ -25,7 +25,7 @@ class CallProcessor:
         self._type_lookup = type_lookup
         self._callee = callee
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Emit CALLS for a call expression."""
         caller_id = caller_id_for_scope(self._session, self._syntax, scope_stack)
         callee_node = node.child_by_field_name("function")
@@ -37,11 +37,12 @@ class CallProcessor:
         callee_targets = self._callee.resolve_callee_targets(raw_callee, scope_stack)
         self._callee.add_call_edges(caller_id, raw_callee, callee_targets)
         self._maybe_track_instantiation(node, raw_callee)
+        return None
 
     def _maybe_track_instantiation(self, call_node: TSNode, raw_callee: str) -> None:
         """Register lhs as instance when rhs is a constructor call."""
         parent = call_node.parent
-        atypes = self._syntax._ctx.lang_cfg.cst.assignment_types
+        atypes = self._syntax.lang_cfg.cst.assignment_types
         if parent is None or parent.type not in atypes:
             return
         lhs = (
@@ -51,7 +52,7 @@ class CallProcessor:
         )
         if lhs is None:
             return
-        self_prefix = self._syntax._ctx.lang_cfg.graph.self_prefix
+        self_prefix = self._syntax.lang_cfg.graph.self_prefix
         nt = self._syntax.node_text
         if lhs.type == "identifier":
             var_name = nt(lhs)

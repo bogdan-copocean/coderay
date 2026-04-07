@@ -16,7 +16,7 @@ class JsTsImportProcessor:
         self._session = session
         self._syntax = syntax
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Process JS/TS import node."""
         del scope_stack
         source_node = node.child_by_field_name("source")
@@ -56,6 +56,7 @@ class JsTsImportProcessor:
             return
 
         self._emit_edges(imported, mod_path)
+        return None
 
     def _collect_imported(
         self, import_clause: TSNode | None, mod_path: str

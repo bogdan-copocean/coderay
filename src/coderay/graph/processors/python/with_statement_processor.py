@@ -5,11 +5,10 @@ from __future__ import annotations
 from coderay.graph.lowering.session import LoweringSession
 from coderay.graph.lowering.syntax_read import SyntaxRead
 from coderay.graph.processors.type_lookup import TypeLookup
-from coderay.graph.processors.with_statement import WithStatementProcessor
 from coderay.parsing.base import TSNode
 
 
-class PythonWithStatementProcessor(WithStatementProcessor):
+class PythonWithStatementProcessor:
     """Bind as-target names from __enter__ return type."""
 
     def __init__(
@@ -18,9 +17,11 @@ class PythonWithStatementProcessor(WithStatementProcessor):
         syntax: SyntaxRead,
         type_lookup: TypeLookup,
     ) -> None:
-        super().__init__(session, syntax, type_lookup)
+        self._session = session
+        self._syntax = syntax
+        self._type_lookup = type_lookup
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Register instances from with ... as bindings."""
         del scope_stack
         for child in node.children:
@@ -28,13 +29,14 @@ class PythonWithStatementProcessor(WithStatementProcessor):
                 for item in child.children:
                     if item.type == "with_item":
                         self._process_with_item(item)
+        return None
 
     def _process_with_item(self, item: TSNode) -> None:
         """Type as-target from context manager __enter__ return."""
         value = item.child_by_field_name("value")
         if not value:
             return
-        call_types = self._syntax._ctx.lang_cfg.cst.call_types
+        call_types = self._syntax.lang_cfg.cst.call_types
         if value.type == "as_pattern":
             target_node = value.child_by_field_name("alias")
             call_node = next(

@@ -20,15 +20,15 @@ class PythonAssignmentProcessor(AssignmentProcessor):
     ) -> None:
         super().__init__(session, syntax, type_lookup)
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Python tuple unpack and base assignment rules."""
         lhs, rhs = _assignment_sides(node)
         if lhs is None or rhs is None:
             return
         if lhs.type in ("pattern_list", "tuple_pattern", "list_pattern"):
             self._handle_tuple_unpacking(lhs, rhs)
-            return
-        super().handle(node, scope_stack=scope_stack)
+            return None
+        return super().handle(node, scope_stack=scope_stack)
 
     def _register_assignment_from_call(
         self,
@@ -62,7 +62,7 @@ class PythonAssignmentProcessor(AssignmentProcessor):
                     identifiers.append(name)
         if not identifiers:
             return
-        if rhs.type not in self._syntax._ctx.lang_cfg.cst.call_types:
+        if rhs.type not in self._syntax.lang_cfg.cst.call_types:
             return
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:

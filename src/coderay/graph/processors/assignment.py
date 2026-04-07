@@ -37,12 +37,12 @@ class AssignmentProcessor:
         self._syntax = syntax
         self._type_lookup = type_lookup
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         # x = y          ->  alias x to resolved(y)
         lhs, rhs = _assignment_sides(node)
         if lhs is None or rhs is None:
             return
-        self_prefix = self._syntax._ctx.lang_cfg.graph.self_prefix
+        self_prefix = self._syntax.lang_cfg.graph.self_prefix
         nt = self._syntax.node_text
         fc = self._session.file_ctx
         if lhs.type == "attribute" and rhs.type == "identifier":
@@ -85,8 +85,9 @@ class AssignmentProcessor:
                     prefix_resolved = fc.resolve(prefix)
                     if prefix_resolved:
                         fc.register_alias(lhs_name, f"{prefix_resolved}::{attr}")
-        elif rhs.type in self._syntax._ctx.lang_cfg.cst.call_types:
+        elif rhs.type in self._syntax.lang_cfg.cst.call_types:
             self._register_assignment_from_call(lhs_name, rhs, node, scope_stack)
+        return None
 
     def _register_assignment_from_call(
         self,

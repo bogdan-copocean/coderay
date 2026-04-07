@@ -8,10 +8,7 @@ from coderay.parsing.base import TSNode
 
 
 class NodeProcessor(Protocol):
-    """Handle one classified node; scope_stack is the enclosing qualified path."""
+    """Handle one classified node; return a scope name to push, or None."""
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> None:
-        """Process node and update session facts / file context."""
-
-
-# ImportProcessor (``processors/imports.py``) is the same surface: only ``handle``.
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
+        """Process node, update session facts, return new scope name or None."""
