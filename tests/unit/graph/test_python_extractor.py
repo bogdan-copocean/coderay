@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from coderay.core.models import NodeKind
+from coderay.graph.extractors.python.extractor import PythonGraphExtractor
 from coderay.graph.facts import (
     CallsEdge,
     ImportsEdge,
@@ -10,7 +11,6 @@ from coderay.graph.facts import (
     SymbolDefinition,
 )
 from coderay.graph.file_context import FileContext
-from coderay.graph.plugins.python.extractor import PythonGraphExtractor
 from coderay.parsing.base import get_parse_context
 
 FILE = "test.py"
