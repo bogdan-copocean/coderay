@@ -12,7 +12,7 @@ class PythonTypeLookup(_TypeLookupCore):
     def find_method_in_class_body(
         self, class_node: TSNode, method_name: str
     ) -> TSNode | None:
-        body_types = self._syntax.lang_cfg.cst.class_body_types
+        body_types = self._parser.lang_cfg.cst.class_body_types
         for child in class_node.children:
             if child.type not in body_types:
                 continue
@@ -21,7 +21,7 @@ class PythonTypeLookup(_TypeLookupCore):
                 if fn is None:
                     continue
                 name_node = fn.child_by_field_name("name")
-                if name_node and self._syntax.node_text(name_node) == method_name:
+                if name_node and self._parser.node_text(name_node) == method_name:
                     return fn
         return None
 
@@ -29,7 +29,7 @@ class PythonTypeLookup(_TypeLookupCore):
         def search(n: TSNode) -> TSNode | None:
             if n.type == "function_definition":
                 name_node = n.child_by_field_name("name")
-                if name_node and self._syntax.node_text(name_node) == func_name:
+                if name_node and self._parser.node_text(name_node) == func_name:
                     return n
             for c in n.children:
                 found = search(c)
@@ -37,7 +37,7 @@ class PythonTypeLookup(_TypeLookupCore):
                     return found
             return None
 
-        return search(self._syntax.get_tree().root_node)
+        return search(self._parser.get_tree().root_node)
 
     def _unwrap_decorated(self, stmt: TSNode) -> TSNode | None:
         """Return function_definition, including from decorated_definition."""

@@ -3,26 +3,27 @@
 from __future__ import annotations
 
 from coderay.graph._utils import resolve_relative_import
+from coderay.graph.identifiers import caller_id_for_scope
 from coderay.graph.lowering.session import LoweringSession
-from coderay.graph.lowering.syntax_read import SyntaxRead
 from coderay.graph.processors.imports import append_import_edge
-from coderay.graph.processors.scope import caller_id_for_scope
-from coderay.parsing.base import TSNode
+from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 class PythonImportProcessor:
     """Handle import_from / import / future_import (Python)."""
 
-    def __init__(self, session: LoweringSession, syntax: SyntaxRead) -> None:
+    def __init__(self, session: LoweringSession, parser: BaseTreeSitterParser) -> None:
         self._session = session
-        self._syntax = syntax
+        self._parser = parser
 
     def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Process Python import node."""
         ntype = node.type
         module: list[str] = []
         imported: list[tuple[str, str]] = []
-        caller_id = caller_id_for_scope(self._session, self._syntax, scope_stack)
+        caller_id = caller_id_for_scope(
+            self._session.module_id, self._parser.file_path, scope_stack
+        )
 
         for child in node.children:
             prev = child.prev_sibling
@@ -44,7 +45,7 @@ class PythonImportProcessor:
 
             elif ntype == "future_import_statement":
                 if prev_type == "from":
-                    module.append(self._syntax.node_text(child).strip())
+                    module.append(self._parser.node_text(child).strip())
                     continue
                 self._collect_import_name(child, imported)
 
@@ -55,7 +56,7 @@ class PythonImportProcessor:
         return None
 
     def _resolve_import_text(self, child: TSNode) -> str | None:
-        text = self._syntax.node_text(child).strip()
+        text = self._parser.node_text(child).strip()
         if text and text[0] == ".":
             return resolve_relative_import(self._session.module_id, text)
         return text or None
@@ -63,7 +64,7 @@ class PythonImportProcessor:
     def _collect_import_name(self, child: TSNode, names: list[tuple[str, str]]) -> None:
         ctype = child.type
         if ctype in ("dotted_name", "identifier"):
-            name = self._syntax.node_text(child).strip()
+            name = self._parser.node_text(child).strip()
             names.append((name, name))
         elif ctype == "aliased_import":
             original, alias = self._parse_aliased_import(child)
@@ -101,9 +102,9 @@ class PythonImportProcessor:
         for child in node.children:
             if child.type in ("dotted_name", "identifier"):
                 if original is None:
-                    original = self._syntax.node_text(child).strip()
+                    original = self._parser.node_text(child).strip()
                 else:
-                    alias = self._syntax.node_text(child).strip()
+                    alias = self._parser.node_text(child).strip()
         return original, alias
 
     def _emit_from_import_edges(

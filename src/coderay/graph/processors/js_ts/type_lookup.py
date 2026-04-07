@@ -12,7 +12,7 @@ class JsTsTypeLookup(_TypeLookupCore):
     def find_method_in_class_body(
         self, class_node: TSNode, method_name: str
     ) -> TSNode | None:
-        body_types = self._syntax.lang_cfg.cst.class_body_types
+        body_types = self._parser.lang_cfg.cst.class_body_types
         for child in class_node.children:
             if child.type not in body_types:
                 continue
@@ -20,7 +20,7 @@ class JsTsTypeLookup(_TypeLookupCore):
                 if stmt.type != "method_definition":
                     continue
                 name_node = stmt.child_by_field_name("name")
-                if name_node and self._syntax.node_text(name_node) == method_name:
+                if name_node and self._parser.node_text(name_node) == method_name:
                     return stmt
         return None
 
@@ -28,11 +28,11 @@ class JsTsTypeLookup(_TypeLookupCore):
         def search(n: TSNode) -> TSNode | None:
             if n.type in ("function_declaration", "function_definition"):
                 name_node = n.child_by_field_name("name")
-                if name_node and self._syntax.node_text(name_node) == func_name:
+                if name_node and self._parser.node_text(name_node) == func_name:
                     return n
             if n.type == "variable_declarator":
                 name_node = n.child_by_field_name("name")
-                if name_node and self._syntax.node_text(name_node) == func_name:
+                if name_node and self._parser.node_text(name_node) == func_name:
                     value = n.child_by_field_name("value")
                     if value and value.type == "arrow_function":
                         return value
@@ -42,4 +42,4 @@ class JsTsTypeLookup(_TypeLookupCore):
                     return found
             return None
 
-        return search(self._syntax.get_tree().root_node)
+        return search(self._parser.get_tree().root_node)

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from coderay.graph.lowering.session import LoweringSession
-from coderay.graph.lowering.syntax_read import SyntaxRead
 from coderay.graph.processors.type_lookup import TypeLookup
-from coderay.parsing.base import TSNode
+from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 def _assignment_sides(node: TSNode) -> tuple[TSNode | None, TSNode | None]:
@@ -30,11 +29,11 @@ class AssignmentProcessor:
     def __init__(
         self,
         session: LoweringSession,
-        syntax: SyntaxRead,
+        parser: BaseTreeSitterParser,
         type_lookup: TypeLookup,
     ) -> None:
         self._session = session
-        self._syntax = syntax
+        self._parser = parser
         self._type_lookup = type_lookup
 
     def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
@@ -42,8 +41,8 @@ class AssignmentProcessor:
         lhs, rhs = _assignment_sides(node)
         if lhs is None or rhs is None:
             return
-        self_prefix = self._syntax.lang_cfg.graph.self_prefix
-        nt = self._syntax.node_text
+        self_prefix = self._parser.lang_cfg.graph.self_prefix
+        nt = self._parser.node_text
         fc = self._session.file_ctx
         if lhs.type == "attribute" and rhs.type == "identifier":
             lhs_text = nt(lhs)
@@ -85,7 +84,7 @@ class AssignmentProcessor:
                     prefix_resolved = fc.resolve(prefix)
                     if prefix_resolved:
                         fc.register_alias(lhs_name, f"{prefix_resolved}::{attr}")
-        elif rhs.type in self._syntax.lang_cfg.cst.call_types:
+        elif rhs.type in self._parser.lang_cfg.cst.call_types:
             self._register_assignment_from_call(lhs_name, rhs, node, scope_stack)
         return None
 
@@ -101,7 +100,7 @@ class AssignmentProcessor:
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:
             return
-        callee_name = self._syntax.node_text(callee_node).strip()
+        callee_name = self._parser.node_text(callee_node).strip()
         if not callee_name:
             return
         return_type = self._type_lookup.get_function_return_type(callee_name)

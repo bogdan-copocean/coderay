@@ -6,13 +6,12 @@ from collections.abc import Callable
 from typing import Protocol
 
 from coderay.graph.lowering.session import LoweringSession
-from coderay.graph.lowering.syntax_read import SyntaxRead
 from coderay.graph.processors.type_text_resolve import (
     is_bare_self_annotation,
     resolve_annotation_type_text,
     resolve_annotation_type_texts,
 )
-from coderay.parsing.base import TSNode
+from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 class TypeLookup(Protocol):
@@ -61,11 +60,11 @@ class _TypeLookupCore:
     def __init__(
         self,
         session: LoweringSession,
-        syntax: SyntaxRead,
+        parser: BaseTreeSitterParser,
         find_class_node: Callable[[str], TSNode | None],
     ) -> None:
         self._session = session
-        self._syntax = syntax
+        self._parser = parser
         self._find_class_node = find_class_node
 
     def find_method_in_class_body(
@@ -82,7 +81,7 @@ class _TypeLookupCore:
         """Resolve annotation to a single qualified class ref."""
         return resolve_annotation_type_text(
             type_text,
-            file_path=self._syntax.file_path,
+            file_path=self._parser.file_path,
             resolve=self._session.file_ctx.resolve,
         )
 
@@ -98,7 +97,7 @@ class _TypeLookupCore:
         )
         return resolve_annotation_type_texts(
             type_text,
-            file_path=self._syntax.file_path,
+            file_path=self._parser.file_path,
             resolve=self._session.file_ctx.resolve,
             use_self_semantics=use_self,
             enclosing_class_qualified=enc,
@@ -108,14 +107,14 @@ class _TypeLookupCore:
         """Walk up to innermost enclosing class qualified name."""
         current = node.parent
         class_names: list[str] = []
-        class_scope_types = self._syntax.lang_cfg.cst.class_scope_types
+        class_scope_types = self._parser.lang_cfg.cst.class_scope_types
         while current:
             if current.type in class_scope_types:
                 name_node = current.child_by_field_name("name") or (
                     current.named_children[0] if current.named_children else None
                 )
                 if name_node:
-                    name = self._syntax.node_text(name_node)
+                    name = self._parser.node_text(name_node)
                     if name:
                         class_names.append(name)
             current = current.parent
@@ -133,7 +132,7 @@ class _TypeLookupCore:
         )
         if not name_node:
             return None
-        pname = self._syntax.node_text(name_node)
+        pname = self._parser.node_text(name_node)
         type_node = param_node.child_by_field_name("type")
         if type_node is None:
             for c in param_node.children:
@@ -147,7 +146,7 @@ class _TypeLookupCore:
         if parent and parent.parent:
             enclosing = parent.parent
         type_refs = self.resolve_type_texts(
-            self._syntax.node_text(type_node), enclosing_func_node=enclosing
+            self._parser.node_text(type_node), enclosing_func_node=enclosing
         )
         return (pname, type_refs) if type_refs else None
 
@@ -168,14 +167,14 @@ class _TypeLookupCore:
         if not type_node:
             return None
         refs = self.resolve_type_texts(
-            self._syntax.node_text(type_node), enclosing_func_node=func_node
+            self._parser.node_text(type_node), enclosing_func_node=func_node
         )
         return refs[0] if refs else None
 
     def get_enclosing_function_node(self, node: TSNode) -> TSNode | None:
         """Walk up tree to enclosing function definition."""
         current = node.parent
-        fn_types = self._syntax.lang_cfg.cst.function_scope_types
+        fn_types = self._parser.lang_cfg.cst.function_scope_types
         while current:
             if current.type in fn_types:
                 return current
@@ -187,7 +186,7 @@ class _TypeLookupCore:
         params = func_node.child_by_field_name("parameters")
         if not params:
             return []
-        param_types = self._syntax.lang_cfg.cst.typed_param_types
+        param_types = self._parser.lang_cfg.cst.typed_param_types
         result: list[tuple[str, list[str]]] = []
         for child in params.children:
             if child.type in param_types:

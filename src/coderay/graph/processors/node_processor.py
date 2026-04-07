@@ -8,7 +8,10 @@ from coderay.parsing.base import TSNode
 
 
 class NodeProcessor(Protocol):
-    """Handle one classified node; return a scope name to push, or None."""
+    """Handle one classified CST node.
 
-    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
-        """Process node, update session facts, return new scope name or None."""
+    Returns a scope name if the handler registered a new scope (used when
+    Handler.pushes_scope=True), otherwise None.
+    """
+
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None: ...

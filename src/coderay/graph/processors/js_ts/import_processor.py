@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from coderay.graph._utils import resolve_relative_import
 from coderay.graph.lowering.session import LoweringSession
-from coderay.graph.lowering.syntax_read import SyntaxRead
 from coderay.graph.processors.imports import append_import_edge
-from coderay.parsing.base import TSNode
+from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 class JsTsImportProcessor:
     """Handle JS/TS import_statement."""
 
-    def __init__(self, session: LoweringSession, syntax: SyntaxRead) -> None:
+    def __init__(self, session: LoweringSession, parser: BaseTreeSitterParser) -> None:
         self._session = session
-        self._syntax = syntax
+        self._parser = parser
 
     def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Process JS/TS import node."""
@@ -31,7 +30,7 @@ class JsTsImportProcessor:
         if not source_node:
             return
 
-        raw_source = self._syntax.node_text(source_node).strip()
+        raw_source = self._parser.node_text(source_node).strip()
         if (
             len(raw_source) >= 2
             and raw_source[0] in ("'", '"')
@@ -78,11 +77,11 @@ class JsTsImportProcessor:
                     name_node = spec.child_by_field_name("name")
                     alias_node = spec.child_by_field_name("alias")
                     orig = (
-                        self._syntax.node_text(name_node).strip() if name_node else ""
+                        self._parser.node_text(name_node).strip() if name_node else ""
                     )
                     if orig:
                         local = (
-                            self._syntax.node_text(alias_node).strip()
+                            self._parser.node_text(alias_node).strip()
                             if alias_node
                             else orig
                         )
@@ -90,11 +89,11 @@ class JsTsImportProcessor:
         elif import_clause.type == "namespace_import":
             ident = import_clause.child_by_field_name("name")
             if ident:
-                local = self._syntax.node_text(ident).strip()
+                local = self._parser.node_text(ident).strip()
                 if local:
                     imported.append((mod_path, local))
         elif import_clause.type == "identifier":
-            local = self._syntax.node_text(import_clause).strip()
+            local = self._parser.node_text(import_clause).strip()
             if local:
                 imported.append((mod_path, local))
 

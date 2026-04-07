@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from coderay.graph.lowering.session import LoweringSession
-from coderay.graph.lowering.syntax_read import SyntaxRead
 from coderay.graph.processors.assignment import AssignmentProcessor, _assignment_sides
 from coderay.graph.processors.type_lookup import TypeLookup
-from coderay.parsing.base import TSNode
+from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 class PythonAssignmentProcessor(AssignmentProcessor):
@@ -15,10 +14,10 @@ class PythonAssignmentProcessor(AssignmentProcessor):
     def __init__(
         self,
         session: LoweringSession,
-        syntax: SyntaxRead,
+        parser: BaseTreeSitterParser,
         type_lookup: TypeLookup,
     ) -> None:
-        super().__init__(session, syntax, type_lookup)
+        super().__init__(session, parser, type_lookup)
 
     def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
         """Python tuple unpack and base assignment rules."""
@@ -40,7 +39,7 @@ class PythonAssignmentProcessor(AssignmentProcessor):
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:
             return
-        callee_name = self._syntax.node_text(callee_node).strip()
+        callee_name = self._parser.node_text(callee_node).strip()
         if not callee_name:
             return
         if callee_name == "partial" or callee_name.endswith(".partial"):
@@ -57,17 +56,17 @@ class PythonAssignmentProcessor(AssignmentProcessor):
         identifiers: list[str] = []
         for child in lhs.children:
             if child.type == "identifier":
-                name = self._syntax.node_text(child)
+                name = self._parser.node_text(child)
                 if name and name != "_":
                     identifiers.append(name)
         if not identifiers:
             return
-        if rhs.type not in self._syntax.lang_cfg.cst.call_types:
+        if rhs.type not in self._parser.lang_cfg.cst.call_types:
             return
         callee_node = rhs.child_by_field_name("function")
         if not callee_node:
             return
-        callee_name = self._syntax.node_text(callee_node).strip()
+        callee_name = self._parser.node_text(callee_node).strip()
         if not callee_name:
             return
         func_node = (
@@ -96,14 +95,14 @@ class PythonAssignmentProcessor(AssignmentProcessor):
         children = type_node.named_children
         if len(children) < 2:
             return []
-        base_name = self._syntax.node_text(children[0])
+        base_name = self._parser.node_text(children[0])
         if base_name.lower() != "tuple":
             return []
         type_param_node = children[1]
         result: list[str] = []
         for type_child in type_param_node.named_children:
             if type_child.type == "type":
-                ttext = self._syntax.node_text(type_child)
+                ttext = self._parser.node_text(type_child)
                 refs = self._type_lookup.resolve_type_texts(ttext)
                 result.extend(refs)
         return result
@@ -116,5 +115,5 @@ class PythonAssignmentProcessor(AssignmentProcessor):
             return None
         for child in arg_list.named_children:
             if child.type in ("identifier", "dotted_name", "attribute"):
-                return self._syntax.node_text(child)
+                return self._parser.node_text(child)
         return None
