@@ -1,4 +1,15 @@
-"""Per-file symbol bindings for graph extraction (Python/JS/TS)."""
+"""Per-file symbol bindings for graph extraction (Python/JS/TS).
+
+Bindings are file-local only (no cross-file graph); a future project-wide
+context may sit alongside this.
+
+Instance typing: each variable name is either one known class ref or a union of
+refs (e.g. ``A | B`` on a parameter). Those two shapes live in ``_instances`` vs
+``_instance_unions`` — not duplicate indexes; ``register_instance`` /
+``register_instance_union`` clear the other map for that name. Use
+``resolve_instance`` for a single ref only; ``resolve_method_calls`` and
+``resolve_chain`` consult unions first, then single refs.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +21,9 @@ class FileContext:
 
     def __init__(self, module_index: dict[str, str] | None = None) -> None:
         self._symbols: dict[str, str] = {}
+        # x known as instance of one class  ->  "file::Class" or resolved id
         self._instances: dict[str, str] = {}
+        # union types: multiple class refs (exclusive with _instances per name)
         self._instance_unions: dict[str, list[str]] = {}
         self._class_attributes: dict[str, str] = {}
         self._classes: set[str] = set()
@@ -87,7 +100,7 @@ class FileContext:
         return self._symbols.get(name)
 
     def resolve_instance(self, var_name: str) -> str | None:
-        """Look up a variable's originating class reference."""
+        """Look up single class ref; None if name is union-only or unknown."""
         return self._instances.get(var_name)
 
     def resolve_method_call(self, obj_name: str, method_name: str) -> str | None:
@@ -106,6 +119,7 @@ class FileContext:
         return [f"{class_ref}.{method_name}"]
 
     def resolve_chain(self, chain: str) -> list[str]:
+        # a.b.c  ->  start from instance/alias of a, walk class_attributes per segment
         """Resolve obj.attr1.attr2 to class refs for the final attribute."""
         parts = chain.split(".")
         if not parts:

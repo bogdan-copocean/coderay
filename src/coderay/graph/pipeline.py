@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 
 from coderay.graph.code_graph import CodeGraph
+from coderay.graph.extractors.python.passes import run_python_passes
 from coderay.graph.passes.global_passes import run_global_passes
-from coderay.graph.plugins.python.passes import run_python_passes
 
 logger = logging.getLogger(__name__)
 

@@ -2,19 +2,32 @@
 
 Directed call/import/inheritance graph over the indexed codebase.
 
+## Layout
+
+| Area | Role |
+|------|------|
+| [`graph_builder.py`](graph_builder.py) | `GraphBuilder`: parse → extract facts → emit → merge; optional `resolve_facts` hook; `include_external` filtering |
+| [`builder.py`](builder.py) | `build_graph` / `build_and_save_graph` — module index + `GraphBuilder.build` + `save_graph` |
+| [`extractor.py`](extractor.py) | `build_module_index`, `extract_graph_from_file` (thin wrapper around `GraphBuilder.process_file`) |
+| [`types.py`](types.py) | `ModuleIndex`, `ProjectIndex` for resolvers |
+| [`extractors/`](extractors/) | `BaseGraphExtractor` + per-language extractors (Python, JS/TS) |
+| [`processors/`](processors/) | Shared processors (`definition`, `call`, `assignment`, `type_lookup`, `imports`, …) |
+| [`processors/<lang>/`](processors/python/) | Language-specific processors (e.g. `PythonTypeLookup`, `ImportProcessor`) |
+| [`lowering/`](lowering/) | `LoweringSession`, `SyntaxRead` — CST helpers for processors |
+| [`passes/`](passes/) | Post-merge global passes; Python-only steps in [`extractors/python/passes.py`](extractors/python/passes.py) |
+| [`pipeline.py`](pipeline.py) | `run_post_merge_pipeline` — Python passes + `run_global_passes` |
+
 ## Pipeline
 
 ```
-extract_graph_from_file()   # per file: CST → GraphFacts
+GraphBuilder.process_file() / extract_graph_from_file()   # CST → facts → emit
     ↓
-build_graph()               # merge all facts into CodeGraph
+build_graph()                    # merge all files → CodeGraph
     ↓
-run_post_merge_pipeline()   # resolve cross-file edges, prune phantoms
+run_post_merge_pipeline()        # cross-file passes, prune phantoms
 ```
 
-Facts (`facts.py`) capture nodes (functions, classes, modules) and edges
-(CALLS, IMPORTS, INHERITS, CONTAINS). Emitting to the graph (`emit.py`)
-adds real nodes and phantom nodes for unresolved call targets.
+`GraphBuilder` selects the extractor from `lang_cfg.name` (`python` | `javascript` | `typescript`). Facts (`facts.py`) describe nodes and edges; [`emit.py`](emit.py) turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls).
 
 ## CodeGraph (`code_graph.py`)
 
@@ -47,10 +60,11 @@ Phantom alias nodes are seeded to catch callers that import via re-export
 paths. Module nodes are suppressed when the file is already represented
 by more specific function/class nodes.
 
-## Language plugins
+## Language modules
 
-`plugins/python/` and `plugins/js_ts/` implement `LanguageGraphPlugin`.
-`plugins/base/handlers/` contains shared call/import/class handlers.
+[`extractors/python/`](extractors/python/) and [`extractors/js_ts/`](extractors/js_ts/)
+hold extractors; language-specific processors (imports, typing, assignments) sit under
+[`processors/python/`](processors/python/) and [`processors/js_ts/`](processors/js_ts/).
 
 ## Persistence
 
