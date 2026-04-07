@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from coderay.graph.extractors.base import BaseGraphExtractor
+from coderay.graph.extractors.base import BaseGraphExtractor, Handler, HandlerMap
+from coderay.graph.processors.assignment import AssignmentProcessor
+from coderay.graph.processors.call import CallProcessor
+from coderay.graph.processors.callee_resolution import CalleeResolution
+from coderay.graph.processors.decorator import DecoratorProcessor
+from coderay.graph.processors.definition import (
+    ClassDefinitionProcessor,
+    FunctionDefinitionProcessor,
+)
 from coderay.graph.processors.python.assignment_processor import (
     PythonAssignmentProcessor,
 )
@@ -11,50 +19,79 @@ from coderay.graph.processors.python.type_lookup import PythonTypeLookup
 from coderay.graph.processors.python.with_statement_processor import (
     PythonWithStatementProcessor,
 )
-from coderay.graph.processors.type_lookup import TypeLookup
 from coderay.parsing.base import TSNode
+from coderay.parsing.cst_kind import TraversalKind
 
 
 class PythonGraphExtractor(BaseGraphExtractor):
     """Lower Python tree-sitter CST to graph facts."""
 
-    _assignment_processor_cls = PythonAssignmentProcessor
-    _with_processor_cls = PythonWithStatementProcessor
-    _import_processor_cls = PythonImportProcessor
+    def _build_handlers(self) -> HandlerMap:
+        parser = self._parser
+        session = self._session
+        type_lookup = PythonTypeLookup(session, parser, self._find_class_node)
+        callee = CalleeResolution(session, parser, self._find_class_node)
 
-    def _build_type_lookup(self) -> TypeLookup:
-        return PythonTypeLookup(self._session, self, self._find_class_node)
+        return {
+            TraversalKind.IMPORT: Handler(PythonImportProcessor(session, parser)),
+            TraversalKind.FUNCTION: Handler(
+                PythonFunctionDefinitionProcessor(
+                    session, parser, type_lookup, self._file_ctx
+                ),
+                pushes_scope=True,
+            ),
+            TraversalKind.CLASS: Handler(
+                ClassDefinitionProcessor(session, parser),
+                pushes_scope=True,
+            ),
+            TraversalKind.CALL: Handler(
+                CallProcessor(session, parser, type_lookup, callee)
+            ),
+            TraversalKind.DECORATED_DEFINITION: Handler(
+                DecoratorProcessor(session, parser, callee), order="post"
+            ),
+            TraversalKind.ASSIGNMENT: Handler(
+                PythonAssignmentProcessor(session, parser, type_lookup)
+            ),
+            TraversalKind.WITH: Handler(
+                PythonWithStatementProcessor(session, parser, type_lookup)
+            ),
+        }
 
-    def _after_function_definition_registered(
-        self, node: TSNode, *, scope_stack: list[str]
-    ) -> None:
-        # def __init__(self, repo: UserRepository):  ->  register repo as instance
-        # @property \n def name(self) -> str:  ->  register class attribute
+
+class PythonFunctionDefinitionProcessor(FunctionDefinitionProcessor):
+    """FunctionDefinitionProcessor + typed param and @property registration."""
+
+    def __init__(self, session, parser, type_lookup, file_ctx) -> None:
+        super().__init__(session, parser)
+        self._type_lookup = type_lookup
+        self._file_ctx = file_ctx
+
+    def handle(self, node: TSNode, *, scope_stack: list[str]) -> str | None:
+        # Register typed params and @property attrs before DFS recurses into body.
         for param_name, type_refs in self._type_lookup.get_typed_parameters(node):
             if len(type_refs) == 1:
                 self._file_ctx.register_instance(param_name, type_refs[0])
             else:
                 self._file_ctx.register_instance_union(param_name, type_refs)
 
-        if self._is_property(node) and scope_stack:
-            name = self.identifier_from_node(node)
-            if not name:
-                return
-            class_qualified = ".".join(scope_stack)
+        if scope_stack and _is_property(self._parser, node):
+            name = self._parser.identifier_from_node(node)
             return_type = self._type_lookup.get_return_type_from_func_node(node)
-            if return_type:
+            if name and return_type:
                 self._file_ctx.register_class_attribute(
-                    class_qualified, name, return_type
+                    ".".join(scope_stack), name, return_type
                 )
 
-    def _is_property(self, func_node: TSNode) -> bool:
-        """Return True if function has @property decorator."""
-        parent = func_node.parent
-        if parent is None or parent.type != "decorated_definition":
-            return False
-        for child in parent.children:
-            if child.type == "decorator":
-                text = self.node_text(child).strip()
-                if text.endswith("property"):
-                    return True
+        return super().handle(node, scope_stack=scope_stack)
+
+
+def _is_property(parser, func_node: TSNode) -> bool:
+    parent = func_node.parent
+    if parent is None or parent.type != "decorated_definition":
         return False
+    return any(
+        parser.node_text(child).strip().endswith("property")
+        for child in parent.children
+        if child.type == "decorator"
+    )

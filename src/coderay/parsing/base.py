@@ -75,8 +75,11 @@ class BaseTreeSitterParser:
 
     @property
     def file_path(self) -> str:
-        """Return file path."""
         return self._ctx.file_path
+
+    @property
+    def lang_cfg(self):
+        return self._ctx.lang_cfg
 
     def node_text(self, node) -> str:
         """Return source text for node."""
