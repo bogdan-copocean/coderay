@@ -1,32 +1,23 @@
-"""Pure callee resolution: frozen bindings + parser text → target node IDs."""
+"""Pure callee resolution: bindings + parser text → target node IDs."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
-from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
 from coderay.graph.lowering.name_bindings import OONameBindings
-from coderay.graph.processors.cst_bases import list_base_names_from_arg_list
-from coderay.parsing.base import BaseTreeSitterParser, TSNode
+from coderay.graph.handlers.helpers import BASE_CLASS_NODE_TYPES, list_base_names_from_arg_list
+from coderay.parsing.base import BaseTreeSitterParser
 from coderay.parsing.languages import get_supported_extensions
 
 
 class CalleeResolver:
     """Resolve a raw callee string to qualified target node IDs.
 
-    Takes frozen ``OONameBindings`` and a parser (text only).
+    Takes ``OONameBindings`` and a parser (text only).
     Produces ``list[str]`` — no side effects, no fact emission.
     """
 
-    def __init__(
-        self,
-        bindings: OONameBindings,
-        parser: BaseTreeSitterParser,
-        find_class_node: Callable[[str], TSNode | None],
-    ) -> None:
+    def __init__(self, bindings: OONameBindings, parser: BaseTreeSitterParser) -> None:
         self._bindings = bindings
         self._parser = parser
-        self._find_class_node = find_class_node
         self._supported_extensions = get_supported_extensions()
 
     def resolve(self, raw: str, scope_stack: list[str]) -> list[str]:
@@ -38,10 +29,7 @@ class CalleeResolver:
         result = self._resolve_self(raw, scope_stack, graph_cfg.self_prefix)
         if result is not None:
             return result
-        parts = raw.split(".")
-        if len(parts) == 1:
-            return self._resolve_simple(raw)
-        return self._resolve_chain(raw)
+        return self._resolve_simple(raw) if "." not in raw else self._resolve_chain(raw)
 
     # ------------------------------------------------------------------
     # Dispatch helpers
@@ -111,7 +99,7 @@ class CalleeResolver:
         return [method_name]
 
     # ------------------------------------------------------------------
-    # Super / class helpers
+    # Super / enclosing class helpers
     # ------------------------------------------------------------------
 
     def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
@@ -126,12 +114,13 @@ class CalleeResolver:
         return f"{base_resolved or f'{fp}::{base_name}'}.{method}"
 
     def _get_first_base_class(self, class_qualified: str) -> str | None:
+        from coderay.graph.handlers.helpers import find_class_node
         target_class = class_qualified.split(".")[-1]
-        class_node = self._find_class_node(target_class)
+        class_node = find_class_node(self._parser, target_class)
         if not class_node:
             return None
         for child in class_node.children:
-            if child.type not in _BASE_CLASS_NODE_TYPES:
+            if child.type not in BASE_CLASS_NODE_TYPES:
                 continue
             bases = list_base_names_from_arg_list(child, self._parser.node_text)
             if bases:
@@ -139,8 +128,7 @@ class CalleeResolver:
         return None
 
     def _find_enclosing_class(self, scope_stack: list[str]) -> str | None:
-        b = self._bindings
         for i in range(len(scope_stack) - 1, -1, -1):
-            if b.is_class(scope_stack[i]):
+            if self._bindings.is_class(scope_stack[i]):
                 return ".".join(scope_stack[: i + 1])
         return None
