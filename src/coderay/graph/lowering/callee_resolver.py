@@ -1,65 +1,63 @@
-"""Shared callee resolution for call and decorator lowering."""
+"""Pure callee resolution: frozen bindings + parser text → target node IDs."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
 from coderay.graph._utils import _BASE_CLASS_NODE_TYPES
-from coderay.graph.facts import CallsEdge
-from coderay.graph.lowering.session import LoweringSession
+from coderay.graph.lowering.name_bindings import OONameBindings
 from coderay.graph.processors.cst_bases import list_base_names_from_arg_list
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 from coderay.parsing.languages import get_supported_extensions
 
 
-class CalleeResolution:
-    """Resolve call text to qualified targets; append CALLS facts."""
+class CalleeResolver:
+    """Resolve a raw callee string to qualified target node IDs.
+
+    Takes frozen ``OONameBindings`` and a parser (text only).
+    Produces ``list[str]`` — no side effects, no fact emission.
+    """
 
     def __init__(
         self,
-        session: LoweringSession,
+        bindings: OONameBindings,
         parser: BaseTreeSitterParser,
         find_class_node: Callable[[str], TSNode | None],
     ) -> None:
-        self._session = session
+        self._bindings = bindings
         self._parser = parser
         self._find_class_node = find_class_node
         self._supported_extensions = get_supported_extensions()
 
-    def add_call_edges(
-        self, caller_id: str, raw: str, callee_targets: list[str]
-    ) -> None:
-        del raw
-        for callee_name in callee_targets:
-            if callee_name:
-                self._session.facts.add(
-                    CallsEdge(source_id=caller_id, target=callee_name)
-                )
-
-    def resolve_callee_targets(self, raw: str, scope_stack: list[str]) -> list[str]:
-        graph = self._parser.lang_cfg.graph
-        result = self.resolve_super_targets(raw, scope_stack, graph.super_prefixes)
+    def resolve(self, raw: str, scope_stack: list[str]) -> list[str]:
+        """Return qualified target IDs for *raw* callee text."""
+        graph_cfg = self._parser.lang_cfg.graph
+        result = self._resolve_super(raw, scope_stack, graph_cfg.super_prefixes)
         if result is not None:
             return result
-        result = self.resolve_self_targets(raw, scope_stack, graph.self_prefix)
+        result = self._resolve_self(raw, scope_stack, graph_cfg.self_prefix)
         if result is not None:
             return result
         parts = raw.split(".")
         if len(parts) == 1:
-            return self.resolve_simple_name_targets(raw)
-        return self.resolve_chain_targets(raw)
+            return self._resolve_simple(raw)
+        return self._resolve_chain(raw)
 
-    def resolve_super_targets(
+    # ------------------------------------------------------------------
+    # Dispatch helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_super(
         self, raw: str, scope_stack: list[str], super_prefixes: tuple[str, ...]
     ) -> list[str] | None:
         for prefix in super_prefixes:
             if raw.startswith(prefix):
-                method = raw[len(prefix) :]
-                target = self.resolve_super_call(scope_stack, method)
+                method = raw[len(prefix):]
+                target = self._resolve_super_call(scope_stack, method)
                 return [target] if target else [method]
         return None
 
-    def resolve_self_targets(
+    def _resolve_self(
         self, raw: str, scope_stack: list[str], self_prefix: str
     ) -> list[str] | None:
         if not self_prefix or not raw.startswith(self_prefix):
@@ -68,42 +66,42 @@ class CalleeResolution:
         parts = suffix.split(".")
         method = parts[-1]
         fp = self._parser.file_path
-        fc = self._session.file_ctx
+        b = self._bindings
         if len(parts) == 1:
-            class_qualified = self.find_enclosing_class(scope_stack)
+            class_qualified = self._find_enclosing_class(scope_stack)
             if class_qualified:
                 return [f"{fp}::{class_qualified}.{method}"]
         instance_key = self_prefix + ".".join(parts[:-1])
-        class_ref = fc.resolve_instance(instance_key)
+        class_ref = b.resolve_instance(instance_key)
         if not class_ref:
-            class_qualified = self.find_enclosing_class(scope_stack)
+            class_qualified = self._find_enclosing_class(scope_stack)
             if class_qualified and len(parts) == 2:
-                class_ref = fc.resolve_class_attribute(class_qualified, parts[0])
+                class_ref = b.resolve_class_attribute(class_qualified, parts[0])
         if class_ref:
             return [f"{class_ref}.{method}"]
         return [method]
 
-    def resolve_simple_name_targets(self, raw: str) -> list[str]:
-        fc = self._session.file_ctx
-        instance_class = fc.resolve_instance(raw)
+    def _resolve_simple(self, raw: str) -> list[str]:
+        b = self._bindings
+        instance_class = b.resolve_instance(raw)
         if instance_class:
             return [f"{instance_class}.__call__"]
-        resolved = fc.resolve(raw)
+        resolved = b.resolve(raw)
         return [resolved] if resolved else [raw]
 
-    def resolve_chain_targets(self, raw: str) -> list[str]:
+    def _resolve_chain(self, raw: str) -> list[str]:
         parts = raw.split(".")
         obj_name = parts[0]
         method_name = parts[-1]
-        fc = self._session.file_ctx
+        b = self._bindings
         if len(parts) > 2:
-            chain_refs = fc.resolve_chain(".".join(parts[:-1]))
+            chain_refs = b.resolve_chain(".".join(parts[:-1]))
             if chain_refs:
                 return [f"{ref}.{method_name}" for ref in chain_refs]
-        method_targets = fc.resolve_method_calls(obj_name, method_name)
+        method_targets = b.resolve_method_calls(obj_name, method_name)
         if method_targets:
             return method_targets
-        obj_resolved = fc.resolve(obj_name)
+        obj_resolved = b.resolve(obj_name)
         if obj_resolved:
             tail = ".".join(parts[1:])
             _, ext = obj_resolved.rsplit(".", 1) if "." in obj_resolved else ("", "")
@@ -112,19 +110,22 @@ class CalleeResolution:
             return [f"{obj_resolved}.{tail}"]
         return [method_name]
 
-    def resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
-        class_qualified = self.find_enclosing_class(scope_stack)
+    # ------------------------------------------------------------------
+    # Super / class helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_super_call(self, scope_stack: list[str], method: str) -> str | None:
+        class_qualified = self._find_enclosing_class(scope_stack)
         if not class_qualified:
             return None
-        base_name = self.get_first_base_class(class_qualified)
+        base_name = self._get_first_base_class(class_qualified)
         if not base_name:
             return None
-        fc = self._session.file_ctx
-        base_resolved = fc.resolve(base_name)
+        base_resolved = self._bindings.resolve(base_name)
         fp = self._parser.file_path
         return f"{base_resolved or f'{fp}::{base_name}'}.{method}"
 
-    def get_first_base_class(self, class_qualified: str) -> str | None:
+    def _get_first_base_class(self, class_qualified: str) -> str | None:
         target_class = class_qualified.split(".")[-1]
         class_node = self._find_class_node(target_class)
         if not class_node:
@@ -137,9 +138,9 @@ class CalleeResolution:
                 return bases[0]
         return None
 
-    def find_enclosing_class(self, scope_stack: list[str]) -> str | None:
-        fc = self._session.file_ctx
+    def _find_enclosing_class(self, scope_stack: list[str]) -> str | None:
+        b = self._bindings
         for i in range(len(scope_stack) - 1, -1, -1):
-            if fc.is_class(scope_stack[i]):
+            if b.is_class(scope_stack[i]):
                 return ".".join(scope_stack[: i + 1])
         return None

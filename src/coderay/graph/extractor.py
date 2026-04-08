@@ -5,13 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from coderay.graph._utils import resolve_relative_import
-from coderay.graph.file_context import FileContext
 from coderay.graph.graph_builder import GraphBuilder
 from coderay.graph.identifiers import file_path_to_module_names
 from coderay.graph.types import ModuleIndex
 
 __all__ = [
-    "FileContext",
     "ModuleIndex",
     "_resolve_relative_import",
     "build_module_index",

@@ -1,44 +1,103 @@
-"""Shared graph extractor: DFS traversal with handler map dispatch."""
+"""Shared graph extractor: two-pass DFS with binding and fact handler maps."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import dataclass
+from typing import Literal, Protocol
 
 from coderay.graph.facts import Fact, ModuleInfo
-from coderay.graph.file_context import FileContext
-from coderay.graph.lowering.session import LoweringSession
-from coderay.graph.processors.node_processor import NodeProcessor
+from coderay.graph.lowering.name_bindings import FileNameBindings, NameBindings
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, TSNode
 from coderay.parsing.cst_kind import TraversalKind, classify_node
 
 
-@dataclass
-class Handler:
-    """Wraps a processor with traversal intent.
+# ---------------------------------------------------------------------------
+# Protocols — contract between extractors and per-node binders/emitters
+# ---------------------------------------------------------------------------
 
-    order="pre"  — handle, then DFS recurses into children (default).
-    order="post" — DFS recurses into children first, then handle.
-    pushes_scope — handler.handle() returns a scope name; DFS recurses
-                   under that name instead of the current scope_stack.
-                   Implies no further recursion after the call (processor
-                   owns the body implicitly via the scope push).
+class Binder(Protocol):
+    """Pass 1 — register names into ``FileNameBindings``.
+
+    May append to ``scope_stack`` when the node opens a new lexical scope.
+    The DFS pops the pushed name after recursing into children.
+    Must not emit facts — side effects on ``bindings`` and ``scope_stack`` only.
     """
 
-    processor: NodeProcessor
+    def register(
+        self,
+        node: TSNode,
+        scope_stack: list[str],
+        parser: BaseTreeSitterParser,
+        bindings: FileNameBindings,
+    ) -> None: ...
+
+
+class Emitter(Protocol):
+    """Pass 2 — emit facts from resolved bindings.
+
+    Receives the same mutable ``scope_stack`` as Pass 1 (same DFS traversal).
+    Must not mutate ``bindings`` or ``scope_stack``.
+    """
+
+    def emit(
+        self,
+        node: TSNode,
+        scope_stack: list[str],
+        parser: BaseTreeSitterParser,
+        bindings: NameBindings,
+    ) -> list[Fact]: ...
+
+
+# ---------------------------------------------------------------------------
+# Handler wrappers and maps
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BindingHandler:
+    """Wraps a Binder for Pass 1.
+
+    order="post" — children visited before register() (rare for bindings).
+    """
+
+    processor: Binder
     order: Literal["pre", "post"] = "pre"
-    pushes_scope: bool = field(default=False)
 
 
-# Languages declare only the kinds they handle; absent kinds recurse silently.
-HandlerMap = dict[TraversalKind, Handler]
+@dataclass
+class FactHandler:
+    """Wraps an Emitter for Pass 2.
 
+    order="post" — children visited before emit() (used for decorators).
+    """
+
+    processor: Emitter
+    order: Literal["pre", "post"] = "pre"
+
+
+BindingHandlerMap = dict[TraversalKind, BindingHandler]
+FactHandlerMap = dict[TraversalKind, FactHandler]
+
+
+# ---------------------------------------------------------------------------
+# Base extractor
+# ---------------------------------------------------------------------------
 
 class BaseGraphExtractor(ABC):
-    """Lower a source file's CST to graph facts; subclass per language.
+    """Lower a source file's CST to graph facts via two DFS passes.
 
-    Only requirement: implement _build_handlers().
+    Pass 1 (binding pass) — Binders populate ``FileNameBindings``
+    so that Pass 2 can resolve names.  No facts are emitted here.
+
+    Pass 2 (fact pass)    — Emitters read the completed bindings and
+    emit all facts: definitions, imports, inheritance, calls, decorators.
+
+    Both passes share a mutable scope stack.  A binder that opens a new
+    lexical scope appends to it; the DFS pops the name after recursing into
+    children.  Pass 2 mirrors the same scope transitions automatically.
+
+    Subclass contract: implement ``_build_binding_handlers()`` and
+    ``_build_fact_handlers()``.
     """
 
     def __init__(
@@ -49,83 +108,105 @@ class BaseGraphExtractor(ABC):
     ) -> None:
         self._parser = BaseTreeSitterParser(context)
         self._module_id: str = context.file_path
-        self._module_index = module_index or {}
-        self._session = LoweringSession(
-            facts=set(),
-            file_ctx=self._build_file_context(),
-            module_id=self._module_id,
-        )
-        self._handlers: HandlerMap = self._build_handlers()
+        self._module_index: dict[str, str] = module_index or {}
 
     @abstractmethod
-    def _build_handlers(self) -> HandlerMap:
-        """Declare which node kinds this language handles and how."""
+    def _build_binding_handlers(self, bindings: FileNameBindings) -> BindingHandlerMap:
+        """Declare Pass 1 handlers for this language."""
 
-    def _build_file_context(self) -> FileContext:
-        return FileContext(module_index=self._module_index)
-
-    @property
-    def _file_ctx(self) -> FileContext:
-        return self._session.file_ctx
-
-    @property
-    def _facts(self) -> set[Fact]:
-        return self._session.facts
+    @abstractmethod
+    def _build_fact_handlers(self, bindings: FileNameBindings) -> FactHandlerMap:
+        """Declare Pass 2 handlers for this language."""
 
     def extract_facts_list(self) -> set[Fact]:
         tree = self._parser.get_tree()
-        self._session.facts.add(
+        root = tree.root_node
+        facts: set[Fact] = {
             ModuleInfo(
                 file_path=self._parser.file_path,
-                end_line=tree.root_node.end_point[0] + 1,
+                end_line=root.end_point[0] + 1,
             )
-        )
-        self._dfs(tree.root_node, scope_stack=[])
-        return self._session.facts
+        }
 
-    def _dfs(self, node: TSNode, *, scope_stack: list[str]) -> None:
+        # Pass 1: populate bindings — no facts collected here.
+        self._bindings = FileNameBindings(self._module_index)
+        binding_handlers = self._build_binding_handlers(self._bindings)
+        scope_stack: list[str] = []
+        self._dfs_binding(root, scope_stack=scope_stack, handlers=binding_handlers)
+
+        # Pass 2: emit all facts using the completed bindings.
+        # Reuse the same scope_stack (now empty again after Pass 1 completes).
+        fact_handlers = self._build_fact_handlers(self._bindings)
+        self._dfs_fact(root, scope_stack=scope_stack, handlers=fact_handlers, facts=facts)
+
+        return facts
+
+    @property
+    def _file_ctx(self) -> FileNameBindings:
+        """Expose bindings for tests that inspect binding state post-extraction."""
+        return self._bindings
+
+    # ------------------------------------------------------------------
+    # Pass 1: binding DFS — populates FileNameBindings, collects no facts
+    # ------------------------------------------------------------------
+
+    def _dfs_binding(
+        self,
+        node: TSNode,
+        *,
+        scope_stack: list[str],
+        handlers: BindingHandlerMap,
+    ) -> None:
         kind = classify_node(node.type, self._parser.lang_cfg)
-        entry = self._handlers.get(kind)
+        entry = handlers.get(kind)
 
         if entry is None:
             for child in node.children:
-                self._dfs(child, scope_stack=scope_stack)
+                self._dfs_binding(child, scope_stack=scope_stack, handlers=handlers)
             return
 
         if entry.order == "post":
             for child in node.children:
-                self._dfs(child, scope_stack=scope_stack)
-            entry.processor.handle(node, scope_stack=scope_stack)
+                self._dfs_binding(child, scope_stack=scope_stack, handlers=handlers)
+            entry.processor.register(node, scope_stack, self._parser, self._bindings)
             return
 
-        # pre-order
-        scope_name = entry.processor.handle(node, scope_stack=scope_stack)
-        if entry.pushes_scope:
-            # Processor registered a new scope — recurse under it.
-            if scope_name:
-                new_scope = [*scope_stack, scope_name]
-                for child in node.children:
-                    self._dfs(child, scope_stack=new_scope)
-        else:
+        depth = len(scope_stack)
+        entry.processor.register(node, scope_stack, self._parser, self._bindings)
+        for child in node.children:
+            self._dfs_binding(child, scope_stack=scope_stack, handlers=handlers)
+        del scope_stack[depth:]  # pop any scope the binder pushed
+
+    # ------------------------------------------------------------------
+    # Pass 2: fact DFS — emits all facts, reads bindings read-only
+    # ------------------------------------------------------------------
+
+    def _dfs_fact(
+        self,
+        node: TSNode,
+        *,
+        scope_stack: list[str],
+        handlers: FactHandlerMap,
+        facts: set[Fact],
+    ) -> None:
+        kind = classify_node(node.type, self._parser.lang_cfg)
+        entry = handlers.get(kind)
+
+        if entry is None:
             for child in node.children:
-                self._dfs(child, scope_stack=scope_stack)
+                self._dfs_fact(child, scope_stack=scope_stack, handlers=handlers, facts=facts)
+            return
 
-    def _find_class_node(self, class_name: str) -> TSNode | None:
-        """Find a class definition node by name (recursive tree search)."""
-        tree = self._parser.get_tree()
-        class_types = self._parser.lang_cfg.cst.class_scope_types
+        if entry.order == "post":
+            depth = len(scope_stack)
+            for child in node.children:
+                self._dfs_fact(child, scope_stack=scope_stack, handlers=handlers, facts=facts)
+            del scope_stack[depth:]
+            facts.update(entry.processor.emit(node, scope_stack, self._parser, self._bindings))
+            return
 
-        def _search(n: TSNode) -> TSNode | None:
-            if n.type in class_types:
-                name_node = n.child_by_field_name("name") or (
-                    n.named_children[0] if n.named_children else None
-                )
-                if name_node and self._parser.node_text(name_node) == class_name:
-                    return n
-            for c in n.children:
-                found = _search(c)
-                if found:
-                    return found
-            return None
-
-        return _search(tree.root_node)
+        depth = len(scope_stack)
+        facts.update(entry.processor.emit(node, scope_stack, self._parser, self._bindings))
+        for child in node.children:
+            self._dfs_fact(child, scope_stack=scope_stack, handlers=handlers, facts=facts)
+        del scope_stack[depth:]

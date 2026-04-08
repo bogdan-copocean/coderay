@@ -1,0 +1,38 @@
+"""Definition binding: register function/class names into bindings (Pass 1)."""
+
+from __future__ import annotations
+
+from coderay.core.models import NodeKind
+from coderay.graph.lowering.name_bindings import FileNameBindings
+from coderay.parsing.base import BaseTreeSitterParser, TSNode
+
+
+class DefinitionBinder:
+    """Register a function or class name into ``FileNameBindings`` (Pass 1).
+
+    Appends the definition name to ``scope_stack`` so the DFS recurses into
+    the body under the correct scope.  No facts emitted.
+    """
+
+    def __init__(self, module_id: str, kind: NodeKind) -> None:
+        self._module_id = module_id
+        self._kind = kind
+
+    def register(
+        self,
+        node: TSNode,
+        scope_stack: list[str],
+        parser: BaseTreeSitterParser,
+        bindings: FileNameBindings,
+    ) -> None:
+        name = parser.identifier_from_node(node)
+        if not name:
+            return
+        fp = parser.file_path
+        qualified = ".".join([*scope_stack, name])
+        node_id = f"{fp}::{qualified}"
+        if self._kind == NodeKind.CLASS:
+            bindings.register_definition(name, node_id, is_class=True)
+        else:
+            bindings.register_definition(qualified if scope_stack else name, node_id)
+        scope_stack.append(name)

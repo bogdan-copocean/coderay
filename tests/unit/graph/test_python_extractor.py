@@ -10,7 +10,7 @@ from coderay.graph.facts import (
     InheritsEdge,
     SymbolDefinition,
 )
-from coderay.graph.file_context import FileContext
+from coderay.graph.lowering.name_bindings import NameBindingsBuilder
 from coderay.parsing.base import get_parse_context
 
 FILE = "test.py"
@@ -20,7 +20,7 @@ def _extract(
     source: str,
     *,
     module_index: dict[str, str] | None = None,
-) -> tuple[list, FileContext]:
+) -> tuple[list, NameBindingsBuilder]:
     """Build extractor from source snippet and return (facts, file_ctx)."""
     ctx = get_parse_context(FILE, source)
     ext = PythonGraphExtractor(ctx, module_index=module_index)

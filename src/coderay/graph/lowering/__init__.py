@@ -1,3 +1,3 @@
-from coderay.graph.lowering.session import LoweringSession
+from coderay.graph.lowering.name_bindings import NameBindings, NameBindingsBuilder, OONameBindings
 
-__all__ = ["LoweringSession"]
+__all__ = ["NameBindings", "NameBindingsBuilder", "OONameBindings"]

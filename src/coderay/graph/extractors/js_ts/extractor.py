@@ -2,40 +2,45 @@
 
 from __future__ import annotations
 
-from coderay.graph.extractors.base import BaseGraphExtractor, Handler, HandlerMap
-from coderay.graph.processors.assignment import AssignmentProcessor
-from coderay.graph.processors.call import CallProcessor
-from coderay.graph.processors.callee_resolution import CalleeResolution
-from coderay.graph.processors.definition import (
-    ClassDefinitionProcessor,
-    FunctionDefinitionProcessor,
+from coderay.core.models import NodeKind
+from coderay.graph.extractors.base import (
+    BaseGraphExtractor,
+    BindingHandler,
+    BindingHandlerMap,
+    FactHandler,
+    FactHandlerMap,
 )
-from coderay.graph.processors.js_ts.import_processor import JsTsImportProcessor
-from coderay.graph.processors.js_ts.type_lookup import JsTsTypeLookup
+from coderay.graph.lowering.callee_resolver import CalleeResolver
+from coderay.graph.lowering.name_bindings import FileNameBindings
+from coderay.graph.handlers.assignment_binder import AssignmentBinder
+from coderay.graph.handlers.call_emitter import CallEmitter
+from coderay.graph.handlers.definition_binder import DefinitionBinder
+from coderay.graph.handlers.definition_emitter import DefinitionEmitter
+from coderay.graph.handlers.js_ts.import_binder import JsTsImportBinder
+from coderay.graph.handlers.js_ts.import_emitter import JsTsImportEmitter
 from coderay.parsing.cst_kind import TraversalKind
 
 
 class JsTsGraphExtractor(BaseGraphExtractor):
     """Lower JS/TS tree-sitter CST to graph facts."""
 
-    def _build_handlers(self) -> HandlerMap:
-        parser = self._parser
-        session = self._session
-        type_lookup = JsTsTypeLookup(session, parser, self._find_class_node)
-        callee = CalleeResolution(session, parser, self._find_class_node)
+    def _build_binding_handlers(self, bindings: FileNameBindings) -> BindingHandlerMap:
+        module_id = self._module_id
 
         return {
-            TraversalKind.IMPORT: Handler(JsTsImportProcessor(session, parser)),
-            TraversalKind.FUNCTION: Handler(
-                FunctionDefinitionProcessor(session, parser, self._dfs)
-            ),
-            TraversalKind.CLASS: Handler(
-                ClassDefinitionProcessor(session, parser, self._dfs)
-            ),
-            TraversalKind.CALL: Handler(
-                CallProcessor(session, parser, type_lookup, callee)
-            ),
-            TraversalKind.ASSIGNMENT: Handler(
-                AssignmentProcessor(session, parser, type_lookup)
-            ),
+            TraversalKind.IMPORT: BindingHandler(JsTsImportBinder()),
+            TraversalKind.FUNCTION: BindingHandler(DefinitionBinder(module_id, NodeKind.FUNCTION)),
+            TraversalKind.CLASS: BindingHandler(DefinitionBinder(module_id, NodeKind.CLASS)),
+            TraversalKind.ASSIGNMENT: BindingHandler(AssignmentBinder()),
+        }
+
+    def _build_fact_handlers(self, bindings: FileNameBindings) -> FactHandlerMap:
+        module_id = self._module_id
+        resolver = CalleeResolver(bindings, self._parser)
+
+        return {
+            TraversalKind.IMPORT: FactHandler(JsTsImportEmitter()),
+            TraversalKind.FUNCTION: FactHandler(DefinitionEmitter(module_id, NodeKind.FUNCTION)),
+            TraversalKind.CLASS: FactHandler(DefinitionEmitter(module_id, NodeKind.CLASS)),
+            TraversalKind.CALL: FactHandler(CallEmitter(resolver)),
         }
