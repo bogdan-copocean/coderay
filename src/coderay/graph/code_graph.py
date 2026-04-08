@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections import defaultdict, deque
+from collections import defaultdict
 from typing import Any
 
 import networkx as nx

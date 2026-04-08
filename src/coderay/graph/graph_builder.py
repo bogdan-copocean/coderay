@@ -1,4 +1,4 @@
-"""Multi-file graph extraction: dispatch, materialise, merge into CodeGraph, post-merge."""
+"""Multi-file graph extraction: dispatch, materialise, merge, post-merge."""
 
 from __future__ import annotations
 
@@ -50,8 +50,8 @@ class GraphBuilder:
         ext_cls = get_extractor(ctx.lang_cfg.name)
         if ext_cls is None:
             return [], []
-        facts = ext_cls(ctx, module_index=self._module_index).extract_facts_list()
-        facts = self.resolve_facts(facts)
+        raw_facts = ext_cls(ctx, module_index=self._module_index).extract_facts_list()
+        facts: Iterable[Fact] = self.resolve_facts(raw_facts)
         nodes, edges = materialise_graph(facts)
         if not get_config().graph.include_external:
             edges = filter_external_edges(edges, set(self._module_index.values()))

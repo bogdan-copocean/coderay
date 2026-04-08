@@ -34,7 +34,7 @@ def list_base_names_from_arg_list(
     )
     result: list[str] = []
     candidates = arg_list_node.named_children
-    # JS/TS extends_clause / class_heritage store the value under a field, not as children.
+    # JS/TS extends_clause / class_heritage store the value under a field.
     if not candidates and arg_list_node.type in ("extends_clause", "class_heritage"):
         value = arg_list_node.child_by_field_name("value")
         if value:
@@ -54,7 +54,10 @@ def list_base_names_from_arg_list(
 
 
 def resolve_base_class_name(raw: str, bindings: NameBindings) -> str:
-    """Resolve a base class name through bindings, e.g. "mod.Base" -> "path/mod.py::Base"."""
+    """Resolve a base class name through bindings.
+
+    e.g. "mod.Base" -> "path/mod.py::Base".
+    """
     parts = raw.split(".")
     if len(parts) == 1:
         return bindings.resolve(raw) or raw
@@ -108,7 +111,7 @@ def find_top_level_function(parser: BaseTreeSitterParser, name: str) -> TSNode |
     fn_types = parser.lang_cfg.cst.function_scope_types  # e.g. ("function_definition",)
 
     def search(n: TSNode) -> TSNode | None:
-        # identifier_from_node handles arrow functions (variable_declarator wrapping arrow_function).
+        # identifier_from_node handles arrow functions (variable_declarator wrapping).
         if n.type in fn_types and parser.identifier_from_node(n) == name:
             return n
         for c in n.children:
