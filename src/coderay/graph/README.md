@@ -6,28 +6,30 @@ Directed call/import/inheritance graph over the indexed codebase.
 
 | Area | Role |
 |------|------|
-| [`graph_builder.py`](graph_builder.py) | `GraphBuilder`: parse → extract facts → emit → merge; optional `resolve_facts` hook; `include_external` filtering |
+| [`graph_builder.py`](graph_builder.py) | `GraphBuilder`: parse → extract facts → materialise → merge; optional `resolve_facts` hook; `include_external` filtering |
 | [`builder.py`](builder.py) | `build_graph` / `build_and_save_graph` — module index + `GraphBuilder.build` + `save_graph` |
-| [`extractor.py`](extractor.py) | `build_module_index`, `extract_graph_from_file` (thin wrapper around `GraphBuilder.process_file`) |
-| [`types.py`](types.py) | `ModuleIndex`, `ProjectIndex` for resolvers |
-| [`extractors/`](extractors/) | `BaseGraphExtractor` + per-language extractors (Python, JS/TS) |
-| [`processors/`](processors/) | Shared processors (`definition`, `call`, `assignment`, `type_lookup`, `imports`, …) |
-| [`processors/<lang>/`](processors/python/) | Language-specific processors (e.g. `PythonTypeLookup`, `ImportProcessor`) |
-| [`lowering/`](lowering/) | `LoweringSession`, `SyntaxRead` — CST helpers for processors |
-| [`passes/`](passes/) | Post-merge global passes; Python-only steps in [`extractors/python/passes.py`](extractors/python/passes.py) |
+| [`extractors/`](extractors/) | `BaseGraphExtractor` + per-language extractors (Python, JS/TS); `build_module_index` and `extract_graph_from_file` live here |
+| [`handlers/`](handlers/) | Shared handlers (`definition`, `call`, `assignment`, `decorator`, …) |
+| [`handlers/<lang>/`](handlers/python/) | Language-specific handlers (imports, assignments, definitions) |
+| [`lowering/`](lowering/) | `LoweringSession`, `FileNameBindings`, `CalleeResolver` — CST helpers for handlers |
+| [`passes/`](passes/) | Post-merge global passes; Python-only steps in [`passes/python.py`](passes/python.py) |
 | [`pipeline.py`](pipeline.py) | `run_post_merge_pipeline` — Python passes + `run_global_passes` |
+| [`impact.py`](impact.py) | `get_impact_radius` — reverse BFS over the graph |
+| [`materialise.py`](materialise.py) | Turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls) |
+| [`facts.py`](facts.py) | `NodeFact`, `EdgeFact` — the intermediate representation emitted by extractors |
+| [`language_plugin.py`](language_plugin.py) | `LanguagePlugin` protocol — the interface each language extractor implements |
 
 ## Pipeline
 
 ```
-GraphBuilder.process_file() / extract_graph_from_file()   # CST → facts → emit
+GraphBuilder.process_file() / extract_graph_from_file()   # CST → facts → materialise
     ↓
 build_graph()                    # merge all files → CodeGraph
     ↓
 run_post_merge_pipeline()        # cross-file passes, prune phantoms
 ```
 
-`GraphBuilder` selects the extractor from `lang_cfg.name` (`python` | `javascript` | `typescript`). Facts (`facts.py`) describe nodes and edges; [`emit.py`](emit.py) turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls).
+`GraphBuilder` selects the extractor from `lang_cfg.name` (`python` | `javascript` | `typescript`). Facts (`facts.py`) describe nodes and edges; [`materialise.py`](materialise.py) turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls).
 
 ## CodeGraph (`code_graph.py`)
 
@@ -63,8 +65,8 @@ by more specific function/class nodes.
 ## Language modules
 
 [`extractors/python/`](extractors/python/) and [`extractors/js_ts/`](extractors/js_ts/)
-hold extractors; language-specific processors (imports, typing, assignments) sit under
-[`processors/python/`](processors/python/) and [`processors/js_ts/`](processors/js_ts/).
+hold extractors; language-specific handlers (imports, typing, assignments) sit under
+[`handlers/python/`](handlers/python/) and [`handlers/js_ts/`](handlers/js_ts/).
 
 ## Persistence
 
