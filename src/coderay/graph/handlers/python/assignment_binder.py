@@ -93,7 +93,10 @@ class PythonAssignmentBinder(AssignmentBinder):
                 bindings.register_alias(name, type_args[i])
 
     def _extract_tuple_type_args(
-        self, type_node: TSNode, parser: BaseTreeSitterParser, bindings: FileNameBindings
+        self,
+        type_node: TSNode,
+        parser: BaseTreeSitterParser,
+        bindings: FileNameBindings,
     ) -> list[str]:
         if type_node.type == "type" and type_node.named_children:
             type_node = type_node.named_children[0]
@@ -107,7 +110,9 @@ class PythonAssignmentBinder(AssignmentBinder):
         result: list[str] = []
         for type_child in children[1].named_children:
             if type_child.type == "type":
-                refs = resolve_type_texts(parser, bindings, parser.node_text(type_child))
+                refs = resolve_type_texts(
+                    parser, bindings, parser.node_text(type_child)
+                )
                 result.extend(refs)
         return result
 

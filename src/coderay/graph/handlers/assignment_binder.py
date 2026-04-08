@@ -75,7 +75,8 @@ class AssignmentBinder:
                                 func_node = get_enclosing_function_node(parser, node)
                                 class_qualified = (
                                     find_enclosing_class_from_node(parser, func_node)
-                                    if func_node else None
+                                    if func_node
+                                    else None
                                 )
                                 if class_qualified:
                                     attr_name = lhs_text.split(".", 1)[1].split(".")[0]
@@ -100,7 +101,9 @@ class AssignmentBinder:
                 else:
                     prefix_resolved = bindings.resolve(parts[0])
                     if prefix_resolved:
-                        bindings.register_alias(lhs_name, f"{prefix_resolved}::{'.'.join(parts[1:])}")
+                        bindings.register_alias(
+                            lhs_name, f"{prefix_resolved}::{'.'.join(parts[1:])}"
+                        )
         elif rhs.type in parser.lang_cfg.cst.call_types:
             self._register_from_call(lhs_name, rhs, bindings, parser)
 

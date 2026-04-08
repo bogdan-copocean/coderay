@@ -10,14 +10,14 @@ from coderay.graph.extractors.base import (
     FactHandler,
     FactHandlerMap,
 )
-from coderay.graph.lowering.callee_resolver import CalleeResolver
-from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.graph.handlers.assignment_binder import AssignmentBinder
 from coderay.graph.handlers.call_emitter import CallEmitter
 from coderay.graph.handlers.definition_binder import DefinitionBinder
 from coderay.graph.handlers.definition_emitter import DefinitionEmitter
 from coderay.graph.handlers.js_ts.import_binder import JsTsImportBinder
 from coderay.graph.handlers.js_ts.import_emitter import JsTsImportEmitter
+from coderay.graph.lowering.callee_resolver import CalleeResolver
+from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.cst_kind import TraversalKind
 
 
@@ -29,8 +29,12 @@ class JsTsGraphExtractor(BaseGraphExtractor):
 
         return {
             TraversalKind.IMPORT: BindingHandler(JsTsImportBinder()),
-            TraversalKind.FUNCTION: BindingHandler(DefinitionBinder(module_id, NodeKind.FUNCTION)),
-            TraversalKind.CLASS: BindingHandler(DefinitionBinder(module_id, NodeKind.CLASS)),
+            TraversalKind.FUNCTION: BindingHandler(
+                DefinitionBinder(module_id, NodeKind.FUNCTION)
+            ),
+            TraversalKind.CLASS: BindingHandler(
+                DefinitionBinder(module_id, NodeKind.CLASS)
+            ),
             TraversalKind.ASSIGNMENT: BindingHandler(AssignmentBinder()),
         }
 
@@ -40,7 +44,11 @@ class JsTsGraphExtractor(BaseGraphExtractor):
 
         return {
             TraversalKind.IMPORT: FactHandler(JsTsImportEmitter()),
-            TraversalKind.FUNCTION: FactHandler(DefinitionEmitter(module_id, NodeKind.FUNCTION)),
-            TraversalKind.CLASS: FactHandler(DefinitionEmitter(module_id, NodeKind.CLASS)),
+            TraversalKind.FUNCTION: FactHandler(
+                DefinitionEmitter(module_id, NodeKind.FUNCTION)
+            ),
+            TraversalKind.CLASS: FactHandler(
+                DefinitionEmitter(module_id, NodeKind.CLASS)
+            ),
             TraversalKind.CALL: FactHandler(CallEmitter(resolver)),
         }

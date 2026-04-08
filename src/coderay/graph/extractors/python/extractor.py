@@ -33,7 +33,9 @@ class PythonGraphExtractor(BaseGraphExtractor):
         return {
             TraversalKind.IMPORT: BindingHandler(PythonImportBinder()),
             TraversalKind.FUNCTION: BindingHandler(PythonFunctionBinder(module_id)),
-            TraversalKind.CLASS: BindingHandler(DefinitionBinder(module_id, NodeKind.CLASS)),
+            TraversalKind.CLASS: BindingHandler(
+                DefinitionBinder(module_id, NodeKind.CLASS)
+            ),
             TraversalKind.ASSIGNMENT: BindingHandler(PythonAssignmentBinder()),
             TraversalKind.WITH: BindingHandler(PythonWithBinder()),
         }
@@ -44,8 +46,14 @@ class PythonGraphExtractor(BaseGraphExtractor):
 
         return {
             TraversalKind.IMPORT: FactHandler(PythonImportEmitter()),
-            TraversalKind.FUNCTION: FactHandler(DefinitionEmitter(module_id, NodeKind.FUNCTION)),
-            TraversalKind.CLASS: FactHandler(DefinitionEmitter(module_id, NodeKind.CLASS)),
+            TraversalKind.FUNCTION: FactHandler(
+                DefinitionEmitter(module_id, NodeKind.FUNCTION)
+            ),
+            TraversalKind.CLASS: FactHandler(
+                DefinitionEmitter(module_id, NodeKind.CLASS)
+            ),
             TraversalKind.CALL: FactHandler(CallEmitter(resolver)),
-            TraversalKind.DECORATED_DEFINITION: FactHandler(DecoratorEmitter(resolver), order="post"),
+            TraversalKind.DECORATED_DEFINITION: FactHandler(
+                DecoratorEmitter(resolver), order="post"
+            ),
         }

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from coderay.graph.handlers.helpers import (
+    BASE_CLASS_NODE_TYPES,
+    list_base_names_from_arg_list,
+)
 from coderay.graph.lowering.name_bindings import OONameBindings
-from coderay.graph.handlers.helpers import BASE_CLASS_NODE_TYPES, list_base_names_from_arg_list
 from coderay.parsing.base import BaseTreeSitterParser
 from coderay.parsing.languages import get_supported_extensions
 
@@ -40,7 +43,7 @@ class CalleeResolver:
     ) -> list[str] | None:
         for prefix in super_prefixes:
             if raw.startswith(prefix):
-                method = raw[len(prefix):]
+                method = raw[len(prefix) :]
                 target = self._resolve_super_call(scope_stack, method)
                 return [target] if target else [method]
         return None
@@ -115,6 +118,7 @@ class CalleeResolver:
 
     def _get_first_base_class(self, class_qualified: str) -> str | None:
         from coderay.graph.handlers.helpers import find_class_node
+
         target_class = class_qualified.split(".")[-1]
         class_node = find_class_node(self._parser, target_class)
         if not class_node:

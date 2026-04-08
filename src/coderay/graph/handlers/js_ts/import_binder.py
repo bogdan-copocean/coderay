@@ -94,9 +94,7 @@ def _collect_imported(
                 alias_node = spec.child_by_field_name("alias")
                 orig = parser.node_text(name_node).strip() if name_node else ""
                 if orig:
-                    local = (
-                        parser.node_text(alias_node).strip() if alias_node else orig
-                    )
+                    local = parser.node_text(alias_node).strip() if alias_node else orig
                     imported.append((orig, local))
     elif import_clause.type == "namespace_import":
         ident = import_clause.child_by_field_name("name")

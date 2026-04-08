@@ -11,10 +11,10 @@ from coderay.graph.lowering.name_bindings import FileNameBindings, NameBindings
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, TSNode
 from coderay.parsing.cst_kind import TraversalKind, classify_node
 
-
 # ---------------------------------------------------------------------------
 # Protocols — contract between extractors and per-node binders/emitters
 # ---------------------------------------------------------------------------
+
 
 class Binder(Protocol):
     """Pass 1 — register names into ``FileNameBindings``.
@@ -53,6 +53,7 @@ class Emitter(Protocol):
 # Handler wrappers and maps
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BindingHandler:
     """Wraps a Binder for Pass 1.
@@ -82,6 +83,7 @@ FactHandlerMap = dict[TraversalKind, FactHandler]
 # ---------------------------------------------------------------------------
 # Base extractor
 # ---------------------------------------------------------------------------
+
 
 class BaseGraphExtractor(ABC):
     """Lower a source file's CST to graph facts via two DFS passes.
@@ -137,7 +139,9 @@ class BaseGraphExtractor(ABC):
         # Pass 2: emit all facts using the completed bindings.
         # Reuse the same scope_stack (now empty again after Pass 1 completes).
         fact_handlers = self._build_fact_handlers(self._bindings)
-        self._dfs_fact(root, scope_stack=scope_stack, handlers=fact_handlers, facts=facts)
+        self._dfs_fact(
+            root, scope_stack=scope_stack, handlers=fact_handlers, facts=facts
+        )
 
         return facts
 
@@ -194,19 +198,29 @@ class BaseGraphExtractor(ABC):
 
         if entry is None:
             for child in node.children:
-                self._dfs_fact(child, scope_stack=scope_stack, handlers=handlers, facts=facts)
+                self._dfs_fact(
+                    child, scope_stack=scope_stack, handlers=handlers, facts=facts
+                )
             return
 
         if entry.order == "post":
             depth = len(scope_stack)
             for child in node.children:
-                self._dfs_fact(child, scope_stack=scope_stack, handlers=handlers, facts=facts)
+                self._dfs_fact(
+                    child, scope_stack=scope_stack, handlers=handlers, facts=facts
+                )
             del scope_stack[depth:]
-            facts.update(entry.processor.emit(node, scope_stack, self._parser, self._bindings))
+            facts.update(
+                entry.processor.emit(node, scope_stack, self._parser, self._bindings)
+            )
             return
 
         depth = len(scope_stack)
-        facts.update(entry.processor.emit(node, scope_stack, self._parser, self._bindings))
+        facts.update(
+            entry.processor.emit(node, scope_stack, self._parser, self._bindings)
+        )
         for child in node.children:
-            self._dfs_fact(child, scope_stack=scope_stack, handlers=handlers, facts=facts)
+            self._dfs_fact(
+                child, scope_stack=scope_stack, handlers=handlers, facts=facts
+            )
         del scope_stack[depth:]

@@ -69,6 +69,7 @@ def resolve_base_class_name(raw: str, bindings: NameBindings) -> str:
 # Node-ID helper
 # ---------------------------------------------------------------------------
 
+
 def caller_id_for_scope(file_path: str, scope_stack: list[str]) -> str:
     """Node ID for the current scope. e.g. ["Foo", "bar"] -> "a.py::Foo.bar"."""
     if scope_stack:
@@ -80,6 +81,7 @@ def caller_id_for_scope(file_path: str, scope_stack: list[str]) -> str:
 # Config-driven CST function lookup — no language subclasses needed,
 # node-type sets come from lang_cfg.cst.
 # ---------------------------------------------------------------------------
+
 
 def find_class_node(parser: BaseTreeSitterParser, class_name: str) -> TSNode | None:
     """Find a class definition node by name in the parsed tree."""
@@ -125,14 +127,17 @@ def find_method_in_class(
     class_node = find_class_node(parser, class_name)
     if not class_node:
         return None
-    body_types = parser.lang_cfg.cst.class_body_types   # e.g. ("block",)
+    body_types = parser.lang_cfg.cst.class_body_types  # e.g. ("block",)
     fn_types = parser.lang_cfg.cst.function_scope_types
     for child in class_node.children:
         if child.type not in body_types:
             continue
         for stmt in child.children:
             node = _unwrap_decorated(stmt)  # strip @decorators for Python
-            if node.type in fn_types and parser.identifier_from_node(node) == method_name:
+            if (
+                node.type in fn_types
+                and parser.identifier_from_node(node) == method_name
+            ):
                 return node
     return None
 
@@ -190,6 +195,7 @@ def get_enclosing_function_node(
 # Annotation + CST combined — need both parser (file_path, CST) and bindings.
 # ---------------------------------------------------------------------------
 
+
 def resolve_type_texts(
     parser: BaseTreeSitterParser,
     bindings: NameBindings,
@@ -203,7 +209,11 @@ def resolve_type_texts(
     """
     use_self = bool(enclosing_func_node) and is_bare_self_annotation(type_text)
     # For `Self` annotations, find the class that owns the enclosing function.
-    enc = find_enclosing_class_from_node(parser, enclosing_func_node) if use_self else None
+    enc = (
+        find_enclosing_class_from_node(parser, enclosing_func_node)
+        if use_self
+        else None
+    )
     return resolve_annotation_type_texts(
         type_text,
         file_path=parser.file_path,
@@ -218,10 +228,9 @@ def get_return_type_from_func_node(
 ) -> str | None:
     """Read the return-type annotation of a function node and resolve it."""
     # Python uses "return_type", JS/TS uses "type".
-    type_node = (
-        func_node.child_by_field_name("return_type")
-        or func_node.child_by_field_name("type")
-    )
+    type_node = func_node.child_by_field_name(
+        "return_type"
+    ) or func_node.child_by_field_name("type")
     if not type_node:
         return None
     refs = resolve_type_texts(
@@ -240,7 +249,11 @@ def get_function_return_type(
         func_node = find_method_in_class(parser, class_name, method_name)
     else:
         func_node = find_top_level_function(parser, callee_name)
-    return get_return_type_from_func_node(parser, bindings, func_node) if func_node else None
+    return (
+        get_return_type_from_func_node(parser, bindings, func_node)
+        if func_node
+        else None
+    )
 
 
 def extract_type_from_typed_param(
@@ -307,6 +320,7 @@ def get_parameter_type_hint(
 # ---------------------------------------------------------------------------
 # Pure annotation string resolution (no CST, no bindings object — just resolve fn)
 # ---------------------------------------------------------------------------
+
 
 def is_bare_self_annotation(type_text: str | None) -> bool:
     """True if annotation text is exactly ``Self`` (handles quotes)."""

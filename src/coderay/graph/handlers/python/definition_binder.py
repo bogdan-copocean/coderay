@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from coderay.core.models import NodeKind
 from coderay.graph.handlers.definition_binder import DefinitionBinder
-from coderay.graph.handlers.helpers import get_return_type_from_func_node, get_typed_parameters
+from coderay.graph.handlers.helpers import (
+    get_return_type_from_func_node,
+    get_typed_parameters,
+)
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
@@ -34,7 +37,9 @@ class PythonFunctionBinder(DefinitionBinder):
             name = parser.identifier_from_node(node)
             return_type = get_return_type_from_func_node(parser, bindings, node)
             if name and return_type:
-                bindings.register_class_attribute(".".join(scope_stack), name, return_type)
+                bindings.register_class_attribute(
+                    ".".join(scope_stack), name, return_type
+                )
 
         super().register(node, scope_stack, parser, bindings)
 

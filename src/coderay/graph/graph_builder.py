@@ -9,10 +9,10 @@ from coderay.core.config import get_config
 from coderay.core.models import GraphEdge, GraphNode
 from coderay.graph.code_graph import CodeGraph
 from coderay.graph.facts import Fact
-from coderay.graph.utils import file_path_to_module_names
 from coderay.graph.language_plugin import get_extractor
 from coderay.graph.materialise import filter_external_edges, materialise_graph
 from coderay.graph.pipeline import run_post_merge_pipeline
+from coderay.graph.utils import file_path_to_module_names
 from coderay.parsing.base import get_parse_context
 
 logger = logging.getLogger(__name__)

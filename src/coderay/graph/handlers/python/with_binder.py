@@ -51,6 +51,8 @@ class PythonWithBinder:
         cm_name = parser.node_text(callee_node).strip() if callee_node else ""
         if not cm_name:
             return
-        enter_return = get_function_return_type(parser, bindings, f"{cm_name}.__enter__")
+        enter_return = get_function_return_type(
+            parser, bindings, f"{cm_name}.__enter__"
+        )
         if enter_return:
             bindings.register_instance(var_name, enter_return)

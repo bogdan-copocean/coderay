@@ -74,7 +74,9 @@ class ImpactAnalyzer:
             for nid in visited
             if (n := g.get_node(nid)) is not None and nid != own_module
         ]
-        files_with_non_module = {n.file_path for n in raw_nodes if n.kind != NodeKind.MODULE}
+        files_with_non_module = {
+            n.file_path for n in raw_nodes if n.kind != NodeKind.MODULE
+        }
         filtered: list[GraphNode] = [
             n
             for n in raw_nodes
@@ -180,7 +182,8 @@ class ImpactAnalyzer:
             return None, None
         method_name = qualifier.rsplit(".", 1)[-1] if "." in qualifier else qualifier
         candidates = [
-            nid for nid in file_nodes
+            nid
+            for nid in file_nodes
             if (node := g.get_node(nid)) is not None
             and node.qualified_name.rsplit(".", 1)[-1] == method_name
         ]
@@ -199,10 +202,15 @@ class ImpactAnalyzer:
         if node is None:
             return None
         module_id = node.file_path
-        importer_count = sum(
-            1 for pred in g._g.predecessors(module_id)
-            if EdgeKind.IMPORTS in g._require_edge_kinds(pred, module_id)
-        ) if module_id in g._g else 0
+        importer_count = (
+            sum(
+                1
+                for pred in g._g.predecessors(module_id)
+                if EdgeKind.IMPORTS in g._require_edge_kinds(pred, module_id)
+            )
+            if module_id in g._g
+            else 0
+        )
         if importer_count > 0:
             return (
                 f"No callers found via static analysis, but this module "
@@ -210,7 +218,9 @@ class ImpactAnalyzer:
                 f"exist but couldn't be resolved statically. "
                 f"Supplement with grep for the method name."
             )
-        return "No callers found. This module is not imported by any other indexed file."
+        return (
+            "No callers found. This module is not imported by any other indexed file."
+        )
 
 
 def _last_component(node_id: str) -> str:

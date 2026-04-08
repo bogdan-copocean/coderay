@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from coderay.graph.facts import Fact, ImportsEdge
-from coderay.graph.handlers.python.import_binder import parse_python_imports
 from coderay.graph.handlers.helpers import caller_id_for_scope
+from coderay.graph.handlers.python.import_binder import parse_python_imports
 from coderay.graph.lowering.name_bindings import NameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
@@ -26,7 +26,9 @@ class PythonImportEmitter:
             facts: list[Fact] = []
             for mod_text, local in imported:
                 resolved = bindings.resolve(local)
-                facts.append(ImportsEdge(source_id=caller_id, target=resolved or mod_text))
+                facts.append(
+                    ImportsEdge(source_id=caller_id, target=resolved or mod_text)
+                )
             return facts
 
         if not module or not imported:

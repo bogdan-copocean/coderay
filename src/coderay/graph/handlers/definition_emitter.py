@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from coderay.core.models import NodeKind
 from coderay.graph.facts import Fact, InheritsEdge, SymbolDefinition
-from coderay.graph.lowering.name_bindings import NameBindings
 from coderay.graph.handlers.helpers import (
     BASE_CLASS_NODE_TYPES,
     list_base_names_from_arg_list,
     resolve_base_class_name,
 )
+from coderay.graph.lowering.name_bindings import NameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
@@ -36,7 +36,9 @@ class DefinitionEmitter:
             return []
         fp = parser.file_path
         qualified = ".".join([*scope_stack, name])
-        definer = self._module_id if not scope_stack else f"{fp}::{'.'.join(scope_stack)}"
+        definer = (
+            self._module_id if not scope_stack else f"{fp}::{'.'.join(scope_stack)}"
+        )
         node_id = f"{fp}::{qualified}"
         facts: list[Fact] = [
             SymbolDefinition(

@@ -22,7 +22,9 @@ class CallEmitter:
         parser: BaseTreeSitterParser,
         bindings: NameBindings,
     ) -> list[Fact]:
-        del bindings  # resolution goes through the resolver which holds its own snapshot
+        del (
+            bindings
+        )  # resolution goes through the resolver which holds its own snapshot
         caller_id = caller_id_for_scope(parser.file_path, scope_stack)
         callee_node = node.child_by_field_name("function")
         if callee_node is None:

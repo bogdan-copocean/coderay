@@ -191,6 +191,7 @@ class CodeGraph:
     def get_impact_radius(self, symbol: str, depth: int = 2) -> ImpactResult:
         """Find nodes affected by reverse CALLS/IMPORTS/INHERITS BFS."""
         from coderay.graph.impact import ImpactAnalyzer
+
         return ImpactAnalyzer(self).get_impact_radius(symbol, depth)
 
     def _require_edge_kinds(self, source: str, target: str) -> set[EdgeKind]:
