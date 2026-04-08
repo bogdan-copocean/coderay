@@ -7,8 +7,7 @@ from pathlib import Path
 from coderay.core.config import get_config
 from coderay.core.index_workspace import IndexWorkspace
 from coderay.graph.code_graph import CodeGraph
-from coderay.graph.extractor import build_module_index, extract_graph_from_file
-from coderay.graph.graph_builder import GraphBuilder
+from coderay.graph.graph_builder import GraphBuilder, build_module_index
 from coderay.graph.pipeline import run_post_merge_pipeline
 
 logger = logging.getLogger(__name__)
@@ -122,11 +121,7 @@ def build_and_save_graph(
         module_index = build_module_index(all_paths)
         for fp, content in files_with_content:
             try:
-                nodes, edges = extract_graph_from_file(
-                    fp,
-                    content,
-                    module_index=module_index,
-                )
+                nodes, edges = GraphBuilder(module_index).process_file(fp, content)
                 existing_graph.add_nodes_and_edges(nodes, edges)
             except Exception as exc:
                 logger.exception("Graph extraction failed for %s: %s", fp, exc)

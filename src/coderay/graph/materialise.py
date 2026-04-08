@@ -1,4 +1,4 @@
-"""Emit GraphNode/GraphEdge from extracted facts."""
+"""Materialise GraphNode/GraphEdge from extracted facts."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from coderay.graph.facts import (
 )
 
 
-def emit_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[GraphEdge]]:
+def materialise_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[GraphEdge]]:
     """Turn fact stream into graph primitives."""
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
