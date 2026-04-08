@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from coderay.graph.handlers.helpers import (
+from coderay.graph.lowering.cst_helpers import (
     BASE_CLASS_NODE_TYPES,
     list_base_names_from_arg_list,
 )
-from coderay.graph.lowering.name_bindings import OONameBindings
+from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser
 from coderay.parsing.languages import get_supported_extensions
 
@@ -14,11 +14,13 @@ from coderay.parsing.languages import get_supported_extensions
 class CalleeResolver:
     """Resolve a raw callee string to qualified target node IDs.
 
-    Takes ``OONameBindings`` and a parser (text only).
+    Takes ``FileNameBindings`` and a parser (text only).
     Produces ``list[str]`` — no side effects, no fact emission.
     """
 
-    def __init__(self, bindings: OONameBindings, parser: BaseTreeSitterParser) -> None:
+    def __init__(
+        self, bindings: FileNameBindings, parser: BaseTreeSitterParser
+    ) -> None:
         self._bindings = bindings
         self._parser = parser
         self._supported_extensions = get_supported_extensions()
@@ -117,7 +119,7 @@ class CalleeResolver:
         return f"{base_resolved or f'{fp}::{base_name}'}.{method}"
 
     def _get_first_base_class(self, class_qualified: str) -> str | None:
-        from coderay.graph.handlers.helpers import find_class_node
+        from coderay.parsing.cst_traversal import find_class_node
 
         target_class = class_qualified.split(".")[-1]
         class_node = find_class_node(self._parser, target_class)

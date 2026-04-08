@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from coderay.core.models import NodeKind
 from coderay.graph.handlers.definition_binder import DefinitionBinder
-from coderay.graph.handlers.helpers import (
+from coderay.graph.handlers.typed_params import (
     get_return_type_from_func_node,
     get_typed_parameters,
 )

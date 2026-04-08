@@ -38,9 +38,8 @@ class JsTsGraphExtractor(BaseGraphExtractor):
             TraversalKind.ASSIGNMENT: BindingHandler(AssignmentBinder()),
         }
 
-    def _build_fact_handlers(self, bindings: FileNameBindings) -> FactHandlerMap:
+    def _build_fact_handlers(self, resolver: CalleeResolver) -> FactHandlerMap:
         module_id = self._module_id
-        resolver = CalleeResolver(bindings, self._parser)
 
         return {
             TraversalKind.IMPORT: FactHandler(JsTsImportEmitter()),

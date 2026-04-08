@@ -13,6 +13,7 @@ from coderay.graph.facts import (
     ModuleInfo,
     SymbolDefinition,
 )
+from coderay.graph.lowering.cst_helpers import node_id
 
 
 def materialise_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[GraphEdge]]:
@@ -34,10 +35,10 @@ def materialise_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[Grap
             )
         elif isinstance(f, SymbolDefinition):
             qualified = ".".join([*f.scope_stack, f.name])
-            node_id = f"{f.file_path}::{qualified}"
+            nid = node_id(f.file_path, list(f.scope_stack), f.name)
             nodes.append(
                 GraphNode(
-                    id=node_id,
+                    id=nid,
                     kind=f.kind,
                     file_path=f.file_path,
                     start_line=f.start_line,
@@ -47,7 +48,7 @@ def materialise_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[Grap
                 )
             )
             edges.append(
-                GraphEdge(source=f.definer_id, target=node_id, kind=EdgeKind.DEFINES)
+                GraphEdge(source=f.definer_id, target=nid, kind=EdgeKind.DEFINES)
             )
         elif isinstance(f, ImportsEdge):
             edges.append(

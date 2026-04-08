@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from coderay.graph.handlers.helpers import get_function_return_type
+from coderay.graph.handlers.typed_params import get_function_return_type
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 

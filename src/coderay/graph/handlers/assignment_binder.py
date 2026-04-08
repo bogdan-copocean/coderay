@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from coderay.graph.handlers.helpers import (
-    find_enclosing_class_from_node,
-    get_enclosing_function_node,
+from coderay.graph.handlers.typed_params import (
     get_function_return_type,
     get_parameter_type_hint,
 )
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
+from coderay.parsing.cst_traversal import (
+    find_enclosing_class_from_node,
+    get_enclosing_function_node,
+)
 
 
 def _assignment_sides(node: TSNode) -> tuple[TSNode | None, TSNode | None]:

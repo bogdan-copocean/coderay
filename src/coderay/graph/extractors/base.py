@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from coderay.graph.facts import Fact, ModuleInfo
+from coderay.graph.lowering.callee_resolver import CalleeResolver
 from coderay.graph.lowering.name_bindings import FileNameBindings, NameBindings
 from coderay.parsing.base import BaseTreeSitterParser, ParserContext, TSNode
 from coderay.parsing.cst_kind import TraversalKind, classify_node
@@ -111,13 +112,14 @@ class BaseGraphExtractor(ABC):
         self._parser = BaseTreeSitterParser(context)
         self._module_id: str = context.file_path
         self._module_index: dict[str, str] = module_index or {}
+        self._bindings = FileNameBindings(self._module_index)
 
     @abstractmethod
     def _build_binding_handlers(self, bindings: FileNameBindings) -> BindingHandlerMap:
         """Declare Pass 1 handlers for this language."""
 
     @abstractmethod
-    def _build_fact_handlers(self, bindings: FileNameBindings) -> FactHandlerMap:
+    def _build_fact_handlers(self, resolver: CalleeResolver) -> FactHandlerMap:
         """Declare Pass 2 handlers for this language."""
 
     def extract_facts_list(self) -> set[Fact]:
@@ -131,14 +133,15 @@ class BaseGraphExtractor(ABC):
         }
 
         # Pass 1: populate bindings — no facts collected here.
-        self._bindings = FileNameBindings(self._module_index)
+        self._bindings = FileNameBindings(self._module_index)  # fresh per run
         binding_handlers = self._build_binding_handlers(self._bindings)
         scope_stack: list[str] = []
         self._dfs_binding(root, scope_stack=scope_stack, handlers=binding_handlers)
 
         # Pass 2: emit all facts using the completed bindings.
         # Reuse the same scope_stack (now empty again after Pass 1 completes).
-        fact_handlers = self._build_fact_handlers(self._bindings)
+        resolver = CalleeResolver(self._bindings, self._parser)
+        fact_handlers = self._build_fact_handlers(resolver)
         self._dfs_fact(
             root, scope_stack=scope_stack, handlers=fact_handlers, facts=facts
         )

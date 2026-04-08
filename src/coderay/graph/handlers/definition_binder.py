@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from coderay.core.models import NodeKind
+from coderay.graph.lowering.cst_helpers import node_id
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
@@ -28,11 +29,10 @@ class DefinitionBinder:
         name = parser.identifier_from_node(node)
         if not name:
             return
-        fp = parser.file_path
+        nid = node_id(parser.file_path, scope_stack, name)
         qualified = ".".join([*scope_stack, name])
-        node_id = f"{fp}::{qualified}"
         if self._kind == NodeKind.CLASS:
-            bindings.register_definition(name, node_id, is_class=True)
+            bindings.register_definition(name, nid, is_class=True)
         else:
-            bindings.register_definition(qualified if scope_stack else name, node_id)
+            bindings.register_definition(qualified if scope_stack else name, nid)
         scope_stack.append(name)

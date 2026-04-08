@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from coderay.graph.handlers.assignment_binder import AssignmentBinder, _assignment_sides
-from coderay.graph.handlers.helpers import (
-    find_method_in_class,
-    find_top_level_function,
-    resolve_type_texts,
-)
+from coderay.graph.handlers.typed_params import resolve_type_texts
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
+from coderay.parsing.cst_traversal import find_method_in_class, find_top_level_function
 
 
 class PythonAssignmentBinder(AssignmentBinder):

@@ -15,19 +15,6 @@ class NameBindings(Protocol):
     def resolve_module(self, name: str) -> str | None: ...
 
 
-@runtime_checkable
-class OONameBindings(NameBindings, Protocol):
-    """Name resolution extended for class-based (OO) languages."""
-
-    def resolve_instance(self, var_name: str) -> str | None: ...
-    def resolve_method_calls(self, obj_name: str, method_name: str) -> list[str]: ...
-    def resolve_class_attribute(
-        self, class_qualified: str, attr_name: str
-    ) -> str | None: ...
-    def resolve_chain(self, chain: str) -> list[str]: ...
-    def is_class(self, name: str) -> bool: ...
-
-
 class FileNameBindings:
     """Per-file name binding store for one extraction run.
 
