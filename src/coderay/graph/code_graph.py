@@ -7,7 +7,7 @@ from typing import Any
 import networkx as nx
 
 from coderay.core.models import EdgeKind, GraphEdge, GraphNode, ImpactResult, NodeKind
-from coderay.graph.identifiers import file_path_to_module_names
+from coderay.graph.utils import file_path_to_module_names
 
 logger = logging.getLogger(__name__)
 

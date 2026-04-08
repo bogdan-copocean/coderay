@@ -1,4 +1,4 @@
-"""Multi-file graph extraction: dispatch, emit, merge into CodeGraph, post-merge."""
+"""Multi-file graph extraction: dispatch, materialise, merge into CodeGraph, post-merge."""
 
 from __future__ import annotations
 
@@ -8,27 +8,36 @@ from collections.abc import Iterable
 from coderay.core.config import get_config
 from coderay.core.models import GraphEdge, GraphNode
 from coderay.graph.code_graph import CodeGraph
-from coderay.graph.emit import emit_graph, filter_external_edges
 from coderay.graph.facts import Fact
+from coderay.graph.utils import file_path_to_module_names
 from coderay.graph.language_plugin import get_extractor
+from coderay.graph.materialise import filter_external_edges, materialise_graph
 from coderay.graph.pipeline import run_post_merge_pipeline
-from coderay.graph.types import ModuleIndex, ProjectIndex
 from coderay.parsing.base import get_parse_context
 
 logger = logging.getLogger(__name__)
 
+ModuleIndex = dict[str, str]
+
+
+def build_module_index(file_paths: list[str]) -> ModuleIndex:
+    """Build a mapping from dotted module names to file paths."""
+    module_index: ModuleIndex = {}
+    for fp in file_paths:
+        for mod_name in file_path_to_module_names(fp):
+            if mod_name not in module_index:
+                module_index[mod_name] = fp
+    return module_index
+
 
 class GraphBuilder:
-    """Module index, per-file extract/emit, graph merge, post-merge."""
+    """Per-file extract → materialise, multi-file merge → CodeGraph, post-merge."""
 
     def __init__(self, module_index: ModuleIndex) -> None:
         self._module_index = module_index
 
-    def resolve_facts(
-        self, facts: Iterable[Fact], project: ProjectIndex
-    ) -> Iterable[Fact]:
-        """Hook before emit; default is identity."""
-        del project
+    def resolve_facts(self, facts: Iterable[Fact]) -> Iterable[Fact]:
+        """Hook before materialisation; default is identity."""
         return facts
 
     def process_file(
@@ -42,8 +51,8 @@ class GraphBuilder:
         if ext_cls is None:
             return [], []
         facts = ext_cls(ctx, module_index=self._module_index).extract_facts_list()
-        facts = self.resolve_facts(facts, ProjectIndex(self._module_index))
-        nodes, edges = emit_graph(facts)
+        facts = self.resolve_facts(facts)
+        nodes, edges = materialise_graph(facts)
         if not get_config().graph.include_external:
             edges = filter_external_edges(edges, set(self._module_index.values()))
         return nodes, edges
