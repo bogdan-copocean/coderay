@@ -248,7 +248,7 @@ class TestTypeResolution:
             "class A:\n    pass\nclass B:\n    pass\ndef foo(x: A | B):\n    pass\n"
         )
         _, ctx = _extract(source)
-        union = ctx._instance_unions.get("x")
+        union = ctx.union_targets("x")
         assert union is not None
         assert len(union) == 2
 
