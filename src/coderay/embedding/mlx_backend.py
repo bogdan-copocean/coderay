@@ -1,5 +1,6 @@
 import logging
 
+from coderay.core.timing import timed_phase
 from coderay.embedding.base import Embedder, EmbedTask
 from coderay.embedding.prefixes import SEARCH_PREFIXES, requires_prefix
 
@@ -44,6 +45,7 @@ class MLXEmbedder(Embedder):
             prefix = SEARCH_PREFIXES.get(task, "")
             texts = [prefix + t for t in texts] if prefix else texts
 
+        logger.info("Embedding %d chunks (task=%s)...", len(texts), task.value)
         return self._embed_batched(texts)
 
     def _ensure_loaded(self) -> None:
@@ -53,20 +55,13 @@ class MLXEmbedder(Embedder):
         from mlx_embeddings import load
 
         cached = self._is_cached()
-        if cached:
-            logger.info(
-                "Loading model %s from cache (%s)...",
-                self._model_name,
-                mx.default_device(),
-            )
-        else:
-            logger.info(
-                "Downloading model %s (one-time, %s)...",
-                self._model_name,
-                mx.default_device(),
-            )
         self._model, self._tokenizer = load(self._model_name)
-        logger.info("Model %s ready.", self._model_name)
+        logger.info(
+            "Model %s ready (%s, %s).",
+            self._model_name,
+            "cache" if cached else "downloaded",
+            mx.default_device(),
+        )
 
     def _is_cached(self) -> bool:
         """Check if model exists in huggingface cache."""
@@ -83,12 +78,18 @@ class MLXEmbedder(Embedder):
         n = len(texts)
         bs = self._batch_size
 
-        for i in range(0, n, bs):
-            batch = texts[i : i + bs]
-            arr = self._embed_single_batch(batch)
-            out.extend(arr.tolist())
-            logger.info("MLX embedded %d/%d", min(i + bs, n), n)
+        with timed_phase("embedding", log=False) as tp:
+            for i in range(0, n, bs):
+                batch = texts[i : i + bs]
+                arr = self._embed_single_batch(batch)
+                out.extend(arr.tolist())
+                logger.info("Embedded %d/%d chunks", min(i + bs, n), n)
 
+        logger.info(
+            "Embedding complete: %d chunks in %.2fs",
+            n,
+            tp.elapsed,
+        )
         return out
 
     def _embed_single_batch(self, batch: list[str]):

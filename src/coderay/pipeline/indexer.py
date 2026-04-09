@@ -303,48 +303,56 @@ class Indexer:
         """Chunk, embed, store files; return (path_hashes, files_content)."""
         files_content: list[tuple[str, str]] = []
 
-        with timed_phase("read"):
-            for p in rel_paths:
-                try:
-                    path = self._workspace.resolve_logical(p)
-                except Exception:
-                    logger.warning("Skip (bad logical path): %s", p)
-                    continue
-                if not path.is_file():
-                    logger.warning("Skip (not a file): %s", p)
-                    continue
-                try:
-                    content = read_from_path(path)
-                    files_content.append((p, content))
-                except Exception as e:
-                    logger.warning("Skip (read failed) %s: %s", p, e)
+        with timed_phase("pipeline", log=False) as tp_pipe:
+            with timed_phase("read"):
+                for p in rel_paths:
+                    try:
+                        path = self._workspace.resolve_logical(p)
+                    except Exception:
+                        logger.warning("Skip (bad logical path): %s", p)
+                        continue
+                    if not path.is_file():
+                        logger.warning("Skip (not a file): %s", p)
+                        continue
+                    try:
+                        content = read_from_path(path)
+                        files_content.append((p, content))
+                    except Exception as e:
+                        logger.warning("Skip (read failed) %s: %s", p, e)
 
-        if not files_content:
-            return {}, []
+            if not files_content:
+                return {}, []
 
-        path_hashes = {p: hash_content(content) for p, content in files_content}
+            path_hashes = {p: hash_content(content) for p, content in files_content}
 
-        paths_to_replace = list({p for p, _ in files_content})
-        self._store.delete_by_paths(paths_to_replace)
+            paths_to_replace = list({p for p, _ in files_content})
+            self._store.delete_by_paths(paths_to_replace)
 
-        with timed_phase("chunking"):
-            chunks = []
-            for p, content in files_content:
-                chunks.extend(chunk_file(p, content))
+            with timed_phase("chunking"):
+                chunks = []
+                for p, content in files_content:
+                    chunks.extend(chunk_file(p, content))
 
-        if not chunks:
-            logger.info("Pipeline done: 0 chunks in %d files", len(files_content))
-            return path_hashes, files_content
+            if not chunks:
+                logger.info(
+                    "Pipeline done: 0 chunks in %d files (%.2fs)",
+                    len(files_content),
+                    tp_pipe.elapsed_so_far(),
+                )
+                return path_hashes, files_content
 
-        texts = [format_chunk_for_embedding(c) for c in chunks]
-        with timed_phase("embedding"):
-            embeddings = self._embedder.embed(texts, task=EmbedTask.DOCUMENT)
+            texts = [format_chunk_for_embedding(c) for c in chunks]
+            with timed_phase("embedding"):
+                embeddings = self._embedder.embed(texts, task=EmbedTask.DOCUMENT)
 
-        with timed_phase("storing"):
-            self._store.insert_chunks(chunks, embeddings)
+            with timed_phase("storing"):
+                self._store.insert_chunks(chunks, embeddings)
 
         logger.info(
-            "Pipeline done: %d chunks in %d files", len(chunks), len(files_content)
+            "Pipeline done: %d chunks in %d files (%.2fs)",
+            len(chunks),
+            len(files_content),
+            tp_pipe.elapsed,
         )
         return path_hashes, files_content
 

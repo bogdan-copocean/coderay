@@ -48,13 +48,13 @@ def load_embedder_from_config() -> Embedder:
     config = get_config()
     ed = config.embedder
     backend = resolved_embedder_backend(ed.backend)
-    if (ed.backend or "auto").strip().lower() == "auto":
-        logger.info("embedder.backend=auto -> %s", backend)
     if backend == "mlx" and not mlx_optional_installed():
         raise RuntimeError(
             "embedder.backend is 'mlx' but MLX is not installed. "
             "On Apple Silicon: pip install 'coderay[mlx]'"
         )
+    model_name = ed.mlx.model_name if backend == "mlx" else ed.fastembed.model_name
+    logger.info("embedder.backend=%s model=%s", backend, model_name)
     if backend == "mlx":
         mx = ed.mlx
         return MLXEmbedder(

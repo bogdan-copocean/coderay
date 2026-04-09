@@ -27,8 +27,23 @@ class TestTimedPhase:
         assert tp.elapsed >= 0.02
 
     def test_log_false_skips_logging(self, caplog):
-        """Assert log=False does not emit INFO for the phase."""
-        with caplog.at_level(logging.INFO):
+        """Assert log=False does not emit DEBUG for the phase."""
+        with caplog.at_level(logging.DEBUG):
             with timed_phase("no_log_phase", log=False):
                 time.sleep(0.01)
         assert "no_log_phase" not in caplog.text
+
+    def test_log_true_emits_debug(self, caplog):
+        """Assert log=True records phase timing at DEBUG."""
+        with caplog.at_level(logging.DEBUG):
+            with timed_phase("logged_phase"):
+                time.sleep(0.01)
+        assert "logged_phase" in caplog.text
+
+    def test_elapsed_so_far_before_exit(self):
+        """elapsed_so_far() is usable inside the block; elapsed matches after exit."""
+        with timed_phase("so_far", log=False) as tp:
+            time.sleep(0.02)
+            mid = tp.elapsed_so_far()
+        assert mid >= 0.02
+        assert tp.elapsed >= mid
