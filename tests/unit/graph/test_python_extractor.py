@@ -82,6 +82,14 @@ class TestDefinitions:
         assert "foo" in names
         assert "deco" in names
 
+    def test_async_function_def(self):
+        """Async def is emitted as a function symbol like sync defs."""
+        facts, _ = _extract("async def fetch():\n    pass\n")
+        defs = _definitions(facts)
+        assert len(defs) == 1
+        assert defs[0].name == "fetch"
+        assert defs[0].kind == NodeKind.FUNCTION
+
 
 # ======================================================================
 # Imports
@@ -285,6 +293,15 @@ class TestInheritance:
         targets = {tgt for _, tgt in edges}
         assert any("A" in t for t in targets)
         assert any("B" in t for t in targets)
+
+    def test_dotted_base_via_import_alias(self):
+        """Inherited base `alias.Base` lowers through import-bound prefix."""
+        source = "from pkg import sub as alias\n\nclass Child(alias.Base):\n    pass\n"
+        facts, _ = _extract(source)
+        edges = _inherits(facts)
+        assert len(edges) == 1
+        (_src, tgt) = next(iter(edges))
+        assert "Base" in tgt
 
 
 # ======================================================================
