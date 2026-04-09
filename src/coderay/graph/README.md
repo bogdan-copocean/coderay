@@ -6,18 +6,20 @@ Directed call/import/inheritance graph over the indexed codebase.
 
 | Area | Role |
 |------|------|
-| [`graph_builder.py`](graph_builder.py) | `GraphBuilder`: parse → extract facts → materialise → merge; optional `resolve_facts` hook; `include_external` filtering |
-| [`builder.py`](builder.py) | `build_graph` / `build_and_save_graph` — module index + `GraphBuilder.build` + `save_graph` |
+| [`graph_builder.py`](graph_builder.py) | `GraphBuilder`: parse → extract facts → materialise → merge; optional `resolve_facts` hook; `include_external` filtering; `build_project_index` / `build_module_index` |
+| [`project_index.py`](project_index.py) | `ProjectIndex` protocol + `PythonModuleIndex` (dotted module → file) |
+| [`refs.py`](refs.py) | `file::` helpers and edge `target_kind` heuristics (materialise / emitters) |
+| [`builder.py`](builder.py) | `build_graph` / `build_and_save_graph` — project index + `GraphBuilder.build` + `save_graph` |
 | [`extractors/`](extractors/) | `BaseGraphExtractor` + per-language extractors (Python, JS/TS); `build_module_index` and `extract_graph_from_file` live here |
 | [`handlers/`](handlers/) | Shared handlers (`definition`, `call`, `assignment`, `decorator`, …) |
 | [`handlers/<lang>/`](handlers/python/) | Language-specific handlers (imports, assignments, definitions) |
-| [`lowering/`](lowering/) | `LoweringSession`, `FileNameBindings`, `CalleeResolver` — CST helpers for handlers |
+| [`lowering/`](lowering/) | `FileNameBindings` (composed stores), `CalleeResolver` / `CalleeStrategy`, CST helpers |
 | [`passes/`](passes/) | Post-merge global passes; Python-only steps in [`passes/python.py`](passes/python.py) |
 | [`pipeline.py`](pipeline.py) | `run_post_merge_pipeline` — Python passes + `run_global_passes` |
 | [`impact.py`](impact.py) | `get_impact_radius` — reverse BFS over the graph |
 | [`materialise.py`](materialise.py) | Turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls) |
 | [`facts.py`](facts.py) | `NodeFact`, `EdgeFact` — the intermediate representation emitted by extractors |
-| [`language_plugin.py`](language_plugin.py) | `LanguagePlugin` protocol — the interface each language extractor implements |
+| [`language_plugin.py`](language_plugin.py) | `LanguagePlugin` (extractor, post-merge passes, optional `callee_strategy_factory`) |
 
 ## Pipeline
 
@@ -29,7 +31,7 @@ build_graph()                    # merge all files → CodeGraph
 run_post_merge_pipeline()        # cross-file passes, prune phantoms
 ```
 
-`GraphBuilder` selects the extractor from `lang_cfg.name` (`python` | `javascript` | `typescript`). Facts (`facts.py`) describe nodes and edges; [`materialise.py`](materialise.py) turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls).
+`GraphBuilder` selects the extractor from `lang_cfg.name` (`python` | `javascript` | `typescript`). Edge facts may include `source_lang` and `target_kind` (resolved vs phantom vs module ref); serialised `graph.json` edges remain string targets only. Facts ([`facts.py`](facts.py)); [`materialise.py`](materialise.py) turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls).
 
 ## CodeGraph (`code_graph.py`)
 

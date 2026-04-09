@@ -8,6 +8,7 @@ import logging
 import coderay.graph.extractors.js_ts  # noqa: F401
 import coderay.graph.extractors.python  # noqa: F401
 from coderay.graph.code_graph import CodeGraph
+from coderay.graph.passes.resolve_bare_phantoms import rewrite_bare_phantom_calls
 
 logger = logging.getLogger(__name__)
 
@@ -30,4 +31,5 @@ def run_post_merge_pipeline(
         r, p = run_passes(lang, graph)
         rewritten += r
         pruned += p
+    rewritten += rewrite_bare_phantom_calls(graph)
     return rewritten, pruned

@@ -11,6 +11,7 @@ from coderay.graph.lowering.cst_helpers import (
     node_id,
 )
 from coderay.graph.lowering.name_bindings import NameBindings
+from coderay.graph.refs import infer_inherits_target_kind
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
@@ -54,10 +55,13 @@ class DefinitionEmitter:
                 if child.type not in BASE_CLASS_NODE_TYPES:
                     continue
                 for base_name in list_base_names_from_arg_list(child, parser.node_text):
+                    tgt = resolve_base_class_name(base_name, bindings)
                     facts.append(
                         InheritsEdge(
                             source_id=nid,
-                            target=resolve_base_class_name(base_name, bindings),
+                            target=tgt,
+                            source_lang=parser.lang_cfg.name,
+                            target_kind=infer_inherits_target_kind(tgt),
                         )
                     )
         scope_stack.append(name)

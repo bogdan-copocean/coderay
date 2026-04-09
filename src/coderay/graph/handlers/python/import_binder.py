@@ -61,7 +61,7 @@ class PythonImportBinder:
 
         if ntype == "import_statement":
             for mod_text, local in imported:
-                # import pkg[.sub]: local "pkg" -> dotted module string (resolved to file in register_import).
+                # Bare import: local -> dotted name; register_import resolves file.
                 bindings.register_import(local, mod_text)
         else:
             if not module or not imported:
@@ -69,7 +69,7 @@ class PythonImportBinder:
             mod_name = module[0]
             for original, local in imported:
                 if ntype != "future_import_statement":
-                    # from pkg import X: local "X" -> "pkg::X" (symbol leg resolved in register_import).
+                    # from-import: local -> "pkg::X"; resolved in register_import.
                     bindings.register_import(local, f"{mod_name}::{original}")
 
 

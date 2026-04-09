@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from coderay.graph.project_index import (
+    EmptyProjectIndex,
+    ProjectIndex,
+    PythonModuleIndex,
+)
 from coderay.parsing.conventions import is_init_file
 
 
@@ -18,19 +23,19 @@ class NameBindings(Protocol):
 class ModuleResolution:
     """Dotted module names -> indexed file paths and ``pkg::Sym`` lowering."""
 
-    def __init__(self, module_index: dict[str, str] | None = None) -> None:
-        self._module_index: dict[str, str] = module_index or {}
+    def __init__(self, index: ProjectIndex | None = None) -> None:
+        self._index = index if index is not None else EmptyProjectIndex()
 
     def resolve_module_to_file(self, mod_name: str) -> str | None:
         """Return file path for ``mod_name`` if present in the index."""
-        return self._module_index.get(mod_name)
+        return self._index.resolve_module_to_file(mod_name)
 
     def resolve_qualified_import(self, mod_name: str, symbol: str) -> str:
         """Lower ``mod_name::symbol`` to a file-backed or logical target string."""
-        submod_file = self._module_index.get(f"{mod_name}.{symbol}")
+        submod_file = self._index.resolve_module_to_file(f"{mod_name}.{symbol}")
         if submod_file:
             return submod_file
-        file_path = self._module_index.get(mod_name)
+        file_path = self._index.resolve_module_to_file(mod_name)
         if not file_path or is_init_file(file_path):
             return f"{mod_name}::{symbol}"
         return f"{file_path}::{symbol}"
@@ -150,8 +155,17 @@ class FileNameBindings:
     ``resolve_*``. Processors stay stateless; one instance per extraction run.
     """
 
-    def __init__(self, module_index: dict[str, str] | None = None) -> None:
-        self._modules = ModuleResolution(module_index)
+    def __init__(
+        self,
+        project_index: ProjectIndex | None = None,
+        *,
+        module_index: dict[str, str] | None = None,
+    ) -> None:
+        if project_index is not None and module_index is not None:
+            raise TypeError("pass only one of project_index or module_index")
+        if module_index is not None:
+            project_index = PythonModuleIndex(module_index)
+        self._modules = ModuleResolution(project_index)
         self._symbols = SymbolBindings()
         self._typing = InstanceTyping()
 

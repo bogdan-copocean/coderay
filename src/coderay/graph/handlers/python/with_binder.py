@@ -51,7 +51,7 @@ class PythonWithBinder:
         cm_name = parser.node_text(callee_node).strip() if callee_node else ""
         if not cm_name:
             return
-        # with cm as x: "x" -> return type of cm.__enter__ (same ref shape as other instances).
+        # as-target -> type of cm.__enter__.
         enter_return = get_function_return_type(
             parser, bindings, f"{cm_name}.__enter__"
         )

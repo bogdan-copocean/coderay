@@ -14,6 +14,7 @@ from coderay.graph.facts import (
     SymbolDefinition,
 )
 from coderay.graph.lowering.cst_helpers import node_id
+from coderay.graph.refs import target_starts_with_known_file
 
 
 def materialise_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[GraphEdge]]:
@@ -67,11 +68,7 @@ def materialise_graph(facts: Iterable[Fact]) -> tuple[list[GraphNode], list[Grap
 
 def _is_internal_target(target: str, known_files: set[str]) -> bool:
     """Return True if target's file-path prefix is a known repo file."""
-    if target in known_files:
-        return True
-    if "::" in target:
-        return target.split("::", 1)[0] in known_files
-    return False
+    return target_starts_with_known_file(target, known_files)
 
 
 def filter_external_edges(

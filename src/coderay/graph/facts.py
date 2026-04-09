@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from coderay.core.models import NodeKind
 
+EdgeTargetKind = Literal["resolved_node", "phantom", "module_ref"]
+
 __all__ = [
     "CallsEdge",
+    "EdgeTargetKind",
     "Fact",
     "ImportsEdge",
     "InheritsEdge",
@@ -43,6 +47,8 @@ class ImportsEdge:
 
     source_id: str
     target: str
+    source_lang: str | None = None
+    target_kind: EdgeTargetKind | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +57,8 @@ class CallsEdge:
 
     source_id: str
     target: str
+    source_lang: str | None = None
+    target_kind: EdgeTargetKind | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +67,8 @@ class InheritsEdge:
 
     source_id: str
     target: str
+    source_lang: str | None = None
+    target_kind: EdgeTargetKind | None = None
 
 
 Fact = ModuleInfo | SymbolDefinition | ImportsEdge | CallsEdge | InheritsEdge

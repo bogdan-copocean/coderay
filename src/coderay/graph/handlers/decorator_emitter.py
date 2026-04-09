@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from coderay.graph.facts import CallsEdge, Fact
-from coderay.graph.lowering.callee_resolver import CalleeResolver
+from coderay.graph.lowering.callee_strategy import CalleeStrategy
 from coderay.graph.lowering.cst_helpers import node_id
 from coderay.graph.lowering.name_bindings import NameBindings
+from coderay.graph.refs import infer_call_target_kind
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 class DecoratorEmitter:
     """Emit CallsEdge facts from decorated def/class to its decorators (Pass 2)."""
 
-    def __init__(self, resolver: CalleeResolver) -> None:
+    def __init__(self, resolver: CalleeStrategy) -> None:
         self._resolver = resolver
 
     def emit(
@@ -42,11 +43,19 @@ class DecoratorEmitter:
         caller_id = node_id(parser.file_path, scope_stack)
         if decorated_name:
             scope_stack.pop()
+        lang = parser.lang_cfg.name
         facts: list[Fact] = []
         for decorator in decorators:
             for target in self._resolver.resolve(decorator, scope_stack):
                 if target:
-                    facts.append(CallsEdge(source_id=caller_id, target=target))
+                    facts.append(
+                        CallsEdge(
+                            source_id=caller_id,
+                            target=target,
+                            source_lang=lang,
+                            target_kind=infer_call_target_kind(target),
+                        )
+                    )
         return facts
 
 

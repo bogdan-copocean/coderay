@@ -16,7 +16,7 @@ from coderay.graph.handlers.definition_binder import DefinitionBinder
 from coderay.graph.handlers.definition_emitter import DefinitionEmitter
 from coderay.graph.handlers.js_ts.import_binder import JsTsImportBinder
 from coderay.graph.handlers.js_ts.import_emitter import JsTsImportEmitter
-from coderay.graph.lowering.callee_resolver import CalleeResolver
+from coderay.graph.lowering.callee_strategy import CalleeStrategy
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.cst_kind import TraversalKind
 
@@ -38,7 +38,7 @@ class JsTsGraphExtractor(BaseGraphExtractor):
             TraversalKind.ASSIGNMENT: BindingHandler(AssignmentBinder()),
         }
 
-    def _build_fact_handlers(self, resolver: CalleeResolver) -> FactHandlerMap:
+    def _build_fact_handlers(self, resolver: CalleeStrategy) -> FactHandlerMap:
         module_id = self._module_id
 
         return {

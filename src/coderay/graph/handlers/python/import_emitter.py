@@ -6,6 +6,7 @@ from coderay.graph.facts import Fact, ImportsEdge
 from coderay.graph.handlers.python.import_binder import parse_python_imports
 from coderay.graph.lowering.cst_helpers import node_id
 from coderay.graph.lowering.name_bindings import NameBindings
+from coderay.graph.refs import infer_import_target_kind
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
@@ -21,13 +22,20 @@ class PythonImportEmitter:
     ) -> list[Fact]:
         caller_id = node_id(parser.file_path, scope_stack)
         ntype, module, imported = parse_python_imports(node, parser)
+        lang = parser.lang_cfg.name
 
         if ntype == "import_statement":
             facts: list[Fact] = []
             for mod_text, local in imported:
                 resolved = bindings.resolve(local)
+                tgt = resolved or mod_text
                 facts.append(
-                    ImportsEdge(source_id=caller_id, target=resolved or mod_text)
+                    ImportsEdge(
+                        source_id=caller_id,
+                        target=tgt,
+                        source_lang=lang,
+                        target_kind=infer_import_target_kind(tgt),
+                    )
                 )
             return facts
 
@@ -38,5 +46,13 @@ class PythonImportEmitter:
         for original, local in imported:
             qualified = f"{mod_name}::{original}"
             resolved = bindings.resolve(local)
-            facts.append(ImportsEdge(source_id=caller_id, target=resolved or qualified))
+            tgt = resolved or qualified
+            facts.append(
+                ImportsEdge(
+                    source_id=caller_id,
+                    target=tgt,
+                    source_lang=lang,
+                    target_kind=infer_import_target_kind(tgt),
+                )
+            )
         return facts

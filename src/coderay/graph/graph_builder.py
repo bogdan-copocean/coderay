@@ -12,6 +12,7 @@ from coderay.graph.facts import Fact
 from coderay.graph.language_plugin import get_extractor
 from coderay.graph.materialise import filter_external_edges, materialise_graph
 from coderay.graph.pipeline import run_post_merge_pipeline
+from coderay.graph.project_index import ProjectIndex, PythonModuleIndex
 from coderay.graph.utils import file_path_to_module_names
 from coderay.parsing.base import get_parse_context
 
@@ -30,11 +31,16 @@ def build_module_index(file_paths: list[str]) -> ModuleIndex:
     return module_index
 
 
+def build_project_index(file_paths: list[str]) -> PythonModuleIndex:
+    """Wrap ``build_module_index`` as a ``PythonModuleIndex``."""
+    return PythonModuleIndex(build_module_index(file_paths))
+
+
 class GraphBuilder:
     """Per-file extract → materialise, multi-file merge → CodeGraph, post-merge."""
 
-    def __init__(self, module_index: ModuleIndex) -> None:
-        self._module_index = module_index
+    def __init__(self, project_index: ProjectIndex) -> None:
+        self._project_index = project_index
 
     def resolve_facts(self, facts: Iterable[Fact]) -> Iterable[Fact]:
         """Hook before materialisation; default is identity."""
@@ -50,11 +56,13 @@ class GraphBuilder:
         ext_cls = get_extractor(ctx.lang_cfg.name)
         if ext_cls is None:
             return [], []
-        raw_facts = ext_cls(ctx, module_index=self._module_index).extract_facts_list()
+        raw_facts = ext_cls(ctx, project_index=self._project_index).extract_facts_list()
         facts: Iterable[Fact] = self.resolve_facts(raw_facts)
         nodes, edges = materialise_graph(facts)
         if not get_config().graph.include_external:
-            edges = filter_external_edges(edges, set(self._module_index.values()))
+            edges = filter_external_edges(
+                edges, self._project_index.indexed_file_paths()
+            )
         return nodes, edges
 
     def build(self, file_paths_and_contents: list[tuple[str, str]]) -> CodeGraph:

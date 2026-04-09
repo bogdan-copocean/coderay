@@ -5,6 +5,7 @@ from __future__ import annotations
 from coderay.graph.facts import Fact, ImportsEdge
 from coderay.graph.handlers.js_ts.import_binder import parse_jsts_imports
 from coderay.graph.lowering.name_bindings import NameBindings
+from coderay.graph.refs import infer_import_target_kind
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
@@ -23,9 +24,18 @@ class JsTsImportEmitter:
         if result is None:
             return []
         imported, mod_path, module_id = result
+        lang = parser.lang_cfg.name
         facts: list[Fact] = []
         for original, local in imported:
             qualified = f"{mod_path}::{original}" if original != mod_path else mod_path
             resolved = bindings.resolve(local)
-            facts.append(ImportsEdge(source_id=module_id, target=resolved or qualified))
+            tgt = resolved or qualified
+            facts.append(
+                ImportsEdge(
+                    source_id=module_id,
+                    target=tgt,
+                    source_lang=lang,
+                    target_kind=infer_import_target_kind(tgt),
+                )
+            )
         return facts

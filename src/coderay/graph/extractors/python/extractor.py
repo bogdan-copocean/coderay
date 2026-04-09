@@ -19,7 +19,7 @@ from coderay.graph.handlers.python.function_binder import PythonFunctionBinder
 from coderay.graph.handlers.python.import_binder import PythonImportBinder
 from coderay.graph.handlers.python.import_emitter import PythonImportEmitter
 from coderay.graph.handlers.python.with_binder import PythonWithBinder
-from coderay.graph.lowering.callee_resolver import CalleeResolver
+from coderay.graph.lowering.callee_strategy import CalleeStrategy
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.cst_kind import TraversalKind
 
@@ -40,7 +40,7 @@ class PythonGraphExtractor(BaseGraphExtractor):
             TraversalKind.WITH: BindingHandler(PythonWithBinder()),
         }
 
-    def _build_fact_handlers(self, resolver: CalleeResolver) -> FactHandlerMap:
+    def _build_fact_handlers(self, resolver: CalleeStrategy) -> FactHandlerMap:
         module_id = self._module_id
 
         return {

@@ -7,15 +7,15 @@ from coderay.graph.lowering.cst_helpers import (
     list_base_names_from_arg_list,
 )
 from coderay.graph.lowering.name_bindings import FileNameBindings
+from coderay.graph.refs import join_file_qual
 from coderay.parsing.base import BaseTreeSitterParser
 from coderay.parsing.languages import get_supported_extensions
 
 
 class CalleeResolver:
-    """Resolve a raw callee string to qualified target node IDs.
+    """Resolve a raw callee string to qualified target node IDs (Python / JS/TS CST).
 
-    Takes ``FileNameBindings`` and a parser (text only).
-    Produces ``list[str]`` — no side effects, no fact emission.
+    Implements ``CalleeStrategy``. Uses ``FileNameBindings`` and parser text only.
     """
 
     def __init__(
@@ -63,7 +63,7 @@ class CalleeResolver:
         if len(parts) == 1:
             class_qualified = self._find_enclosing_class(scope_stack)
             if class_qualified:
-                return [f"{fp}::{class_qualified}.{method}"]
+                return [join_file_qual(fp, f"{class_qualified}.{method}")]
         instance_key = self_prefix + ".".join(parts[:-1])
         class_ref = b.resolve_instance(instance_key)
         if not class_ref:
@@ -116,7 +116,8 @@ class CalleeResolver:
             return None
         base_resolved = self._bindings.resolve(base_name)
         fp = self._parser.file_path
-        return f"{base_resolved or f'{fp}::{base_name}'}.{method}"
+        fallback = base_resolved or join_file_qual(fp, base_name)
+        return f"{fallback}.{method}"
 
     def _get_first_base_class(self, class_qualified: str) -> str | None:
         from coderay.parsing.cst_traversal import find_class_node

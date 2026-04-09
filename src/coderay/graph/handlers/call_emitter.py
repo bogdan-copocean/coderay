@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from coderay.graph.facts import CallsEdge, Fact
-from coderay.graph.lowering.callee_resolver import CalleeResolver
+from coderay.graph.lowering.callee_strategy import CalleeStrategy
 from coderay.graph.lowering.cst_helpers import node_id
 from coderay.graph.lowering.name_bindings import NameBindings
+from coderay.graph.refs import infer_call_target_kind
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
 
 
 class CallEmitter:
     """Emit CallsEdge facts for call expressions (Pass 2)."""
 
-    def __init__(self, resolver: CalleeResolver) -> None:
+    def __init__(self, resolver: CalleeStrategy) -> None:
         self._resolver = resolver
 
     def emit(
@@ -32,5 +33,15 @@ class CallEmitter:
         raw_callee = parser.node_text(callee_node)
         if not raw_callee:
             return []
+        lang = parser.lang_cfg.name
         targets = self._resolver.resolve(raw_callee, scope_stack)
-        return [CallsEdge(source_id=caller_id, target=t) for t in targets if t]
+        return [
+            CallsEdge(
+                source_id=caller_id,
+                target=t,
+                source_lang=lang,
+                target_kind=infer_call_target_kind(t),
+            )
+            for t in targets
+            if t
+        ]

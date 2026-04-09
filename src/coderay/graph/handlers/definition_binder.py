@@ -33,9 +33,9 @@ class DefinitionBinder:
         nid = node_id(parser.file_path, scope_stack, name)
         qualified = ".".join([*scope_stack, name])
         if self._kind == NodeKind.CLASS:
-            # Symbol key "Foo" -> nid; class names stay short (nested: still short name).
+            # Class: short name key -> nid.
             bindings.register_definition(name, nid, is_class=True)
         else:
-            # Nested def: key "Outer.inner" | module scope: key "f" (same shape as Pass 2 facts).
+            # Nested def: qualified key; module scope: short name.
             bindings.register_definition(qualified if scope_stack else name, nid)
         scope_stack.append(name)
