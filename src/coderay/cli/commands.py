@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+import warnings
 from pathlib import Path
 
 import click
@@ -51,6 +52,12 @@ def _setup_logging(verbose: bool = False) -> None:
     ):
         logging.getLogger(name).setLevel(logging.WARNING)
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    warnings.filterwarnings(
+        "ignore",
+        message="Cannot enable progress bars: environment variable",
+        category=UserWarning,
+        module="huggingface_hub.utils.tqdm",
+    )
 
 
 def _set_repo_root(repo_root: Path) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import warnings
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -15,6 +16,12 @@ from coderay.core.config import ProjectNotInitializedError, get_config
 from coderay.mcp_server.errors import IndexNotBuiltError
 
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+warnings.filterwarnings(
+    "ignore",
+    message="Cannot enable progress bars: environment variable",
+    category=UserWarning,
+    module="huggingface_hub.utils.tqdm",
+)
 for _name in ("fastembed", "huggingface_hub", "huggingface_hub.file_download"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
