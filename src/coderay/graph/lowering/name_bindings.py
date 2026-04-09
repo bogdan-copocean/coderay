@@ -56,10 +56,12 @@ class FileNameBindings:
     def register_import(self, local_name: str, qualified_name: str) -> None:
         if "::" in qualified_name:
             mod_part, sym_part = qualified_name.split("::", 1)
+            # "pkg::Sym" -> file::Sym or pkg::Sym (see _resolve_qualified_import).
             resolved = self._resolve_qualified_import(mod_part, sym_part)
             self._symbols[local_name] = resolved
         else:
             file_path = self._resolve_module_to_file(qualified_name)
+            # Bare module string -> repo file path if indexed, else keep dotted name.
             self._symbols[local_name] = file_path if file_path else qualified_name
 
     def register_definition(
@@ -85,6 +87,7 @@ class FileNameBindings:
         self._class_attributes[f"{class_qualified}.{attr_name}"] = type_ref
 
     def register_alias(self, alias_name: str, qualified_name: str) -> None:
+        # Direct map: alias -> already-resolved target string (no "::" splitting).
         self._symbols[alias_name] = qualified_name
 
     # ------------------------------------------------------------------

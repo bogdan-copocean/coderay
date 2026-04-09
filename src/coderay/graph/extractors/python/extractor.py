@@ -15,7 +15,7 @@ from coderay.graph.handlers.decorator_emitter import DecoratorEmitter
 from coderay.graph.handlers.definition_binder import DefinitionBinder
 from coderay.graph.handlers.definition_emitter import DefinitionEmitter
 from coderay.graph.handlers.python.assignment_binder import PythonAssignmentBinder
-from coderay.graph.handlers.python.definition_binder import PythonFunctionBinder
+from coderay.graph.handlers.python.function_binder import PythonFunctionBinder
 from coderay.graph.handlers.python.import_binder import PythonImportBinder
 from coderay.graph.handlers.python.import_emitter import PythonImportEmitter
 from coderay.graph.handlers.python.with_binder import PythonWithBinder

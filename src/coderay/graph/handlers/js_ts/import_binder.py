@@ -67,6 +67,7 @@ class JsTsImportBinder:
             return
         imported, mod_path, _module_id = result
         for original, local in imported:
+            # namespace/default export: (mod_path, mod_path) -> qualified is mod_path only; else mod::orig.
             qualified = f"{mod_path}::{original}" if original != mod_path else mod_path
             bindings.register_import(local, qualified)
 

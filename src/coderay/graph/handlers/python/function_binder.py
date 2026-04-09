@@ -1,4 +1,4 @@
-"""Python function definition binding: typed params and @property (Pass 1)."""
+"""Python function binder — extends ``DefinitionBinder`` (typed params, @property)."""
 
 from __future__ import annotations
 
@@ -25,8 +25,7 @@ class PythonFunctionBinder(DefinitionBinder):
         parser: BaseTreeSitterParser,
         bindings: FileNameBindings,
     ) -> None:
-        # Register typed params before DFS recurses into the body so calls
-        # inside can resolve self.x() when x is a typed parameter.
+        # Param "x" -> one class ref | union: "x" -> file::T or ["T","U"].
         for param_name, type_refs in get_typed_parameters(parser, bindings, node):
             if len(type_refs) == 1:
                 bindings.register_instance(param_name, type_refs[0])
@@ -37,6 +36,7 @@ class PythonFunctionBinder(DefinitionBinder):
             name = parser.identifier_from_node(node)
             return_type = get_return_type_from_func_node(parser, bindings, node)
             if name and return_type:
+                # Key "ClsName.attr" (scope joined) -> return type ref.
                 bindings.register_class_attribute(
                     ".".join(scope_stack), name, return_type
                 )

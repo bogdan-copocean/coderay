@@ -38,7 +38,6 @@ class Emitter(Protocol):
     """Pass 2 — emit facts from resolved bindings.
 
     Receives the same mutable ``scope_stack`` as Pass 1 (same DFS traversal).
-    Must not mutate ``bindings`` or ``scope_stack``.
     """
 
     def emit(
@@ -185,7 +184,7 @@ class BaseGraphExtractor(ABC):
         del scope_stack[depth:]  # pop any scope the binder pushed
 
     # ------------------------------------------------------------------
-    # Pass 2: fact DFS — emits all facts, reads bindings read-only
+    # Pass 2: fact DFS — emits facts; bindings read-only;
     # ------------------------------------------------------------------
 
     def _dfs_fact(

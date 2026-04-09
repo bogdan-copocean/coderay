@@ -29,10 +29,13 @@ class DefinitionBinder:
         name = parser.identifier_from_node(node)
         if not name:
             return
+        # With name: (file, scope_stack, name) -> file::scope.name (see node_id).
         nid = node_id(parser.file_path, scope_stack, name)
         qualified = ".".join([*scope_stack, name])
         if self._kind == NodeKind.CLASS:
+            # Symbol key "Foo" -> nid; class names stay short (nested: still short name).
             bindings.register_definition(name, nid, is_class=True)
         else:
+            # Nested def: key "Outer.inner" | module scope: key "f" (same shape as Pass 2 facts).
             bindings.register_definition(qualified if scope_stack else name, nid)
         scope_stack.append(name)

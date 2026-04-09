@@ -14,7 +14,7 @@ from coderay.parsing.cst_traversal import (
 )
 
 
-def _assignment_sides(node: TSNode) -> tuple[TSNode | None, TSNode | None]:
+def assignment_sides(node: TSNode) -> tuple[TSNode | None, TSNode | None]:
     """Return (lhs, rhs) for assignment-like nodes."""
     if node.type == "variable_declarator":
         return node.child_by_field_name("name"), node.child_by_field_name("value")
@@ -37,7 +37,7 @@ class AssignmentBinder:
         bindings: FileNameBindings,
     ) -> None:
         del scope_stack
-        lhs, rhs = _assignment_sides(node)
+        lhs, rhs = assignment_sides(node)
         if lhs is None or rhs is None:
             return
         self_prefix = parser.lang_cfg.graph.self_prefix
@@ -53,6 +53,7 @@ class AssignmentBinder:
                             parser, bindings, func_node, rhs_name
                         )
                         if type_hint:
+                            # self.attr from param: "self.x" -> class ref.
                             bindings.register_instance(lhs_text, type_hint)
                             class_qualified = find_enclosing_class_from_node(
                                 parser, func_node
@@ -73,6 +74,7 @@ class AssignmentBinder:
                             is_known = bindings.is_class(callee_base)
                             if is_known or resolved is not None:
                                 class_ref = resolved or callee_base
+                                # self.attr = Foo(): "self.attr" -> file::Foo or "Foo".
                                 bindings.register_instance(lhs_text, class_ref)
                                 func_node = get_enclosing_function_node(parser, node)
                                 class_qualified = (
@@ -92,6 +94,7 @@ class AssignmentBinder:
         if rhs.type == "identifier":
             resolved = bindings.resolve(nt(rhs))
             if resolved:
+                # a = b: "a" -> same binding target as "b".
                 bindings.register_alias(lhs_name, resolved)
         elif rhs.type == "attribute":
             rhs_text = nt(rhs)
@@ -99,10 +102,12 @@ class AssignmentBinder:
             if len(parts) >= 2:
                 chain_refs = bindings.resolve_chain(rhs_text)
                 if chain_refs:
+                    # a = x.y.z: "a" -> first resolved class ref.
                     bindings.register_instance(lhs_name, chain_refs[0])
                 else:
                     prefix_resolved = bindings.resolve(parts[0])
                     if prefix_resolved:
+                        # a = mod.sub: "a" -> prefix::sub.
                         bindings.register_alias(
                             lhs_name, f"{prefix_resolved}::{'.'.join(parts[1:])}"
                         )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from coderay.graph.handlers.assignment_binder import AssignmentBinder, _assignment_sides
+from coderay.graph.handlers.assignment_binder import AssignmentBinder, assignment_sides
 from coderay.graph.handlers.typed_params import resolve_type_texts
 from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import BaseTreeSitterParser, TSNode
@@ -19,7 +19,7 @@ class PythonAssignmentBinder(AssignmentBinder):
         parser: BaseTreeSitterParser,
         bindings: FileNameBindings,
     ) -> None:
-        lhs, rhs = _assignment_sides(node)
+        lhs, rhs = assignment_sides(node)
         if lhs is None or rhs is None:
             return
         if lhs.type in ("pattern_list", "tuple_pattern", "list_pattern"):
@@ -45,6 +45,7 @@ class PythonAssignmentBinder(AssignmentBinder):
             if first_arg:
                 resolved = bindings.resolve(first_arg)
                 if resolved:
+                    # p = partial(f, ...): "p" -> same target as bound callable "f".
                     bindings.register_alias(lhs_name, resolved)
             return
         super()._register_from_call(lhs_name, rhs, bindings, parser)
@@ -87,6 +88,7 @@ class PythonAssignmentBinder(AssignmentBinder):
         type_args = self._extract_tuple_type_args(type_node, parser, bindings)
         for i, name in enumerate(identifiers):
             if i < len(type_args):
+                # a,b = t(): "a" -> Tuple type arg i (resolved ref string).
                 bindings.register_alias(name, type_args[i])
 
     def _extract_tuple_type_args(
