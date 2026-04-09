@@ -10,6 +10,19 @@ from coderay.embedding.local import LocalEmbedder
 from coderay.embedding.prefixes import SEARCH_PREFIXES
 
 
+def _embed_side_effect(dim: int):
+    """Return side_effect for TextEmbedding.embed yielding one vector per document."""
+
+    def _side_effect(documents, batch_size=256, parallel=None, **kwargs):
+        if isinstance(documents, str):
+            texts = [documents]
+        else:
+            texts = list(documents)
+        return iter([np.array([0.1] * dim) for _ in texts])
+
+    return _side_effect
+
+
 class TestLocalEmbedder:
     def test_embed_empty(self):
         e = LocalEmbedder(model="BAAI/bge-small-en-v1.5", dimensions=384)
@@ -19,9 +32,7 @@ class TestLocalEmbedder:
     def test_embed_calls_model(self, mock_load):
         e = LocalEmbedder(model="BAAI/bge-small-en-v1.5", dimensions=768)
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter(
-            [np.array([0.1] * 768), np.array([0.2] * 768)]
-        )
+        mock_model.embed.side_effect = _embed_side_effect(768)
         e._model = mock_model
 
         result = e.embed(["hello", "world"])
@@ -34,7 +45,7 @@ class TestLocalEmbedder:
         e = LocalEmbedder(model="BAAI/bge-small-en-v1.5", dimensions=384)
         assert e._model is None
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * 768)])
+        mock_model.embed.side_effect = _embed_side_effect(768)
 
         def _fake_load():
             e._model = mock_model
@@ -68,7 +79,7 @@ class TestLocalEmbedder:
         dims = 768 if "nomic" in model else 384
         e = LocalEmbedder(model=model, dimensions=dims)
         mock_model = MagicMock()
-        mock_model.embed.return_value = iter([np.array([0.1] * dims)])
+        mock_model.embed.side_effect = _embed_side_effect(dims)
         e._model = mock_model
 
         e.embed([input_text], task=task)

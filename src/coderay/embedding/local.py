@@ -5,6 +5,7 @@ from typing import Any
 
 from onnxruntime.capi.onnxruntime_pybind11_state import NoSuchFile
 
+from coderay.core.timing import timed_phase
 from coderay.embedding.base import Embedder, EmbedTask
 from coderay.embedding.prefixes import SEARCH_PREFIXES, requires_prefix
 
@@ -38,15 +39,14 @@ class LocalEmbedder(Embedder):
             return TextEmbedding(model_name=name, local_files_only=local_only)
 
         try:
-            logger.info("Loading model %s from cache...", self._model_name)
             self._model = _open(name=self._model_name, local_only=True)
-            logger.info("Model %s loaded from cache.", self._model_name)
         except (NoSuchFile, ValueError) as e:
             if isinstance(e, ValueError) and "Could not load model" not in str(e):
                 raise
-            logger.info("Downloading model %s (one-time)...", self._model_name)
             self._model = _open(name=self._model_name, local_only=False)
-            logger.info("Model %s downloaded and ready.", self._model_name)
+            logger.info("Model %s ready (downloaded).", self._model_name)
+        else:
+            logger.info("Model %s ready (cache).", self._model_name)
 
     def _apply_prefix(self, texts: list[str], task: EmbedTask) -> list[str]:
         if not requires_prefix(self._model_name):
@@ -66,9 +66,21 @@ class LocalEmbedder(Embedder):
             self._load_model()
 
         prefixed = self._apply_prefix(texts, task)
-
-        logger.info("Embedding %d chunks (task=%s)...", len(prefixed), task.value)
-        embeddings = list(self._model.embed(prefixed, batch_size=self._batch_size))
+        n = len(prefixed)
+        logger.info("Embedding %d chunks (task=%s)...", n, task.value)
+        raw: list[Any] = []
+        bs = self._batch_size
+        with timed_phase("embedding", log=False) as tp:
+            for i in range(0, n, bs):
+                sub = prefixed[i : i + bs]
+                part = list(self._model.embed(sub, batch_size=self._batch_size))
+                raw.extend(part)
+                logger.info("Embedded %d/%d chunks", min(i + len(sub), n), n)
+        logger.info(
+            "Embedding complete: %d chunks in %.2fs",
+            n,
+            tp.elapsed,
+        )
         if self._matryoshka_dimensions is not None:
-            return [e.tolist()[: self._matryoshka_dimensions] for e in embeddings]
-        return [e.tolist() for e in embeddings]
+            return [e.tolist()[: self._matryoshka_dimensions] for e in raw]
+        return [e.tolist() for e in raw]
