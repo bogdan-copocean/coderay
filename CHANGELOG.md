@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 (2026-04-09)
+
+- **Graph** — refactor builder toward composition (refs, `ProjectIndex`, callee strategy hook, fact metadata) ([#3](https://github.com/bogdan-copocean/coderay/pull/3)).
+- **Graph** — unit tests and README updates ([#4](https://github.com/bogdan-copocean/coderay/pull/4)).
+- **CLI / embeddings** — clearer logging: resolved backend and model, batch embedding progress (fastembed and MLX), pipeline timing on `Pipeline done`, phase timings at DEBUG; suppress Hugging Face tqdm warning when progress bars are disabled ([#5](https://github.com/bogdan-copocean/coderay/pull/5)).
+
 ## 1.1.0 (2026-04-02)
 
 **CodeRay** is a local-only indexer and assistant toolkit: no LLM inside the product, no API key, no network for core use.
