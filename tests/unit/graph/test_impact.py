@@ -117,3 +117,39 @@ class TestImpactAnalyzer:
         )
         r = ImpactAnalyzer(g).get_impact_radius("m.py::Child.m", depth=2)
         assert "u.py::use" in {n.id for n in r.nodes}
+
+    def test_fuzzy_resolve_sets_warning_for_wrong_qualifier(self) -> None:
+        """Wrong file::path with matching last segment resolves with a warning."""
+        g = CodeGraph()
+        for n in (
+            self._mod("m.py"),
+            self._cls("m.py::Child", "m.py", "Child"),
+            self._fn("m.py::Child.run", "m.py", "Child.run"),
+        ):
+            g.add_node(n)
+        r = ImpactAnalyzer(g).get_impact_radius("m.py::Wrong.path.run", depth=2)
+        assert r.resolution_warning is not None
+        assert "Requested" in r.resolution_warning
+        assert r.resolved_node == "m.py::Child.run"
+
+    def test_zero_callers_hint_when_not_imported(self) -> None:
+        """No upstream impact and module not imported elsewhere → static hint."""
+        g = CodeGraph()
+        g.add_node(self._mod("m.py"))
+        g.add_node(self._fn("m.py::orphan", "m.py", "orphan"))
+        r = ImpactAnalyzer(g).get_impact_radius("m.py::orphan", depth=2)
+        assert r.nodes == []
+        assert r.hint is not None
+        assert "not imported" in r.hint.lower()
+
+    def test_zero_callers_hint_when_module_imported(self) -> None:
+        """No resolved callers but module has importers → grep supplement hint."""
+        g = CodeGraph()
+        for n in (self._mod("m.py"), self._mod("b.py")):
+            g.add_node(n)
+        g.add_node(self._fn("m.py::orphan", "m.py", "orphan"))
+        g.add_edge(GraphEdge(source="b.py", target="m.py", kind=EdgeKind.IMPORTS))
+        r = ImpactAnalyzer(g).get_impact_radius("m.py::orphan", depth=2)
+        assert r.nodes == []
+        assert r.hint is not None
+        assert "imported by" in r.hint.lower()
