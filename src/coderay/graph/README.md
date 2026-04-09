@@ -1,76 +1,45 @@
 # graph
 
-Directed call/import/inheritance graph over the indexed codebase.
+Directed **calls**, **imports**, and **inheritance** over indexed source. The implementation is laid out as extractors, lowering, merge, and post-merge passes in this package; this file describes **behavior**, not file names.
 
-## Layout
+## Pipeline (conceptual)
 
-| Area | Role |
-|------|------|
-| [`graph_builder.py`](graph_builder.py) | `GraphBuilder`: parse → extract facts → materialise → merge; optional `resolve_facts` hook; `include_external` filtering; `build_project_index` / `build_module_index` |
-| [`project_index.py`](project_index.py) | `ProjectIndex` protocol + `PythonModuleIndex` (dotted module → file) |
-| [`refs.py`](refs.py) | `file::` helpers and edge `target_kind` heuristics (materialise / emitters) |
-| [`builder.py`](builder.py) | `build_graph` / `build_and_save_graph` — project index + `GraphBuilder.build` + `save_graph` |
-| [`extractors/`](extractors/) | `BaseGraphExtractor` + per-language extractors (Python, JS/TS); `build_module_index` and `extract_graph_from_file` live here |
-| [`handlers/`](handlers/) | Shared handlers (`definition`, `call`, `assignment`, `decorator`, …) |
-| [`handlers/<lang>/`](handlers/python/) | Language-specific handlers (imports, assignments, definitions) |
-| [`lowering/`](lowering/) | `FileNameBindings` (composed stores), `CalleeResolver` / `CalleeStrategy`, CST helpers |
-| [`passes/`](passes/) | Post-merge global passes; Python-only steps in [`passes/python.py`](passes/python.py) |
-| [`pipeline.py`](pipeline.py) | `run_post_merge_pipeline` — Python passes + `run_global_passes` |
-| [`impact.py`](impact.py) | `get_impact_radius` — reverse BFS over the graph |
-| [`materialise.py`](materialise.py) | Turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls) |
-| [`facts.py`](facts.py) | `NodeFact`, `EdgeFact` — the intermediate representation emitted by extractors |
-| [`language_plugin.py`](language_plugin.py) | `LanguagePlugin` (extractor, post-merge passes, optional `callee_strategy_factory`) |
+Per file: CST → **facts** (definitions, calls, imports, inherits) → **materialise** into `GraphNode` / `GraphEdge`. Multi-file **merge** builds one `CodeGraph`. **Post-merge** runs language passes and global rewrites (e.g. resolving bare-name call targets when unambiguous repo-wide).
 
-## Pipeline
+Cross-file lowering uses a **module index** (dotted name → file path) so imports and qualified names can become `file_path::symbol` targets. Edges may point at **phantom** strings (unresolved callee) until passes or later tooling refine them.
 
-```
-GraphBuilder.process_file() / extract_graph_from_file()   # CST → facts → materialise
-    ↓
-build_graph()                    # merge all files → CodeGraph
-    ↓
-run_post_merge_pipeline()        # cross-file passes, prune phantoms
-```
+## Targets and phantoms
 
-`GraphBuilder` selects the extractor from `lang_cfg.name` (`python` | `javascript` | `typescript`). Edge facts may include `source_lang` and `target_kind` (resolved vs phantom vs module ref); serialised `graph.json` edges remain string targets only. Facts ([`facts.py`](facts.py)); [`materialise.py`](materialise.py) turns facts into `GraphNode` / `GraphEdge` (including phantom targets for unresolved calls).
+Call/import/inherit **targets are strings**: resolved node ids (`file::qual`), module-style refs (`pkg.mod.sym`), or **phantoms** (short names, unknowns). Heuristics classify targets for filtering and UX; **materialise** can emit edges whose endpoints are not yet graph nodes.
 
-## CodeGraph (`code_graph.py`)
+**`include_external`** (config) drops edges whose targets are not considered “in repo” for the current index.
 
-`CodeGraph` is a `networkx.DiGraph` with four indexes maintained in sync:
+## Symbol resolution (`CodeGraph`)
 
-| Index | Key | Value |
-|-------|-----|-------|
-| `_symbol_index` | short name (`save`) | `{node IDs}` |
-| `_qualified_index` | qualified name (`User.save`) | `{node IDs}` |
-| `_file_index` | file path | `{node IDs}` |
-| `_module_index` | dotted module name | node ID |
+Indexes back **short names** and **qualified names** to node ids. **Unique** short name → one id; **ambiguous** → `resolve_symbol` returns `None` (callers must use full id or disambiguate).
 
-### Symbol resolution
+## Impact radius (`impact.py`)
 
-`resolve_symbol(name)` — exact match → symbol index → qualified index.
-Returns `None` if ambiguous.
+**Reverse** traversal from a symbol: who **calls**, **imports**, or **inherits** toward it, up to a **depth** limit. Not every edge kind is impact-relevant; module nodes are filtered when the same file is already represented by concrete symbols.
 
-`get_impact_radius(symbol)` layered resolution:
-1. Exact via `resolve_symbol`
-2. Fuzzy via `_fuzzy_resolve` (method-name match within the same file)
-3. Disambiguation: if the name matches multiple nodes, returns a hint
-   listing all candidates instead of silently returning not-found
+**Resolution layers:** exact id → optional **fuzzy** match by trailing name within a file → hints when ambiguous or empty results. **Seeds** for a method can include the **parent class’s** same-named method when inheritance is present, so callers of the base implementation count toward impact on overrides. **Phantom aliases** (same symbol under different string ids) are considered so edges from re-exports or legacy shapes are not missed.
 
-### Blast radius BFS
+**Limitations:** static graph only—dynamic dispatch, reflection, and cross-repo callers are not modeled; hints may suggest grep when imports exist but call edges could not be resolved.
 
-`get_impact_radius` does a reverse BFS (predecessors) over
-`CALLS | IMPORTS | INHERITS` edges up to `depth` hops. Seeds include
-the resolved node plus the same method on parent classes (interface-aware).
-Phantom alias nodes are seeded to catch callers that import via re-export
-paths. Module nodes are suppressed when the file is already represented
-by more specific function/class nodes.
+## Callee lowering (`CalleeResolver`)
 
-## Language modules
+Raw callee text from the tree (e.g. `self.m`, `super().x`, `a.b`) is combined with **per-file bindings** (imports, instance typing, scopes) to produce target strings. Order matters: **super** / **self** handling runs before generic **simple** and **dotted-chain** resolution. Behavior is shared across languages where configs align (`self`/`super` prefixes); edge cases differ by language grammar and binding richness.
 
-[`extractors/python/`](extractors/python/) and [`extractors/js_ts/`](extractors/js_ts/)
-hold extractors; language-specific handlers (imports, typing, assignments) sit under
-[`handlers/python/`](handlers/python/) and [`handlers/js_ts/`](handlers/js_ts/).
+## Known limitations (general)
+
+- **Soundness:** graph is **heuristic**, not a type system; wrong or missing edges are expected under metaprogramming, conditional imports, and incomplete index scope.
+- **Staleness:** graph reflects last build; **watch** / rebuild needed after large refactors.
+- **Language coverage:** depth varies by language (Python/JS/TS today); new languages plug in via the same fact/materialise/merge shape but need their own extractors and tests.
+
+## Tests
+
+[`tests/unit/graph/`](../../../tests/unit/graph/) (invariants, extractors, resolver), [`tests/regression/graph/`](../../../tests/regression/graph/) (multi-file fixtures).
 
 ## Persistence
 
-Serialised to `graph.json` in the index directory. `schema_version` allows
-forward-compatible loading of older indexes.
+`graph.json` under the index directory; **`schema_version`** supports loading older serialised shapes when bumped.
