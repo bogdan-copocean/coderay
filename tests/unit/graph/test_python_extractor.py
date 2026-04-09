@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from coderay.core.models import NodeKind
+from coderay.graph.extractors.python.extractor import PythonGraphExtractor
 from coderay.graph.facts import (
     CallsEdge,
     ImportsEdge,
     InheritsEdge,
     SymbolDefinition,
 )
-from coderay.graph.file_context import FileContext
-from coderay.graph.plugins.python.extractor import PythonGraphExtractor
+from coderay.graph.lowering.name_bindings import FileNameBindings
 from coderay.parsing.base import get_parse_context
 
 FILE = "test.py"
@@ -20,7 +20,7 @@ def _extract(
     source: str,
     *,
     module_index: dict[str, str] | None = None,
-) -> tuple[list, FileContext]:
+) -> tuple[list, FileNameBindings]:
     """Build extractor from source snippet and return (facts, file_ctx)."""
     ctx = get_parse_context(FILE, source)
     ext = PythonGraphExtractor(ctx, module_index=module_index)
@@ -248,7 +248,7 @@ class TestTypeResolution:
             "class A:\n    pass\nclass B:\n    pass\ndef foo(x: A | B):\n    pass\n"
         )
         _, ctx = _extract(source)
-        union = ctx._instance_unions.get("x")
+        union = ctx.union_targets("x")
         assert union is not None
         assert len(union) == 2
 

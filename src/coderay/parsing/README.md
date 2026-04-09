@@ -15,7 +15,7 @@ and per-language configuration.
 - `cst_kind.py` — `classify_node(ntype, lang_cfg)` returns a `TraversalKind`
   (`IMPORT`, `FUNCTION`, `CLASS`, `DECORATOR`, `OTHER`) used by both the
   graph extractor and skeleton extractor.
-- `conventions.py` — naming helpers shared across plugins.
+- `conventions.py` — naming helpers shared across parsers and graph.
 
 ## Supported languages
 
@@ -26,7 +26,7 @@ TypeScript (`.ts`, `.tsx`).
 
 Three features share the same parse stack but walk it differently:
 
-- **Graph** (`graph/plugins/*/extractor.py`): `classify_node` + dispatch;
+- **Graph** (`graph/extractors/*/extractor.py`): `classify_node` + dispatch;
   function/class handlers recurse inside `_handle_*` with a scope stack;
   outer DFS returns after those to avoid double-walking.
 - **Skeleton** (`skeleton/extractor.py`): `classify_node` for structural

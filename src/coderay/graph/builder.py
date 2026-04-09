@@ -7,7 +7,7 @@ from pathlib import Path
 from coderay.core.config import get_config
 from coderay.core.index_workspace import IndexWorkspace
 from coderay.graph.code_graph import CodeGraph
-from coderay.graph.extractor import build_module_index, extract_graph_from_file
+from coderay.graph.graph_builder import GraphBuilder, build_project_index
 from coderay.graph.pipeline import run_post_merge_pipeline
 
 logger = logging.getLogger(__name__)
@@ -20,31 +20,10 @@ def build_graph(
     file_paths_and_contents: list[tuple[str, str]],
 ) -> CodeGraph:
     """Extract CodeGraph from files; resolve and prune phantom edges."""
+    del repo_root  # API compatibility; indexing does not use repo root yet.
     all_paths = [fp for fp, _ in file_paths_and_contents]
-    module_index = build_module_index(all_paths)
-
-    graph = CodeGraph()
-    for file_path, content in file_paths_and_contents:
-        try:
-            nodes, edges = extract_graph_from_file(
-                file_path,
-                content,
-                module_index=module_index,
-            )
-            graph.add_nodes_and_edges(nodes, edges)
-        except Exception as exc:
-            logger.exception("Graph extraction failed for %s: %s", file_path, exc)
-            raise
-
-    rewritten, pruned = run_post_merge_pipeline(graph)
-    logger.info(
-        "Graph built: %d nodes, %d edges (%d phantoms rewritten, %d pruned)",
-        graph.node_count,
-        graph.edge_count,
-        rewritten,
-        pruned,
-    )
-    return graph
+    project_index = build_project_index(all_paths)
+    return GraphBuilder(project_index).build(file_paths_and_contents)
 
 
 def save_graph(graph: CodeGraph, index_dir: str | Path) -> Path:
@@ -139,14 +118,10 @@ def build_and_save_graph(
             exclude.update(removed_paths)
         all_paths = [p for p in all_paths if p not in exclude]
         all_paths.extend(fp for fp, _ in files_with_content)
-        module_index = build_module_index(all_paths)
+        project_index = build_project_index(all_paths)
         for fp, content in files_with_content:
             try:
-                nodes, edges = extract_graph_from_file(
-                    fp,
-                    content,
-                    module_index=module_index,
-                )
+                nodes, edges = GraphBuilder(project_index).process_file(fp, content)
                 existing_graph.add_nodes_and_edges(nodes, edges)
             except Exception as exc:
                 logger.exception("Graph extraction failed for %s: %s", fp, exc)

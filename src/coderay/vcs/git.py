@@ -143,10 +143,6 @@ class Git:
         remove_paths = sorted(to_remove)
         return add_paths, remove_paths
 
-    def discover_python_files(self) -> list[Path]:
-        """List Python files; alias for discover_files(extensions={'.py'})."""
-        return self.discover_files(extensions={".py"})
-
     def discover_files(
         self,
         extensions: set[str] | None = None,
