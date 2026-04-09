@@ -30,7 +30,7 @@ def timed(phase: str) -> Callable[[F], F]:
 
 
 class TimedPhase:
-    """Context manager: measure block execution time."""
+    """Context manager: measure block execution time; log completion at DEBUG."""
 
     def __init__(self, phase: str, *, log: bool = True) -> None:
         self.phase = phase
@@ -42,10 +42,15 @@ class TimedPhase:
         self.t0 = time.perf_counter()
         return self
 
+    def elapsed_so_far(self) -> float:
+        """Return seconds since __enter__ (before __exit__)."""
+
+        return time.perf_counter() - self.t0
+
     def __exit__(self, *args: object) -> None:
         self.elapsed = time.perf_counter() - self.t0
         if self.log:
-            logger.info("%s: %.3fs", self.phase, self.elapsed)
+            logger.debug("%s: %.3fs", self.phase, self.elapsed)
 
 
 timed_phase = TimedPhase  # Convenience alias for context manager usage
