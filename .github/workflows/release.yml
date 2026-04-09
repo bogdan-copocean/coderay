@@ -1,0 +1,84 @@
+name: Release
+
+# One-time PyPI: project Settings → Publishing → add a trusted publisher:
+# GitHub → owner/repo → workflow `release.yml` (OIDC; no long-lived PyPI token in secrets).
+# Runs only when you push a semver tag (e.g. v1.1.2). Not on merges to main.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write # GitHub Release + attach wheels/sdist
+  id-token: write # PyPI Trusted Publishing (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Match pyproject version to tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python <<'PY'
+          import os, sys, tomllib
+          from pathlib import Path
+
+          tag = os.environ["TAG"]
+          expected = tag.removeprefix("v")
+          data = tomllib.loads(Path("pyproject.toml").read_text())
+          got = data["project"]["version"]
+          if got != expected:
+              print(f"pyproject.toml version {got!r} != tag {tag!r} (expected {expected!r})", file=sys.stderr)
+              sys.exit(1)
+          print(f"Version OK: {got}")
+          PY
+
+      - name: Extract release notes from CHANGELOG
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python <<'PY'
+          import os, re, sys
+          from pathlib import Path
+
+          tag = os.environ["TAG"]
+          ver = tag.removeprefix("v")
+          text = Path("CHANGELOG.md").read_text()
+          m = re.search(
+              rf"(?ms)^## {re.escape(ver)}[^\n]*\n(.*)(?=^## |\Z)",
+              text,
+          )
+          if not m:
+              print(f"No CHANGELOG.md section for ## {ver}", file=sys.stderr)
+              sys.exit(1)
+          Path("release_notes.md").write_text(m.group(1).strip() + "\n")
+          PY
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distributions
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: dist/*
+          fail_on_unmatched_files: false
+          generate_release_notes: false
