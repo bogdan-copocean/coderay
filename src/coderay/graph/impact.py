@@ -24,8 +24,10 @@ class ImpactAnalyzer:
         """Find nodes affected by a change to *symbol* (reverse BFS)."""
         g = self._graph
         resolution_warning: str | None = None
+        # Map user symbol to a graph node id when unambiguous.
         resolved = g.resolve_symbol(symbol)
 
+        # file::wrong.qual still in-file unique by trailing name → warn and fix up.
         if resolved is None:
             resolved, resolution_warning = self._fuzzy_resolve(symbol)
 
@@ -35,15 +37,19 @@ class ImpactAnalyzer:
         if resolved not in g._g:
             return self._not_found(symbol)
 
+        # Start BFS from the symbol plus inherited / aliased ids (see _impact_seeds).
         seeds = self._impact_seeds(resolved)
         visited: set[str] = set()
+        # (node_id, hop_count_from_seeds); hop 1 = direct dependents of a seed.
         queue: deque[tuple[str, int]] = deque()
+        # Direct dependents of each seed (CALLS/IMPORTS/INHERITS); real node ids only.
         for seed in seeds:
             if seed in g._g:
                 for pred in g._g.predecessors(seed):
                     if self._is_impact_edge(pred, seed):
                         queue.append((pred, 1))
 
+        # Same for phantom-string ids that alias a seed (bare name ↔ file::qual).
         for seed in seeds:
             for phantom in self._bare_name_targets(seed):
                 if phantom in g._g:
@@ -52,12 +58,14 @@ class ImpactAnalyzer:
                         if any(kind in _IMPACT_EDGE_KINDS for kind in kinds):
                             queue.append((pred, 1))
 
+        # Reverse walk: predecessors = upstream impact; hop caps radius.
         while queue:
             nid, hop = queue.popleft()
             if nid in visited:
                 continue
             visited.add(nid)
             node_data = g.get_node(nid)
+            # Under depth: walk further preds; skip MODULE as hop (expand from symbols).
             if (
                 hop < depth
                 and nid in g._g
@@ -74,6 +82,7 @@ class ImpactAnalyzer:
             for nid in visited
             if (n := g.get_node(nid)) is not None and nid != own_module
         ]
+        # Drop orphan MODULE nodes when the same file has a symbol hit.
         files_with_non_module = {
             n.file_path for n in raw_nodes if n.kind != NodeKind.MODULE
         }
@@ -95,14 +104,17 @@ class ImpactAnalyzer:
     # ------------------------------------------------------------------
 
     def _bare_name_targets(self, node_id: str) -> list[str]:
+        """Other graph ids that alias this node (phantom vs file::qual edges)."""
         g = self._graph
         node = g.get_node(node_id)
         if node is None:
             return []
         targets = []
+        # file::id vs qualified tail alone — both may appear as edge endpoints.
         if node.qualified_name != node_id and node.qualified_name in g._g:
             targets.append(node.qualified_name)
         sym_candidates = g._symbol_index.get(node.name, set())
+        # Unambiguous short name may exist as a phantom node id in the graph.
         if len(sym_candidates) == 1 and node.name in g._g:
             targets.append(node.name)
         qname = node.qualified_name
@@ -110,24 +122,29 @@ class ImpactAnalyzer:
         for candidate in g._g.nodes:
             if candidate == node_id or candidate in targets:
                 continue
+            # Only phantom nodes (no GraphNode payload) — avoid stealing real ids.
             if g._g.nodes[candidate].get("data") is not None:
                 continue
+            # e.g. bare phantom "Foo.bar" paired with file path + "::Foo.bar".
             if candidate.endswith(suffix):
                 targets.append(candidate)
         return targets
 
     def _impact_seeds(self, node_id: str) -> list[str]:
+        """BFS entry points: symbol plus parent-class methods when overriding."""
         g = self._graph
         seeds = [node_id]
         if "::" not in node_id:
             return seeds
         file_part, qualifier = node_id.split("::", 1)
+        # Not a nested method (no ".") — no extra inheritance seeds.
         if "." not in qualifier:
             return seeds
         class_qualifier, method_name = qualifier.rsplit(".", 1)
         class_node_id = f"{file_part}::{class_qualifier}"
         if class_node_id not in g._g:
             return seeds
+        # INHERITS: include parent class method as seed (shared call graph).
         for _, parent in g._g.out_edges(class_node_id):
             edge_kinds = g._require_edge_kinds(class_node_id, parent)
             if EdgeKind.INHERITS not in edge_kinds:
@@ -136,6 +153,7 @@ class ImpactAnalyzer:
             if parent_method in g._g:
                 seeds.append(parent_method)
             else:
+                # Try ClassName.method short form when full parent_method id missing.
                 parent_class_name = _last_component(parent)
                 fallback = g.resolve_symbol(f"{parent_class_name}.{method_name}")
                 if fallback and fallback not in seeds:
@@ -173,6 +191,7 @@ class ImpactAnalyzer:
         return self._not_found(symbol)
 
     def _fuzzy_resolve(self, symbol: str) -> tuple[str | None, str | None]:
+        """Resolve file::… by matching the last name segment in that file, if unique."""
         g = self._graph
         if "::" not in symbol:
             return None, None
@@ -180,6 +199,7 @@ class ImpactAnalyzer:
         file_nodes = g._file_index.get(file_part, set())
         if not file_nodes:
             return None, None
+        # Compare trailing identifier only (e.g. ...::Foo.bar vs ...::Other.bar).
         method_name = qualifier.rsplit(".", 1)[-1] if "." in qualifier else qualifier
         candidates = [
             nid
