@@ -1,0 +1,7 @@
+__CANONICAL_PATH__:86-103
+class Repository(Generic[T]):
+    """In-memory repository with basic operations."""
+__CANONICAL_PATH__:97-99
+    def get(self, key: int) -> T | None:
+        """Return the item for the key, if present."""
+        ...

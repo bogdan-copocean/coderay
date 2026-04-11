@@ -1,0 +1,32 @@
+__CANONICAL_PATH__:5-5
+import { UserRepository } from '../../fixtures/js_ts/app/data/userRepository';
+__CANONICAL_PATH__:6-6
+import type { ApiResponse, UserRecord } from '../../fixtures/js_ts/app/types';
+__CANONICAL_PATH__:8-8
+type Handler<T> = (value: T) => T;
+__CANONICAL_PATH__:10-12
+interface ServiceContract {
+__CANONICAL_PATH__:14-29
+class CoreService implements ServiceContract {
+__CANONICAL_PATH__:15-15
+    constructor(private readonly repository: UserRepository) {}
+        ...
+__CANONICAL_PATH__:17-23
+    async loadProfile(userId: number): Promise<ApiResponse<UserRecord>> {
+        ...
+__CANONICAL_PATH__:25-28
+    withClosure(prefix: string): Handler<string> {
+        ...
+__CANONICAL_PATH__:26-26
+        (value: string): string => `${prefix}:${value}`
+            ...
+__CANONICAL_PATH__:31-37
+async function buildProfileLabel(userId: number): Promise<string> {
+    ...
+__CANONICAL_PATH__:39-41
+const buildService = (): CoreService => {
+    return new CoreService(new UserRepository());
+};
+__CANONICAL_PATH__:39-41
+(): CoreService => {
+    ...

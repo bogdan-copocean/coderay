@@ -1,0 +1,8 @@
+__CANONICAL_PATH__:14-29
+class CoreService implements ServiceContract {
+__CANONICAL_PATH__:25-28
+    withClosure(prefix: string): Handler<string> {
+        ...
+__CANONICAL_PATH__:26-26
+        (value: string): string => `${prefix}:${value}`
+            ...
