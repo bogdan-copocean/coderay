@@ -81,6 +81,42 @@ class TestGetFileSkeleton:
             f.write_text("def greet(): pass")
             result = asyncio.run(get_file_skeleton("hello.py"))
             assert "def greet" in result
+            assert str(f.resolve()) in result
+            assert f"{f.resolve()}:1-1" in result
+
+    def test_file_line_range_param_narrows(self, tmp_path):
+        """file_line_range narrows skeleton."""
+        from coderay.mcp_server.server import get_file_skeleton
+
+        with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
+            mock_idx.return_value = tmp_path / ".coderay"
+            f = tmp_path / "hello.py"
+            f.write_text("def greet(): pass")
+            result = asyncio.run(get_file_skeleton("hello.py", file_line_range="1-1"))
+            assert "def greet" in result
+
+    def test_path_suffix_parses_without_file_line_range_param(self, tmp_path):
+        """:START-END on path narrows without file_line_range."""
+        from coderay.mcp_server.server import get_file_skeleton
+
+        with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
+            mock_idx.return_value = tmp_path / ".coderay"
+            f = tmp_path / "hello.py"
+            f.write_text("def greet(): pass")
+            result = asyncio.run(get_file_skeleton("hello.py:1-1"))
+            assert "def greet" in result
+            assert str(f.resolve()) in result
+
+    def test_file_line_range_param_conflicts_with_suffix(self, tmp_path):
+        """Cannot pass both path suffix and file_line_range."""
+        from coderay.mcp_server.server import get_file_skeleton
+
+        with patch("coderay.mcp_server.server._resolve_index_dir") as mock_idx:
+            mock_idx.return_value = tmp_path / ".coderay"
+            f = tmp_path / "hello.py"
+            f.write_text("def greet(): pass")
+            with pytest.raises(ValueError):
+                asyncio.run(get_file_skeleton("hello.py:1-1", file_line_range="2-2"))
 
     def test_path_traversal_rejected(self, tmp_path):
         """Paths outside workspace (e.g. ../../secrets) are rejected."""

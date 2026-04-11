@@ -37,8 +37,10 @@ mcp = FastMCP(
         "\n"
         "- semantic_search: search code by meaning. Best for "
         "'how/where' questions. Use grep for exact symbol lookup.\n"
-        "- get_file_skeleton: signatures and docstrings only, no bodies. "
-        "Check a file's API before reading full source. "
+        "- get_file_skeleton: signatures and docstrings only, no bodies; "
+        "absolute path line per symbol (with optional symbol line range suffix) "
+        "for filepath:START-END style refs. "
+        "Optional file line range narrows output. "
         "Works without the index.\n"
         "- get_impact_radius: reverse dependency traversal from the code "
         "graph. Shows callers/dependents of a function or class. "
@@ -177,9 +179,10 @@ async def semantic_search(
 @mcp.tool(
     description=(
         "Extracts class/function signatures and docstrings from a file — "
-        "no bodies. Significantly fewer tokens than reading the full source "
-        "(a 500-line file typically compresses to ~100 lines of skeleton). "
-        "Use this before deciding whether to read a file in full. "
+        "no bodies. Each symbol is preceded by the absolute file path and "
+        "symbol line range suffix (1-based inclusive) for filepath:START-END refs. "
+        "Optional file line range via path suffix :START-END or file_line_range "
+        "(same meaning; do not pass both). Narrows to declarations fully within that range. "
         "Does not require the index."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
@@ -188,7 +191,12 @@ async def semantic_search(
 async def get_file_skeleton(
     file_path: Annotated[
         str,
-        Field(description="Absolute or relative path to the file"),
+        Field(
+            description=(
+                "Path to the file. Optional :START-END suffix (same as file_line_range); "
+                "do not combine with file_line_range."
+            ),
+        ),
     ],
     include_imports: Annotated[
         bool,
@@ -206,18 +214,46 @@ async def get_file_skeleton(
             ),
         ),
     ] = None,
+    file_line_range: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional file line range as START-END (1-based inclusive). "
+                "Do not combine with a :START-END suffix on file_path."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Get file API surface (signatures, no bodies)."""
     from coderay.skeleton.extractor import extract_skeleton
+    from coderay.skeleton.path_range import (
+        parse_file_line_range,
+        parse_skeleton_file_arg,
+    )
+
+    try:
+        path_str, rng_suffix = parse_skeleton_file_arg(file_path, parse_suffix=True)
+    except ValueError as e:
+        raise ValueError(str(e)) from e
+    line_range: tuple[int, int] | None = rng_suffix
+    if file_line_range:
+        if line_range is not None:
+            raise ValueError(
+                "Use either file_path :START-END suffix or file_line_range, not both."
+            )
+        try:
+            line_range = parse_file_line_range(file_line_range)
+        except ValueError as e:
+            raise ValueError(str(e)) from e
 
     workspace_root = _resolve_index_dir().parent.resolve()
-    candidate = (workspace_root / file_path).resolve()
+    candidate = (workspace_root / path_str).resolve()
     try:
         candidate.relative_to(workspace_root)
     except ValueError:
         raise FileNotFoundError(f"File not found: {file_path}")
     if not candidate.is_file():
-        raise FileNotFoundError(f"File not found: {file_path}")
+        raise FileNotFoundError(f"File not found: {path_str}")
     content = await asyncio.to_thread(
         candidate.read_text, encoding="utf-8", errors="replace"
     )
@@ -227,6 +263,7 @@ async def get_file_skeleton(
         content,
         include_imports=include_imports,
         symbol=symbol,
+        line_range=line_range,
     )
 
 
