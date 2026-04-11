@@ -4,15 +4,17 @@ This project has a CodeRay MCP server available. Use it to navigate the codebase
 efficiently instead of reading full files.
 
 **Reading files is expensive.** A 400-line file costs ~3,600 tokens. Its skeleton
-costs ~830. A targeted `semantic_search` result costs ~400. Prefer CodeRay lookups
-over full-file reads wherever the question is about structure, intent, or dependency.
+costs less: each symbol is preceded by the file’s **absolute path** and **symbol line range**
+suffix (`:START-END`); optional **file line range** keeps only symbols fully inside that window.
+A targeted `semantic_search` result costs ~400. Prefer CodeRay lookups over full-file
+reads wherever the question is about structure, intent, or dependency.
 
 ## MCP tools
 
 | Tool | When to use |
 |------|-------------|
 | `semantic_search` | "How/where" questions — intent-based lookup across the whole index |
-| `get_file_skeleton` | Before reading a file — get all signatures and docstrings without bodies |
+| `get_file_skeleton` | Before reading a file — signatures and docstrings without bodies; symbol line range + optional file line range |
 | `get_impact_radius` | Before refactoring — see every caller and dependent of a function or class |
 | `coderay://index/status` | Check the index is fresh before relying on results |
 
@@ -21,7 +23,7 @@ over full-file reads wherever the question is about structure, intent, or depend
 | Command | When to use |
 |---------|-------------|
 | `coderay search "query"` | Same as `semantic_search` — intent-based lookup from the terminal |
-| `coderay skeleton FILE` | Same as `get_file_skeleton` — print signatures without bodies |
+| `coderay skeleton FILE` | Like `get_file_skeleton` — path and symbol line range on each block; file line range via `--lines` or `FILE:START-END` (not both) |
 | `coderay impact SYMBOL` | Same as `get_impact_radius` — blast radius from the terminal |
 | `coderay status` | Check index freshness before relying on results |
 
