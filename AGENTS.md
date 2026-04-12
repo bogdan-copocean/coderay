@@ -82,6 +82,6 @@ Each `[[index.roots]]` entry may set `include` to limit indexed paths.
 
 Indexing, excludes, search tuning, and embedder settings live in `.coderay.toml`. If behavior looks wrong, check config, then `coderay status`.
 
-## Portable agent instructions
+## Portable navigation skill
 
-For Cursor vs other clients, see [SKILLS.md](SKILLS.md).
+Full procedure (single file for all agents): [SKILLS.md](SKILLS.md).
