@@ -182,8 +182,8 @@ async def semantic_search(
         "no bodies. Each symbol is preceded by the absolute file path and "
         "symbol line range suffix (1-based inclusive) for filepath:START-END refs. "
         "Optional file line range via path suffix :START-END or file_line_range "
-        "(same meaning; do not pass both). Narrows to declarations fully within that range. "
-        "Does not require the index."
+        "(same meaning; do not pass both). Narrows to declarations fully within that"
+        "range. Does not require the index."
     ),
     annotations=READ_ONLY_ANNOTATIONS,
     tags={"analysis"},
@@ -193,8 +193,8 @@ async def get_file_skeleton(
         str,
         Field(
             description=(
-                "Path to the file. Optional :START-END suffix (same as file_line_range); "
-                "do not combine with file_line_range."
+                "Path to the file. Optional :START-END suffix (same as file_line_range)"
+                "; do not combine with file_line_range."
             ),
         ),
     ],

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from coderay.parsing.base import BaseTreeSitterParser, get_parse_context
+from coderay.parsing.base import BaseTreeSitterParser, TSNode, get_parse_context
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +104,10 @@ class SkeletonTreeSitterParser(BaseTreeSitterParser):
         if line_range is not None:
             a, b = line_range
             self._file_line_range0 = (a - 1, b - 1)
-        self._root_node = None
+        self._root_node: TSNode | None = None
         self._abs_display = str(Path(self._ctx.file_path).resolve())
-        # Some (e.g. decorated) defs already printed path:range; skip duplicate on inner _dfs.
+        # Some (e.g. decorated) defs already printed path:range;
+        # skip duplicate on inner _dfs.
         self._omit_next_skeleton_path_line = False
 
     def _rows_vs_line_filter(self, ns: int, ne: int, *, contained: bool) -> bool:

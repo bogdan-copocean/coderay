@@ -359,8 +359,8 @@ def maintain(ctx: click.Context) -> None:
     default=None,
     metavar="START-END",
     help=(
-        "File line range (1-based inclusive); keep only symbols fully within this span. "
-        "Do not combine with a :START-END suffix on FILE_PATH (same meaning)."
+        "File line range (1-based inclusive); keep only symbols fully within this span."
+        " Do not combine with a :START-END suffix on FILE_PATH (same meaning)."
     ),
 )
 def skeleton(
