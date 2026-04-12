@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-04-12)
+
+- **Skeleton** — optional file line range: narrow symbols to those fully inside a span (`FILE:START-END`, CLI `--lines`, MCP `file_line_range`); output reflects the requested range.
+- **Docs** — add `SKILLS.md` (portable navigation for agents); README and related documentation improvements.
+
 ## 1.1.1 (2026-04-09)
 
 - **Graph** — refactor builder toward composition (refs, `ProjectIndex`, callee strategy hook, fact metadata) ([#3](https://github.com/bogdan-copocean/coderay/pull/3)).
