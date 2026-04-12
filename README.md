@@ -4,38 +4,71 @@
 [![License](https://img.shields.io/github/license/bogdan-copocean/coderay)](LICENSE)
 [![CI](https://github.com/bogdan-copocean/coderay/actions/workflows/ci.yml/badge.svg)](https://github.com/bogdan-copocean/coderay/actions/workflows/ci.yml)
 
-**CodeRay** ships a **local code index** with **semantic search**, **file skeletons** (signatures and docstrings, no bodies), and **blast radius** (callers, imports, inheritance) — plus an **MCP stdio server** so agents can use the same tools. Ask *by meaning*, skim **API shape**, trace **who calls what**, then read implementation when it matters: fewer tokens, less noise, answers anchored to the right files.
+**CodeRay** builds a **local code index** that gives AI agents a smarter way to explore a codebase — reading only what they need, not whole files.
 
-**No LLM inside CodeRay, no network, no API key – it runs locally and offline on your machine.**
+**Runs locally. No LLM. No network. No API key.**
+
+## The problem
+
+AI agents exploring a codebase default to reading whole files – even when one function is all that's needed. Every unnecessary line **burns tokens** and **floods the context window**: driving up API costs and noise with every read.
+
+The root cause is simple: agents know the **file paths** but no finer location. Without knowing *where* in a file something lives, they have no choice but to read everything.
+
+**CodeRay fixes this.** Every tool returns **file paths with exact line ranges** — so agents locate first, then read only the lines that matter.
+
+## How it works
+
+CodeRay exposes three primitives, each returning **paths + line ranges**:
+
+| Tool | Question it answers | What agents get |
+|------|---------------------|-----------------|
+| **search** | *Where is the code that does X?* | Relevant chunks with file paths and line ranges |
+| **skeleton** | *What's the shape of this file?* | Signatures + docstrings only, each tagged with its line range |
+| **impact** | *What breaks if I change this?* | Callers, imports, and inheritors — located by line range |
+
+### The two-phase flow
+
+1. **Locate** — run `search`, `skeleton`, or `impact` to find what's needed. Every result includes a file path and a symbol-level line range.
+2. **Read precisely** — use those line ranges to load only the relevant snippet. Skip the rest.
+
+This keeps context windows lean and agent reasoning focused. CodeRay is not a replacement for `grep` — it fills the gap when exact names are unknown or a map is needed before reading.
+
+### Token savings (tiktoken, `cl100k_base`)
+
+| File | Lines | Full read | Skeleton | Savings | % reduction |
+|------|-------|-----------|----------|---------|-------------|
+| `src/coderay/graph/impact.py` | 249 | 2,333 | 693 | **3.4×** | **70%** |
+| `src/coderay/cli/commands.py` | 584 | 4,327 | 1,906 | **2.3×** | **56%** |
+| `src/coderay/pipeline/indexer.py` | 408 | 3,065 | 1,433 | **2.1×** | **53%** |
+
+| Query | Search hit tokens | vs full `indexer.py` read |
+|-------|-------------------|---------------------------|
+| "how are files re-indexed on change" | 479 | **~6x cheaper** |
 
 
 ## Tools
 
-**CodeRay sits next to ripgrep, not instead of it.** Ripgrep when you know the string or symbol; search, skeleton, and impact when you care about *intent*, *structure*, or *dependencies*—then open the file when you need real implementation detail.
+### Semantic search
 
-Semantic search is retrieval, not proof: hits can miss or rank oddly. Treat them as candidates, confirm with a skeleton or read, and keep the index fresh with `coderay watch` or `coderay build` when things drift.
-
-Skeleton shows API shape and docstrings, not every branch. Use **search** and **impact** to narrow where to look, then read the file (or spans) when you need control flow or line-accurate edits. CodeRay trims noise on those round trips; it does not forbid them.
-
-**Semantic search** — “How/where” by meaning.
+Agents search by **meaning**, not by name — useful when the exact function or class is unknown. Results return **file paths with line ranges** pointing at relevant chunks. Treat them as candidates: confirm with `skeleton` or a ranged read before acting. Keep the index fresh with `coderay watch` or `coderay build` when the tree drifts.
 
 <img src="assets/coderay-search.gif" alt="coderay search demo" width="100%" />
 
 ### Blast radius
 
-Callers and dependents (calls, imports, inheritance).
+Shows **callers, imports, and inheritance** for a symbol before it changes. Each result is tied to a file path and line range — combine with `skeleton` or ranged reads on those locations when bodies are needed.
 
 <img src="assets/coderay-impact.gif" alt="coderay impact demo" width="100%" />
 
 ### Skeleton
 
-Signatures and docstrings only; API surface without bodies.
+Returns **signatures and docstrings only** — no function bodies. Every block is tagged with its path and line range so subsequent reads can be scoped to exactly those lines. A full file read should happen only when the skeleton isn't enough.
 
 <img src="assets/coderay-skeleton.gif" alt="coderay skeleton demo" width="100%" />
 
 ### Full read
 
-Same file as skeleton: raw source costs more tokens.
+**Same file, raw source — for comparison:**
 
 <img src="assets/coderay-fullread.gif" alt="same file, raw source head" width="100%" />
 
@@ -50,7 +83,7 @@ Same file as skeleton: raw source costs more tokens.
 
 ## MCP
 
-Same tools as above, exposed to the agent so it can search, sketch structure, and trace impact instead of vacuuming whole files by default. Point the server at a checkout whose root contains `.coderay.toml` (`CODERAY_REPO_ROOT` below). For choosing tools versus a plain read, see [AGENTS.md](AGENTS.md).
+Same three tools over MCP: search, skeleton (paths and line ranges), and impact—so **AI agents** can **narrow context** before full-file reads. Point the server at a checkout whose root contains `.coderay.toml` (`CODERAY_REPO_ROOT` below). For tool choice versus a plain read, see [AGENTS.md](AGENTS.md).
 
 ```bash
 which coderay-mcp
@@ -69,31 +102,6 @@ which coderay-mcp
 ```
 
 `CODERAY_REPO_ROOT` must be the directory that contains `.coderay.toml`. More detail: [`mcp_server/README.md`](src/coderay/mcp_server/README.md).
-
-
-## Why this matters
-
-Noisy context windows make models confident about the wrong code. CodeRay front-loads **intent** (search), **shape** (skeleton), and **dependencies** (impact) so the expensive read happens after you have a map—not instead of ever reading implementation when control flow matters.
-
-### Token savings (tiktoken, `cl100k_base`)
-
-Measured on this repo after a full index.
-
-
-| File                               | Lines | Full read | Skeleton | Savings  |
-| ---------------------------------- | ----- | --------- | -------- | -------- |
-| `src/coderay/pipeline/indexer.py`  | 400   | 3,024     | 757      | **4.0x** |
-| `src/coderay/graph/code_graph.py`  | 500   | 4,261     | 1,022    | **4.2x** |
-| `src/coderay/mcp_server/server.py` | 316   | 2,268     | 1,313    | **1.7x** |
-
-
-
-| Query                                | Search hit tokens | vs full `indexer.py` read |
-| ------------------------------------ | ----------------- | ------------------------- |
-| "how are files re-indexed on change" | 479               | **~6x cheaper**           |
-
-
-*Not guarantees — model, chunks, and files affect counts.*
 
 
 ## Features
