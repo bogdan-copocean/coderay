@@ -37,8 +37,11 @@ class GraphConfig:
 
 @dataclass
 class SkeletonConfig:
-    """Skeleton-only: docstrings and pass-through at module scope."""
+    """Skeleton: declaration types (chunker-style), docstrings, module pass-through."""
 
+    # Node types that emit as declarations. JS/TS omits export_statement (unwrap) and
+    # lexical_declaration (top_level_expr_types). See chunk_types in this file.
+    symbol_types: tuple[str, ...]
     docstring_expr_type: str = "expression_statement"
     top_level_expr_types: tuple[str, ...] = ("expression_statement",)
     body_block_types: tuple[str, ...] = ("block", "statement_block")
@@ -102,8 +105,16 @@ _PYTHON_CST_DISPATCH = CstDispatchConfig(
 )
 
 
+_PY_CHUNK_TYPES: tuple[str, ...] = (
+    "function_definition",
+    "class_definition",
+    "decorated_definition",
+)
+
+
 def _python_skeleton() -> SkeletonConfig:
     return SkeletonConfig(
+        symbol_types=_PY_CHUNK_TYPES,
         docstring_expr_type="expression_statement",
         top_level_expr_types=("expression_statement",),
         body_block_types=("block",),
@@ -111,13 +122,7 @@ def _python_skeleton() -> SkeletonConfig:
 
 
 def _python_chunker() -> ChunkerConfig:
-    return ChunkerConfig(
-        chunk_types=(
-            "function_definition",
-            "class_definition",
-            "decorated_definition",
-        ),
-    )
+    return ChunkerConfig(chunk_types=_PY_CHUNK_TYPES)
 
 
 _PYTHON_GRAPH = GraphConfig(
@@ -172,8 +177,33 @@ _JS_TS_GRAPH = GraphConfig(
 )
 
 
+# Chunker includes export_statement and lexical_declaration; skeleton unwraps exports
+# and treats top-level lexical_declaration via top_level_expr_types.
+_JS_TS_CHUNK_TYPES: tuple[str, ...] = (
+    "function_declaration",
+    "class_declaration",
+    "method_definition",
+    "arrow_function",
+    "export_statement",
+    "lexical_declaration",
+    "interface_declaration",
+    "type_alias_declaration",
+)
+
+_JS_TS_SKELETON_SYMBOL_TYPES: tuple[str, ...] = (
+    "function_declaration",
+    "class_declaration",
+    "method_definition",
+    "arrow_function",
+    "interface_declaration",
+    "type_alias_declaration",
+    "type_declaration",
+)
+
+
 def _js_ts_skeleton() -> SkeletonConfig:
     return SkeletonConfig(
+        symbol_types=_JS_TS_SKELETON_SYMBOL_TYPES,
         docstring_expr_type="expression_statement",
         top_level_expr_types=("expression_statement", "lexical_declaration"),
         body_block_types=("statement_block",),
@@ -181,18 +211,7 @@ def _js_ts_skeleton() -> SkeletonConfig:
 
 
 def _js_ts_chunker() -> ChunkerConfig:
-    return ChunkerConfig(
-        chunk_types=(
-            "function_declaration",
-            "class_declaration",
-            "method_definition",
-            "arrow_function",
-            "export_statement",
-            "lexical_declaration",
-            "interface_declaration",
-            "type_alias_declaration",
-        ),
-    )
+    return ChunkerConfig(chunk_types=_JS_TS_CHUNK_TYPES)
 
 
 @dataclass

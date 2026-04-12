@@ -1,0 +1,4 @@
+__CANONICAL_PATH__:161-171
+def local_imports_example(numbers: list[int]) -> dict[str, int]:
+    """Use local imports to exercise import detection inside function bodies."""
+    ...

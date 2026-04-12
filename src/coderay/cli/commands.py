@@ -340,7 +340,7 @@ def maintain(ctx: click.Context) -> None:
 
 
 @cli.command()
-@click.argument("file_path", type=click.Path(exists=True, path_type=Path))
+@click.argument("file_path", type=str)
 @click.option(
     "--include-imports",
     is_flag=True,
@@ -353,17 +353,53 @@ def maintain(ctx: click.Context) -> None:
     default=None,
     help="Filter to a specific class or top-level function by name.",
 )
+@click.option(
+    "--lines",
+    "line_range",
+    default=None,
+    metavar="START-END",
+    help=(
+        "File line range (1-based inclusive); keep only symbols fully within this span."
+        " Do not combine with a :START-END suffix on FILE_PATH (same meaning)."
+    ),
+)
 def skeleton(
-    file_path: Path,
+    file_path: str,
     include_imports: bool,
     symbol: str | None,
+    line_range: str | None,
 ) -> None:
     """Print signatures without bodies (cheaper than reading the full file)."""
     from coderay.skeleton.extractor import extract_skeleton
+    from coderay.skeleton.path_range import (
+        parse_file_line_range,
+        parse_skeleton_file_arg,
+    )
 
-    content = file_path.read_text(encoding="utf-8", errors="replace")
+    try:
+        path_str, rng_from_path = parse_skeleton_file_arg(file_path, parse_suffix=True)
+    except ValueError as e:
+        raise click.BadParameter(str(e)) from e
+    file_line_range = rng_from_path
+    if line_range:
+        if file_line_range is not None:
+            raise click.UsageError(
+                "Use either a path ending with :START-END or --lines, not both."
+            )
+        try:
+            file_line_range = parse_file_line_range(line_range)
+        except ValueError as e:
+            raise click.BadParameter(str(e), param_hint="--lines") from e
+    resolved = Path(path_str)
+    if not resolved.is_file():
+        raise click.BadParameter(f"not a file: {path_str}", param_hint="file_path")
+    content = resolved.read_text(encoding="utf-8", errors="replace")
     out = extract_skeleton(
-        file_path, content, include_imports=include_imports, symbol=symbol
+        resolved,
+        content,
+        include_imports=include_imports,
+        symbol=symbol,
+        line_range=file_line_range,
     )
     click.echo(out)
 

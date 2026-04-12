@@ -1,0 +1,3 @@
+__CANONICAL_PATH__:31-37
+async function buildProfileLabel(userId: number): Promise<string> {
+    ...

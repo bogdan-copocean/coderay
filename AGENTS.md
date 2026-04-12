@@ -1,77 +1,87 @@
 # CodeRay — agent guidance
 
-This project has a CodeRay MCP server available. Use it to navigate the codebase
-efficiently instead of reading full files.
+CodeRay builds a **local index** so agents can **locate** code with paths and line ranges, then **read only what matters** — not whole files by default.
 
-**Reading files is expensive.** A 400-line file costs ~3,600 tokens. Its skeleton
-costs ~830. A targeted `semantic_search` result costs ~400. Prefer CodeRay lookups
-over full-file reads wherever the question is about structure, intent, or dependency.
+**Runs locally. No LLM in the index. No API key for indexing.**
+
+## Problem and fix
+
+Agents often read entire files because they lack finer location. That burns tokens and floods context. CodeRay answers **where** and **what shape** first: every tool returns **file paths with line ranges** so you narrow, then read a slice.
+
+## Two-phase flow
+
+1. **Locate** — `semantic_search`, `get_file_skeleton`, or `get_impact_radius` (CLI: `coderay search`, `coderay skeleton`, `coderay impact`). Results include path + symbol-level range.
+2. **Read precisely** — load only the line range (or minimal span) you need. Full-file reads only when skeleton + range is not enough.
+
+CodeRay augments **grep**, not replaces it: use grep for **exact** strings or symbols; use semantic search for intent when the target name is unknown.
+
+## Token discipline
+
+Full-file reads are expensive; skeleton and targeted search are cheaper. Illustrative numbers and the demo table live in [README.md](README.md). Prefer skeleton or search hits, then ranged reads.
 
 ## MCP tools
 
 | Tool | When to use |
 |------|-------------|
-| `semantic_search` | "How/where" questions — intent-based lookup across the whole index |
-| `get_file_skeleton` | Before reading a file — get all signatures and docstrings without bodies |
-| `get_impact_radius` | Before refactoring — see every caller and dependent of a function or class |
-| `coderay://index/status` | Check the index is fresh before relying on results |
+| `semantic_search` | "How/where" questions — intent-based lookup across the index |
+| `get_file_skeleton` | Before reading a file — signatures and docstrings; symbol range + optional file line range |
+| `get_impact_radius` | Before refactoring — callers, imports, inheritors |
+| `coderay://index/status` | Check freshness before trusting search/impact |
 
-## CLI tools (for humans)
+Search results are **candidates** — confirm with `get_file_skeleton` or a ranged read before large edits.
 
-| Command | When to use |
-|---------|-------------|
-| `coderay search "query"` | Same as `semantic_search` — intent-based lookup from the terminal |
-| `coderay skeleton FILE` | Same as `get_file_skeleton` — print signatures without bodies |
-| `coderay impact SYMBOL` | Same as `get_impact_radius` — blast radius from the terminal |
-| `coderay status` | Check index freshness before relying on results |
+**MCP setup** — server runs against a tree whose root contains `.coderay.toml`; see [README.md](README.md) and [`src/coderay/mcp_server/README.md`](src/coderay/mcp_server/README.md). Env: `CODERAY_REPO_ROOT` = that root.
 
-## CodeRay is an augmentation, not a replacement for grep
+## CLI (human or scripted)
 
-- **Exact symbol or string lookup** → use grep/ripgrep. It is faster and more precise.
-- **Intent-based questions** ("where is retry logic", "how is config loaded") → use `semantic_search`.
-- **File API surface** → use `get_file_skeleton` before deciding to read the full source.
-- **Dependency analysis** → use `get_impact_radius` before touching a function.
-- **"Which files import this module?"** → grep is fine. **"What calls this method across subclasses?"** → `get_impact_radius`.
+| Command | Role |
+|---------|------|
+| `coderay search "query"` | Same intent as `semantic_search` |
+| `coderay skeleton FILE` | Same as `get_file_skeleton`; `--lines` / `FILE:START-END`; `--symbol` |
+| `coderay impact SYMBOL` | Same as `get_impact_radius` |
+| `coderay status` | Index metadata and freshness |
+| `coderay build` / `coderay watch` | Rebuild or incremental index |
+
+## Grep vs semantic search
+
+- **Exact symbol or string** → grep/ripgrep.
+- **Intent** ("where is retry logic", "how is config loaded") → `semantic_search`.
+- **File API surface** → `get_file_skeleton` before a full read.
+- **Blast radius** → `get_impact_radius` before changing a symbol.
+- **"Which files import this module?"** → grep is fine. **"What calls this across subclasses?"** → `get_impact_radius`.
 
 ## When the index might be stale
 
-Results can be stale if files changed since the last build. Signs of staleness:
-- `semantic_search` returns results that don't match the current code
-- `get_impact_radius` shows no callers for something that's clearly used
-- `index_status` shows an old commit or `INCOMPLETE` state
+- Results do not match the tree, impact shows no callers where there should be, or status shows an old commit / `INCOMPLETE`.
 
-Ask the user to run `coderay build` (or `coderay watch` if not already running) to refresh.
+Ask the user to run `coderay build` or ensure `coderay watch` is running.
 
 ## Node ID format for `get_impact_radius`
 
 ```
 src/models.py::User.save     # class method
 src/utils.py::parse_config   # top-level function
-parse_config                 # bare name — works if unambiguous in the graph
+parse_config                 # bare name if unambiguous
 ```
 
-If a bare name is ambiguous the tool returns a list of candidates to choose from.
+Ambiguous bare names return candidates to disambiguate.
 
 ## Multi-repo workspaces
 
-CodeRay can index multiple repositories under one index. Each repo has an alias
-defined in `.coderay.toml`. Pass `repos: ["my-service"]` to `semantic_search` to
-scope results to one repo, or `repos: ["*"]` for workspace-wide search.
-Default scope is set by `search.default_scope` in the config.
+Each repo has an alias in `.coderay.toml`. Scope `semantic_search` with `repos: ["alias"]` or `repos: ["*"]`; default is `search.default_scope`.
 
 ## Monorepo / subtree indexing
 
-Each `[[index.roots]]` entry accepts an optional `include` list to restrict indexing
-to specific subdirectories. Only files under those paths are indexed and searched.
+Each `[[index.roots]]` entry may set `include` to limit indexed paths.
 
 ## Automatic deindexing
 
-`.coderay.toml` is the source of truth for what belongs in the index. If a file is
-deleted, its path is removed from `include`, or it matches a new `exclude_patterns`
-entry — it is automatically removed from the index on the next build or watch cycle.
+`.coderay.toml` defines the index. Removed paths, `include` changes, or new `exclude_patterns` drop stale files on the next build or watch cycle.
 
 ## Source of truth
 
-All behaviour — what to index, what to exclude, search tuning, embedding backend —
-is in `.coderay.toml` at the project root. If something seems off, check the config
-there first, then run `coderay status` to verify the index reflects it.
+Indexing, excludes, search tuning, and embedder settings live in `.coderay.toml`. If behavior looks wrong, check config, then `coderay status`.
+
+## Portable navigation skill
+
+Full procedure (single file for all agents): [SKILLS.md](SKILLS.md).

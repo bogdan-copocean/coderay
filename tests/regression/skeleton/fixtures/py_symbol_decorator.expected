@@ -1,0 +1,8 @@
+__CANONICAL_PATH__:106-114
+def decorator(fn: Callable[..., T]) -> Callable[..., T]:
+    """Example decorator that logs and forwards calls."""
+    ...
+__CANONICAL_PATH__:109-112
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        """Log the call and forward to the wrapped function."""
+        ...

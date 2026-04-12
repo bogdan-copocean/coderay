@@ -6,8 +6,9 @@ demand (not stored in the index). Works without a built index.
 
 ## How it works
 
-`extractor.py` uses tree-sitter to parse the file, then walks the CST using
-`classify_node` from `parsing/cst_kind.py` to identify structural boundaries.
+`extractor.py` uses tree-sitter to parse the file, then walks the CST; declaration
+nodes come from `LanguageConfig.skeleton.symbol_types` (per language, like chunk
+types in `parsing/languages.py`), with shape from `cst` function/class/decorator sets.
 Function and method bodies are replaced with `...`. Class headers are kept as
 context even when filtering to a specific symbol.
 
