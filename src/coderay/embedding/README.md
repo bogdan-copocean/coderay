@@ -27,25 +27,33 @@ Maps code chunks to dense vectors for storage and query.
 Run `coderay build --full` after any change to `[embedder]` config. Vectors
 from different models are not compatible.
 
-## If indexing is slow
+## Defaults and trade-offs
 
-The default model (BGE Small, ~67MB via fastembed / ~25MB via MLX bf16) is a
-good balance of speed and retrieval quality. If your repo is large and the first
-build takes too long, consider a lighter model:
+The default is **MiniLM L6** (`sentence-transformers/all-MiniLM-L6-v2` on CPU,
+`mlx-community/all-MiniLM-L6-v2-bf16` on MLX): fast indexing and good enough
+semantic search for most workflows. For **stronger embeddings** (often better
+retrieval on code), switch to **BGE Small** — expect a heavier download and more
+compute than MiniLM.
 
-| Model | Backend | Size | Dimensions | Trade-off |
-|-------|---------|------|------------|-----------|
-| `BAAI/bge-small-en-v1.5` | fastembed | ~67MB | 384 | **Default.** Best retrieval quality in this size class. |
-| `sentence-transformers/all-MiniLM-L6-v2` | fastembed | ~90MB | 384 | Widely used, slightly lower code retrieval quality than BGE Small. Larger download. |
-| `mlx-community/bge-small-en-v1.5-4bit` | mlx | ~19MB | 384 | 4-bit quantised BGE Small. Fast on Apple Silicon, minimal download. Small quality delta vs bf16 — untested on code retrieval specifically. |
-| `mlx-community/all-MiniLM-L6-v2-4bit` | mlx | ~13MB | 384 | Smallest option. Fastest cold start. Noticeably lower retrieval quality for code; best suited for quick experimentation. |
+| Model | Backend | Size (approx.) | Dimensions | Notes |
+|-------|---------|----------------|------------|-------|
+| `sentence-transformers/all-MiniLM-L6-v2` | fastembed | ~90MB | 384 | **Default.** Fast; widely used. |
+| `BAAI/bge-small-en-v1.5` | fastembed | ~67MB | 384 | Heavier quality focus; strong retrieval in this size class. |
+| `mlx-community/all-MiniLM-L6-v2-bf16` | mlx | ~45MB | 384 | **Default** on Apple Silicon with `coderay[mlx]`. |
+| `mlx-community/bge-small-en-v1.5-bf16` | mlx | ~25MB | 384 | BGE on MLX; better embeddings than MiniLM, more work per batch. |
+| `mlx-community/bge-small-en-v1.5-4bit` | mlx | ~19MB | 384 | 4-bit BGE; smaller download, small quality delta vs bf16. |
+| `mlx-community/all-MiniLM-L6-v2-4bit` | mlx | ~13MB | 384 | Smallest; fastest cold start; lower retrieval quality for code. |
 
-To switch, update `.coderay.toml` and run `coderay build --full`:
+To use BGE instead of the defaults, edit `.coderay.toml` and run `coderay build --full`:
 
 ```toml
-# Example: lighter MLX model on Apple Silicon
+[embedder.fastembed]
+model_name = "BAAI/bge-small-en-v1.5"
+dimensions = 384
+batch_size = 64
+
 [embedder.mlx]
-model_name = "mlx-community/bge-small-en-v1.5-4bit"
+model_name = "mlx-community/bge-small-en-v1.5-bf16"
 dimensions = 384
 batch_size = 256
 ```

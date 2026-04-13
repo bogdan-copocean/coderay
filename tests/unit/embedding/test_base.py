@@ -68,7 +68,7 @@ class TestLoadEmbedderFromConfig:
                     "embedder": {
                         "backend": "mlx",
                         "mlx": {
-                            "model_name": "mlx-community/bge-small-en-v1.5-bf16",
+                            "model_name": "mlx-community/all-MiniLM-L6-v2-bf16",
                             "dimensions": 384,
                         },
                     }
@@ -78,7 +78,7 @@ class TestLoadEmbedderFromConfig:
         try:
             _ = load_embedder_from_config()
             mock_mlx_cls.assert_called_once_with(
-                model_name="mlx-community/bge-small-en-v1.5-bf16",
+                model_name="mlx-community/all-MiniLM-L6-v2-bf16",
                 dimensions=384,
                 matryoshka_dimensions=None,
                 batch_size=256,
@@ -94,7 +94,7 @@ class TestLoadEmbedderFromConfig:
                     "embedder": {
                         "backend": "mlx",
                         "mlx": {
-                            "model_name": "mlx-community/bge-small-en-v1.5-bf16",
+                            "model_name": "mlx-community/all-MiniLM-L6-v2-bf16",
                             "dimensions": 384,
                         },
                     }

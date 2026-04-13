@@ -16,7 +16,7 @@ def test_search_prefixes_document_query():
     [
         ("nomic-ai/nomic-embed-text-v1.5-Q", True),
         ("mlx-community/nomicai-modernbert-embed-base-4bit", True),
-        ("BAAI/bge-small-en-v1.5", False),
+        ("sentence-transformers/all-MiniLM-L6-v2", False),
     ],
 )
 def test_requires_prefix(model_id, expected):
