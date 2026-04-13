@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 (2026-04-13)
+
+- **Embeddings** — default CPU and MLX models are MiniLM L6 for faster indexing; use BGE Small in config when you need heavier, often stronger embeddings ([`embedding/README.md`](src/coderay/embedding/README.md)).
+
 ## 1.2.0 (2026-04-12)
 
 - **Skeleton** — optional file line range: narrow symbols to those fully inside a span (`FILE:START-END`, CLI `--lines`, MCP `file_line_range`); output reflects the requested range.

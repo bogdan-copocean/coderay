@@ -38,13 +38,13 @@ backend = "auto"
 
 [embedder.fastembed]
 # Default embedder. Runs on CPU.
-model_name = "BAAI/bge-small-en-v1.5"
+model_name = "sentence-transformers/all-MiniLM-L6-v2"
 dimensions = 384
 batch_size = 64
 
 [embedder.mlx]
 # Apple Silicon embedder (MLX/Metal; device depends on runtime).
-model_name = "mlx-community/bge-small-en-v1.5-bf16"
+model_name = "mlx-community/all-MiniLM-L6-v2-4bit"
 dimensions = 384
 batch_size = 256
 

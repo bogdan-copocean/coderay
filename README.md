@@ -109,7 +109,7 @@ which coderay-mcp
 - **Languages** — Python, JavaScript, and TypeScript — [`parsing/README.md`](src/coderay/parsing/README.md)
 - **Multi-repo / monorepo** — roots, aliases, optional `include` subtrees — [`core/README.md`](src/coderay/core/README.md)
 - **Hybrid search** — vector + BM25 (RRF), optional boosting — [`retrieval/README.md`](src/coderay/retrieval/README.md)
-- **Embeddings** — fastembed (CPU) or MLX on Apple Silicon — [`embedding/README.md`](src/coderay/embedding/README.md)
+- **Embeddings** — fastembed (CPU) or MLX on Apple Silicon; defaults to MiniLM L6 for speed — configure BGE in `.coderay.toml` for stronger (heavier) vectors — [`embedding/README.md`](src/coderay/embedding/README.md)
 - **Watch** — incremental re-index; `.coderay.toml` is the source of truth for what’s indexed
 
 

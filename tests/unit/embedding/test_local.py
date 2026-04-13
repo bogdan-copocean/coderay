@@ -25,12 +25,12 @@ def _embed_side_effect(dim: int):
 
 class TestLocalEmbedder:
     def test_embed_empty(self):
-        e = LocalEmbedder(model="BAAI/bge-small-en-v1.5", dimensions=384)
+        e = LocalEmbedder(model="sentence-transformers/all-MiniLM-L6-v2", dimensions=384)
         assert e.embed([]) == []
 
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
     def test_embed_calls_model(self, mock_load):
-        e = LocalEmbedder(model="BAAI/bge-small-en-v1.5", dimensions=768)
+        e = LocalEmbedder(model="sentence-transformers/all-MiniLM-L6-v2", dimensions=768)
         mock_model = MagicMock()
         mock_model.embed.side_effect = _embed_side_effect(768)
         e._model = mock_model
@@ -42,7 +42,7 @@ class TestLocalEmbedder:
 
     @patch("coderay.embedding.local.LocalEmbedder._load_model")
     def test_lazy_loading(self, mock_load):
-        e = LocalEmbedder(model="BAAI/bge-small-en-v1.5", dimensions=384)
+        e = LocalEmbedder(model="sentence-transformers/all-MiniLM-L6-v2", dimensions=384)
         assert e._model is None
         mock_model = MagicMock()
         mock_model.embed.side_effect = _embed_side_effect(768)
