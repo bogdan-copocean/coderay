@@ -37,14 +37,14 @@ bonuses = [{ pattern = "(^|/)src/", factor = 1.1 }]
 backend = "auto"
 
 [embedder.fastembed]
-# Default embedder. Runs on CPU (MiniLM L6 — fast; use BGE in config for stronger embeddings).
+# Default embedder. Runs on CPU.
 model_name = "sentence-transformers/all-MiniLM-L6-v2"
 dimensions = 384
 batch_size = 64
 
 [embedder.mlx]
 # Apple Silicon embedder (MLX/Metal; device depends on runtime).
-model_name = "mlx-community/all-MiniLM-L6-v2-bf16"
+model_name = "mlx-community/all-MiniLM-L6-v2-4bit"
 dimensions = 384
 batch_size = 256
 
