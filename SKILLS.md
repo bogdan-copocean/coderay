@@ -3,8 +3,8 @@ name: coderay-navigation
 description: >-
   Before exploring the codebase or loading source content broadly, use CodeRay MCP to
   locate paths and line ranges (search, skeleton, impact), then pull only the snippets you
-  need. Same model as README “locate first, then read precisely.” Grep only for exact strings or when
-  MCP is wrong.
+  need: "locate first, then read precisely." Grep for exact strings or literals; semantic
+  search for intent. Fall back to grep when index is stale, unavailable or unhelpful.
 ---
 
 # Must do (two steps)
@@ -24,6 +24,8 @@ description: >-
 
 **Not grep replacement:** semantic search approximate; verify important edits. Refresh index: `coderay watch` / `coderay build`; check `coderay status` if stale.
 
+**MCP args:** schemas provided by protocol — use directly, do not guess.
+
 # Hard rules
 
 - Never start repo exploration with bulk file dumps when MCP can run — **locate first**.
@@ -32,24 +34,3 @@ description: >-
 - Refactor / behavior change on a symbol → **`get_impact_radius` first**.
 - Outside index / binary / generated / you already have exact literal → grep or open target OK; still no "read everything to explore."
 
-# Default order
-
-1. `semantic_search` and/or `get_impact_radius`
-2. `get_file_skeleton` for files you edit
-3. Load **only** ranges you need
-
-# CLI examples (`coderay skeleton`)
-
-```bash
-coderay skeleton path/to/file.py --lines 27-34
-coderay skeleton path/to/file.py:27-34
-coderay skeleton path/to/file.py --symbol SomeClass
-```
-
-## MCP args
-
-Read server `tools/*.json` once per session — **do not** guess parameters.
-
-# More detail
-
-[AGENTS.md](AGENTS.md) · [README.md](README.md)
