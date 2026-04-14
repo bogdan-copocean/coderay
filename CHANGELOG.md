@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2 (2026-04-14)
+
+- **MCP / SearchInput** — fix `'SearchInput' object has no attribute '_config'` on every `semantic_search` call; Pydantic `model_validator` fired before `_config` was set ([`cli/search_input.py`](src/coderay/cli/search_input.py)).
+- **Tests** — MCP integration tests covering `semantic_search`, `get_file_skeleton`, `get_impact_radius`, and `index_status` against a real in-memory index.
+- **Docs** — refine `SKILLS.md` for accuracy: fix MCP args note, drop CLI examples, remove redundant sections.
+
 ## 1.2.1 (2026-04-13)
 
 - **Embeddings** — default CPU and MLX models are MiniLM L6 for faster indexing; use BGE Small in config when you need heavier, often stronger embeddings ([`embedding/README.md`](src/coderay/embedding/README.md)).

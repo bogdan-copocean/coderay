@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Annotated
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr
 
 from coderay.core.config import Config
 from coderay.core.index_workspace import IndexWorkspace
@@ -32,18 +32,16 @@ class SearchInput(BaseModel):
     include_tests: bool = True
 
     # Injected at construction time; excluded from serialisation.
-    _config: Config
+    _config: Config = PrivateAttr()
 
     def __init__(self, *, config: Config, **data):
         super().__init__(**data)
-        object.__setattr__(self, "_config", config)
+        self._config = config
+        self._validate_repos()
 
-    @model_validator(mode="after")
-    def _validate_repos(self) -> SearchInput:
-        if not self.repos:
-            return self
-        if self.repos == ["*"]:
-            return self
+    def _validate_repos(self) -> None:
+        if not self.repos or self.repos == ["*"]:
+            return
         known = {e.alias for e in self._config.index.roots if e.alias}
         unknown = [r for r in self.repos if r not in known]
         if unknown:
@@ -51,7 +49,6 @@ class SearchInput(BaseModel):
                 f"Unknown repo alias(es): {unknown}. "
                 f"Configured aliases: {sorted(known)}"
             )
-        return self
 
     def to_dto(self) -> SearchRequestDTO:
         """Resolve scope and return an internal SearchRequestDTO."""
