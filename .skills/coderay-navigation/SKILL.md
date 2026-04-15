@@ -14,15 +14,17 @@ description: >-
 
 ## Tool map
 
-| MCP | CLI | Use when |
-|-----|-----|----------|
-| `semantic_search` | `coderay search` | Intent unknown (“where does X…”) — hits are **candidates** |
-| `get_file_skeleton` | `coderay skeleton` | Need API shape — **signatures/docstrings only**, no bodies |
-| `get_impact_radius` | `coderay impact` | Before refactor — callers / imports / inheritance |
+| MCP | CLI | Index required? | Use when |
+|-----|-----|-----------------|----------|
+| `semantic_search` | `coderay search [--top-k N] [--path-prefix P] [--no-tests]` | Yes | Intent unknown ("where does X...") — hits are **candidates** |
+| `get_file_skeleton` | `coderay skeleton FILE [--symbol NAME]` | **No — always available** | Need API shape — **signatures/docstrings only**, no bodies |
+| `get_impact_radius` | `coderay impact SYMBOL [--max-depth N]` | Yes | Before refactor — callers / imports / inheritance |
 
-**Grep:** exact symbol, path, import, error string — not “how does X work.”
+**Grep:** exact symbol, path, import, error string — not "how does X work."
 
-**Not grep replacement:** semantic search approximate; verify important edits. Refresh index: `coderay watch` / `coderay build`; check `coderay status` if stale.
+**Not grep replacement:** semantic search is approximate (default embedder trades accuracy for speed — configure BGE in `.coderay.toml` for stronger results). Verify important edits. Refresh index: `coderay watch` / `coderay build`; check `coderay status` if stale.
+
+**Skeleton first:** no index needed — always try skeleton before falling back to a full file read.
 
 **MCP args:** schemas provided by protocol — use directly, do not guess.
 
@@ -33,4 +35,3 @@ description: >-
 - Skeleton → pick line numbers → read **those lines**.
 - Refactor / behavior change on a symbol → **`get_impact_radius` first**.
 - Outside index / binary / generated / you already have exact literal → grep or open target OK; still no "read everything to explore."
-
