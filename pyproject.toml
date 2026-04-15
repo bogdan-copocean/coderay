@@ -5,17 +5,31 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "coderay"
 version = "1.2.2"
-description = "X-ray your codebase — semantic search, code graphs, file skeletons, and MCP server"
+description = "Local code index for coding agents: semantic search, code graphs, file skeletons, MCP — line-scoped reads instead of whole-file dumps"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "Bogdan Copocean", email = "bogdancopocean@gmail.com"},
 ]
-keywords = ["semantic-search", "code-indexer", "mcp", "code-graph", "ai-assistant"]
+keywords = [
+    "semantic-search",
+    "code-indexer",
+    "mcp",
+    "code-graph",
+    "ai-assistant",
+    "cost-optimization",
+    "token-optimization",
+    "context-window",
+    "context-window-optimization",
+    "llm",
+    "coding-agent",
+    "ai-agent",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
