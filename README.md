@@ -131,6 +131,10 @@ cat .skills/coderay-navigation/SKILL.md >> CLAUDE.md
 cat .skills/coderay-navigation/SKILL.md >> AGENTS.md
 ```
 
+### Plugin
+
+A lite version of CodeRay is available via plugin — skeleton only, no Python runtime, no index required. Check out [coderay-plugin](https://github.com/bogdan-copocean/coderay-plugin).
+
 ### Connect your agent (MCP)
 
 Expose search, skeleton, and impact to your agent over MCP – each answer is **paths and line ranges** so the model narrows before it reads. Point the server at a repo root containing `.coderay.toml`.

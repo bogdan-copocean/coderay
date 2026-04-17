@@ -35,3 +35,14 @@ description: >-
 - Skeleton → pick line numbers → read **those lines**.
 - Refactor / behavior change on a symbol → **`get_impact_radius` first**.
 - Outside index / binary / generated / you already have exact literal → grep or open target OK; still no "read everything to explore."
+
+## Fallback — when MCP is unavailable
+
+The discipline stays the same; the tools change.
+
+1. Use grep to locate the symbol and find its start line.
+2. Read a bounded window from that line.
+3. Scan the window for the closing delimiter to find the actual end line.
+4. Read only that span.
+
+Never use "MCP unavailable" or "index not built" as a reason to read a whole file.
